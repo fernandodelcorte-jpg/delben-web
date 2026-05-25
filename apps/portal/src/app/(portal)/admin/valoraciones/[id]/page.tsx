@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { CircleNotch, PencilSimple, CheckCircle } from '@phosphor-icons/react'
 import { getValoracion, marcarComoFacturada } from '@/lib/firestore/valoraciones'
@@ -18,7 +18,8 @@ function formatFecha(ts: number) {
   })
 }
 
-export default function ValoracionDetallePage({ params }: { params: { id: string } }) {
+export default function ValoracionDetallePage() {
+  const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const reabrirValoracion = useCarrito((s) => s.reabrirValoracion)
   const [valoracion, setValoracion] = useState<Valoracion | null>(null)
@@ -26,10 +27,10 @@ export default function ValoracionDetallePage({ params }: { params: { id: string
   const [marcando, setMarcando] = useState(false)
 
   useEffect(() => {
-    getValoracion(params.id)
+    getValoracion(id)
       .then(setValoracion)
       .finally(() => setCargando(false))
-  }, [params.id])
+  }, [id])
 
   async function handleMarcarFacturada() {
     if (!valoracion) return
