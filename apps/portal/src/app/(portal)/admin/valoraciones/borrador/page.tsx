@@ -9,6 +9,7 @@ import type { ItemCarrito, ItemHerrajeCarrito, HerrajeAsociado } from '@/store/c
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
 import { getTasaUsdActual } from '@/lib/firestore/config'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import { BuscadorModulos } from '@/components/cotizador/buscador-modulos'
 import { FichaModulo } from '@/components/cotizador/ficha-modulo'
 import { ModuloImagen } from '@/components/cotizador/modulo-imagen'
@@ -38,8 +39,10 @@ export default function ValoracionBorradorPage() {
   const [guardando, setGuardando] = useState(false)
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
 
-  const usaTransporteFijo = (distribuidorData?.universo.transporte_tipo ?? 'porcentual') === 'fijo'
-  const usaInstalacionFija = (distribuidorData?.universo.instalacion_tipo ?? 'porcentual') === 'fijo'
+  const modalidadBorrador = cotizacionInfo?.modalidad ?? 'desarmado'
+  const universoModal = distribuidorData ? getUniversoParaModalidad(distribuidorData.universo, modalidadBorrador) : null
+  const usaTransporteFijo = (universoModal?.transporte_tipo ?? 'porcentual') === 'fijo'
+  const usaInstalacionFija = (universoModal?.instalacion_tipo ?? 'porcentual') === 'fijo'
   const [transporteInput, setTransporteInput] = useState(
     cotizacionInfo?.transporteFijo ? String(cotizacionInfo.transporteFijo) : '',
   )

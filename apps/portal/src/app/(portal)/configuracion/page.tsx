@@ -17,19 +17,26 @@ import {
 } from '@/lib/firestore/distribuidores'
 import { crearUsuarioAuth } from '@/lib/firebase/client'
 import type { Distribuidor, Usuario } from '@/lib/firebase/tipos-firestore'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 
 // ─── Schema universo ──────────────────────────────────────────────────────────
 
-const schemaUniverso = z.object({
+const schemaModalidad = z.object({
   transporte_tipo:  z.enum(['porcentual', 'fijo']),
   transporte_pct:   z.coerce.number().min(0).max(100),
   instalacion_tipo: z.enum(['porcentual', 'fijo']),
   instalacion_pct:  z.coerce.number().min(0).max(100),
   imprevistos_pct:  z.coerce.number().min(0).max(100),
   utilidad_pct:     z.coerce.number().min(0).max(100),
-  iva_pct:          z.coerce.number().min(0).max(100),
+})
+
+const schemaUniverso = z.object({
+  iva_pct:     z.coerce.number().min(0).max(100),
+  desarmado:   schemaModalidad.optional(),
+  tradicional: schemaModalidad.optional(),
 })
 type FormUniverso = z.infer<typeof schemaUniverso>
+type ModalidadPrefijo = 'desarmado' | 'tradicional'
 
 // ─── Schema nuevo usuario ─────────────────────────────────────────────────────
 
@@ -91,15 +98,21 @@ export default function ConfiguracionPage() {
 
   function abrirEditarUniverso() {
     if (!distribuidor) return
-    universoForm.reset({
-      transporte_tipo: distribuidor.universo.transporte_tipo ?? 'porcentual',
-      transporte_pct:  distribuidor.universo.transporte_pct,
-      instalacion_tipo: distribuidor.universo.instalacion_tipo ?? 'porcentual',
-      instalacion_pct: distribuidor.universo.instalacion_pct,
-      imprevistos_pct: distribuidor.universo.imprevistos_pct,
-      utilidad_pct:    distribuidor.universo.utilidad_pct,
-      iva_pct:         distribuidor.universo.iva_pct,
-    })
+    const resetData: FormUniverso = { iva_pct: distribuidor.universo.iva_pct }
+    const toForm = (m: ModalidadPrefijo) => {
+      const u = getUniversoParaModalidad(distribuidor.universo, m)
+      return {
+        transporte_tipo:  u.transporte_tipo ?? 'porcentual' as const,
+        transporte_pct:   u.transporte_pct,
+        instalacion_tipo: u.instalacion_tipo ?? 'porcentual' as const,
+        instalacion_pct:  u.instalacion_pct,
+        imprevistos_pct:  u.imprevistos_pct,
+        utilidad_pct:     u.utilidad_pct,
+      }
+    }
+    if (distribuidor.acceso_desarmado)   resetData.desarmado   = toForm('desarmado')
+    if (distribuidor.acceso_tradicional) resetData.tradicional = toForm('tradicional')
+    universoForm.reset(resetData)
     setEditandoUniverso(true)
   }
 
@@ -291,46 +304,32 @@ export default function ConfiguracionPage() {
           </div>
 
           {editandoUniverso ? (
-            <form onSubmit={universoForm.handleSubmit(onGuardarUniverso)} className="space-y-5">
-              {/* Transporte */}
-              <FilaUniversoConTipo
-                label="Transporte"
-                campoPct="transporte_pct"
-                campoTipo="transporte_tipo"
-                form={universoForm}
-              />
-              {/* Instalación */}
-              <FilaUniversoConTipo
-                label="Instalación"
-                campoPct="instalacion_pct"
-                campoTipo="instalacion_tipo"
-                form={universoForm}
-              />
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {(
-                  [
-                    ['imprevistos_pct', 'Imprevistos %'],
-                    ['utilidad_pct',    'Utilidad % (margin)'],
-                    ['iva_pct',         'IVA %'],
-                  ] as const
-                ).map(([campo, etiqueta]) => (
-                  <div key={campo}>
-                    <label className="block text-xs text-stone-500 mb-1">{etiqueta}</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      max={100}
-                      {...universoForm.register(campo)}
-                      className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
-                    />
-                    {universoForm.formState.errors[campo] && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {universoForm.formState.errors[campo]?.message}
-                      </p>
-                    )}
-                  </div>
-                ))}
+            <form onSubmit={universoForm.handleSubmit(onGuardarUniverso)} className="space-y-6">
+              {distribuidor.acceso_desarmado && (
+                <SeccionModalidadForm
+                  titulo="Desarmado"
+                  prefijo="desarmado"
+                  form={universoForm}
+                />
+              )}
+              {distribuidor.acceso_tradicional && (
+                <SeccionModalidadForm
+                  titulo="Tradicional"
+                  prefijo="tradicional"
+                  form={universoForm}
+                  conSeparador={distribuidor.acceso_desarmado}
+                />
+              )}
+              <div className={distribuidor.acceso_desarmado || distribuidor.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
+                <label className="block text-xs text-stone-500 mb-1">IVA % (compartido)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={100}
+                  {...universoForm.register('iva_pct')}
+                  className="w-28 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
+                />
               </div>
               <div className="flex gap-2 pt-1">
                 <button
@@ -356,22 +355,25 @@ export default function ConfiguracionPage() {
               </div>
             </form>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
-              <Dato
-                label="Transporte"
-                valor={(distribuidor.universo.transporte_tipo ?? 'porcentual') === 'fijo'
-                  ? 'Valor fijo por proyecto'
-                  : `${distribuidor.universo.transporte_pct}%`}
-              />
-              <Dato
-                label="Instalación"
-                valor={(distribuidor.universo.instalacion_tipo ?? 'porcentual') === 'fijo'
-                  ? 'Valor fijo por proyecto'
-                  : `${distribuidor.universo.instalacion_pct}%`}
-              />
-              <Dato label="Imprevistos" valor={`${distribuidor.universo.imprevistos_pct}%`} />
-              <Dato label="Utilidad"    valor={`${distribuidor.universo.utilidad_pct}% (margin)`} />
-              <Dato label="IVA"         valor={`${distribuidor.universo.iva_pct}%`} />
+            <div className="space-y-5">
+              {distribuidor.acceso_desarmado && (
+                <SeccionModalidadVista
+                  titulo="Desarmado"
+                  universo={distribuidor.universo}
+                  modalidad="desarmado"
+                />
+              )}
+              {distribuidor.acceso_tradicional && (
+                <SeccionModalidadVista
+                  titulo="Tradicional"
+                  universo={distribuidor.universo}
+                  modalidad="tradicional"
+                  conSeparador={distribuidor.acceso_desarmado}
+                />
+              )}
+              <div className={distribuidor.acceso_desarmado || distribuidor.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
+                <Dato label="IVA" valor={`${distribuidor.universo.iva_pct}%`} />
+              </div>
             </div>
           )}
         </section>
@@ -529,17 +531,19 @@ function Dato({ label, valor }: { label: string; valor: string }) {
   )
 }
 
-function FilaUniversoConTipo({
+function FilaTipoConPct({
   label,
-  campoPct,
-  campoTipo,
+  campo,
+  prefijo,
   form,
 }: {
   label: string
-  campoPct: 'transporte_pct' | 'instalacion_pct'
-  campoTipo: 'transporte_tipo' | 'instalacion_tipo'
+  campo: 'transporte' | 'instalacion'
+  prefijo: ModalidadPrefijo
   form: ReturnType<typeof useForm<FormUniverso>>
 }) {
+  const campoTipo = `${prefijo}.${campo}_tipo` as `${ModalidadPrefijo}.transporte_tipo`
+  const campoPct  = `${prefijo}.${campo}_pct`  as `${ModalidadPrefijo}.transporte_pct`
   const tipo = form.watch(campoTipo)
   return (
     <div className="space-y-2">
@@ -578,6 +582,75 @@ function FilaUniversoConTipo({
           El monto se ingresará manualmente en cada proyecto al cotizar.
         </p>
       )}
+    </div>
+  )
+}
+
+function SeccionModalidadForm({
+  titulo,
+  prefijo,
+  form,
+  conSeparador = false,
+}: {
+  titulo: string
+  prefijo: ModalidadPrefijo
+  form: ReturnType<typeof useForm<FormUniverso>>
+  conSeparador?: boolean
+}) {
+  return (
+    <div className={conSeparador ? 'pt-5 border-t border-stone-100 space-y-4' : 'space-y-4'}>
+      <p className="text-xs font-semibold text-stone-700 uppercase tracking-wider">{titulo}</p>
+      <FilaTipoConPct label="Transporte" campo="transporte" prefijo={prefijo} form={form} />
+      <FilaTipoConPct label="Instalación" campo="instalacion" prefijo={prefijo} form={form} />
+      <div className="grid grid-cols-2 gap-4">
+        {([
+          [`${prefijo}.imprevistos_pct` as const, 'Imprevistos %'],
+          [`${prefijo}.utilidad_pct`    as const, 'Utilidad % (margin)'],
+        ] as const).map(([campo, etiqueta]) => (
+          <div key={campo}>
+            <label className="block text-xs text-stone-500 mb-1">{etiqueta}</label>
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              max={100}
+              {...form.register(campo)}
+              className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SeccionModalidadVista({
+  titulo,
+  universo,
+  modalidad,
+  conSeparador = false,
+}: {
+  titulo: string
+  universo: Distribuidor['universo']
+  modalidad: ModalidadPrefijo
+  conSeparador?: boolean
+}) {
+  const u = getUniversoParaModalidad(universo, modalidad)
+  return (
+    <div className={conSeparador ? 'pt-4 border-t border-stone-100' : ''}>
+      <p className="text-xs font-semibold text-stone-700 uppercase tracking-wider mb-3">{titulo}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
+        <Dato
+          label="Transporte"
+          valor={(u.transporte_tipo ?? 'porcentual') === 'fijo' ? 'Valor fijo' : `${u.transporte_pct}%`}
+        />
+        <Dato
+          label="Instalación"
+          valor={(u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 'Valor fijo' : `${u.instalacion_pct}%`}
+        />
+        <Dato label="Imprevistos" valor={`${u.imprevistos_pct}%`} />
+        <Dato label="Utilidad"    valor={`${u.utilidad_pct}% (margin)`} />
+      </div>
     </div>
   )
 }

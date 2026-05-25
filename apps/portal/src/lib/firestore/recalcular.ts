@@ -24,6 +24,7 @@ import type {
   HerrajeAsociadoSnapshot,
   ItemHerraCotizacionSnapshot,
 } from '@/lib/firebase/tipos-firestore'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import type {
   ItemCarrito,
   ItemHerrajeCarrito,
@@ -33,7 +34,8 @@ import type {
 
 // ─── Parámetros del motor ─────────────────────────────────────────────────────
 
-function buildMotorParams(dist: Distribuidor) {
+function buildMotorParams(dist: Distribuidor, modalidad: 'desarmado' | 'tradicional') {
+  const u = getUniversoParaModalidad(dist.universo, modalidad)
   return {
     distribuidorMotor: {
       id: dist.id,
@@ -48,11 +50,11 @@ function buildMotorParams(dist: Distribuidor) {
       gestion_comercial: dist.servicios.gestion_comercial_pct,
     },
     universoMotor: {
-      transporte: dist.universo.transporte_pct,
-      instalacion: dist.universo.instalacion_pct,
-      imprevistos: dist.universo.imprevistos_pct,
-      utilidad: dist.universo.utilidad_pct,
-      iva: dist.universo.iva_pct,
+      transporte: u.transporte_pct,
+      instalacion: u.instalacion_pct,
+      imprevistos: u.imprevistos_pct,
+      utilidad: u.utilidad_pct,
+      iva: u.iva_pct,
     },
     pais: dist.pais,
   }
@@ -183,7 +185,7 @@ export async function recalcularCotizacion(
     version: cotizacion.version,
   }
 
-  const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist)
+  const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacion.modalidad)
   const motorBase = {
     modelo: cotizacionInfo.modalidad,
     distribuidor: distribuidorMotor,

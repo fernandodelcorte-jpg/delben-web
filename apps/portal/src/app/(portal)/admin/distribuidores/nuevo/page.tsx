@@ -124,11 +124,19 @@ export default function NuevoDistribuidorPage() {
           gestion_comercial_pct: data.gestion_comercial_pct,
         },
         universo: {
-          transporte_pct: data.transporte_pct,
-          instalacion_pct: data.instalacion_pct,
-          imprevistos_pct: data.imprevistos_pct,
-          utilidad_pct: data.utilidad_pct,
           iva_pct: data.iva_pct,
+          desarmado: {
+            transporte_pct: data.transporte_pct,
+            instalacion_pct: data.instalacion_pct,
+            imprevistos_pct: data.imprevistos_pct,
+            utilidad_pct: data.utilidad_pct,
+          },
+          tradicional: {
+            transporte_pct: data.transporte_pct,
+            instalacion_pct: data.instalacion_pct,
+            imprevistos_pct: data.imprevistos_pct,
+            utilidad_pct: data.utilidad_pct,
+          },
         },
         activo: true,
       })

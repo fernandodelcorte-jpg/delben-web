@@ -10,6 +10,7 @@ import {
   UNIVERSO_DEMO,
 } from '@/lib/datos-demo'
 import type { Accesorio, Cotizacion, Distribuidor, Modulo, Subcategoria, Valoracion } from '@/lib/firebase/tipos-firestore'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import {
   guardarCotizacion as _guardarCotizacion,
   actualizarCotizacion as _actualizarCotizacion,
@@ -137,24 +138,27 @@ type CarritoState = {
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-function buildMotorParams(dist: Distribuidor | null) {
+function buildMotorParams(dist: Distribuidor | null, modalidad: 'desarmado' | 'tradicional') {
+  if (!dist) {
+    return {
+      distribuidorMotor: DISTRIBUIDOR_DEMO,
+      serviciosMotor: SERVICIOS_DELBEN_DEMO,
+      universoMotor: UNIVERSO_DEMO,
+      pais: 'Colombia',
+    }
+  }
+  const u = getUniversoParaModalidad(dist.universo, modalidad)
   return {
-    distribuidorMotor: dist
-      ? { id: dist.id, descuento_muebles_pct: dist.descuento_muebles_pct, descuento_herrajes_pct: dist.descuento_herrajes_pct }
-      : DISTRIBUIDOR_DEMO,
-    serviciosMotor: dist
-      ? { diseno: dist.servicios.diseno_pct, cotizacion: dist.servicios.cotizacion_pct, produccion: dist.servicios.produccion_pct, logistica: dist.servicios.logistica_pct, gestion_comercial: dist.servicios.gestion_comercial_pct }
-      : SERVICIOS_DELBEN_DEMO,
-    universoMotor: dist
-      ? {
-          transporte: (dist.universo.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : dist.universo.transporte_pct,
-          instalacion: (dist.universo.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : dist.universo.instalacion_pct,
-          imprevistos: dist.universo.imprevistos_pct,
-          utilidad: dist.universo.utilidad_pct,
-          iva: dist.universo.iva_pct,
-        }
-      : UNIVERSO_DEMO,
-    pais: dist?.pais ?? 'Colombia',
+    distribuidorMotor: { id: dist.id, descuento_muebles_pct: dist.descuento_muebles_pct, descuento_herrajes_pct: dist.descuento_herrajes_pct },
+    serviciosMotor: { diseno: dist.servicios.diseno_pct, cotizacion: dist.servicios.cotizacion_pct, produccion: dist.servicios.produccion_pct, logistica: dist.servicios.logistica_pct, gestion_comercial: dist.servicios.gestion_comercial_pct },
+    universoMotor: {
+      transporte: (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct,
+      instalacion: (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct,
+      imprevistos: u.imprevistos_pct,
+      utilidad: u.utilidad_pct,
+      iva: u.iva_pct,
+    },
+    pais: dist.pais,
   }
 }
 
@@ -246,7 +250,7 @@ export const useCarrito = create<CarritoState>()(
     const { cotizacionInfo, distribuidorData: dist, campanasDisponibles, tasaUsd, itemEditando } = get()
     if (!cotizacionInfo) return
 
-    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist)
+    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacionInfo.modalidad)
 
     const motorBase = {
       modelo: cotizacionInfo.modalidad,
@@ -328,7 +332,7 @@ export const useCarrito = create<CarritoState>()(
 
     if (!precioCop) return
 
-    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist)
+    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacionInfo.modalidad)
 
     const resultado = calcularItem({
       precio_base_cop: precioCop,

@@ -21,6 +21,7 @@ import type {
   Usuario,
   HistorialCondiciones,
 } from '@/lib/firebase/tipos-firestore'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -339,12 +340,28 @@ export default function DetalleDistribuidorPage() {
             Lo configura el administrador del distribuidor en su panel.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm sm:grid-cols-3">
-          <Dato label="Transporte" valor={`${distribuidor.universo.transporte_pct}%`} />
-          <Dato label="Instalación" valor={`${distribuidor.universo.instalacion_pct}%`} />
-          <Dato label="Imprevistos" valor={`${distribuidor.universo.imprevistos_pct}%`} />
-          <Dato label="Utilidad (margin)" valor={`${distribuidor.universo.utilidad_pct}%`} />
-          <Dato label="IVA" valor={`${distribuidor.universo.iva_pct}%`} />
+        <div className="space-y-5">
+          {(['desarmado', 'tradicional'] as const)
+            .filter((m) => m === 'desarmado' ? distribuidor.acceso_desarmado : distribuidor.acceso_tradicional)
+            .map((m, idx) => {
+              const u = getUniversoParaModalidad(distribuidor.universo, m)
+              return (
+                <div key={m} className={idx > 0 ? 'pt-4 border-t border-stone-100' : ''}>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
+                    {m === 'desarmado' ? 'Desarmado' : 'Tradicional'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-y-3 gap-x-8 text-sm sm:grid-cols-4">
+                    <Dato label="Transporte"  valor={(u.transporte_tipo ?? 'porcentual') === 'fijo' ? 'Fijo' : `${u.transporte_pct}%`} />
+                    <Dato label="Instalación" valor={(u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 'Fijo' : `${u.instalacion_pct}%`} />
+                    <Dato label="Imprevistos" valor={`${u.imprevistos_pct}%`} />
+                    <Dato label="Utilidad"    valor={`${u.utilidad_pct}% (m)`} />
+                  </div>
+                </div>
+              )
+            })}
+          <div className="pt-4 border-t border-stone-100">
+            <Dato label="IVA" valor={`${distribuidor.universo.iva_pct}%`} />
+          </div>
         </div>
       </section>
 

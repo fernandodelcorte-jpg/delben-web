@@ -89,6 +89,15 @@ export interface AccesorioDoc {
   activo: boolean
 }
 
+export interface UniversoModalidad {
+  transporte_tipo?: 'porcentual' | 'fijo'
+  transporte_pct: number
+  instalacion_tipo?: 'porcentual' | 'fijo'
+  instalacion_pct: number
+  imprevistos_pct: number
+  utilidad_pct: number
+}
+
 export interface DistribuidorDoc {
   nombre: string
   pais: string
@@ -106,16 +115,39 @@ export interface DistribuidorDoc {
     gestion_comercial_pct: number
   }
   universo: {
-    transporte_tipo?: 'porcentual' | 'fijo'
-    transporte_pct: number
-    instalacion_tipo?: 'porcentual' | 'fijo'
-    instalacion_pct: number
-    imprevistos_pct: number
-    utilidad_pct: number
     iva_pct: number
+    desarmado?: UniversoModalidad
+    tradicional?: UniversoModalidad
   }
   activo: boolean
   created_at: number
+}
+
+// Lee el universo de la modalidad correcta con fallback al esquema plano antiguo.
+export function getUniversoParaModalidad(
+  universo: DistribuidorDoc['universo'],
+  modalidad: 'desarmado' | 'tradicional',
+): UniversoModalidad & { iva_pct: number } {
+  const data = universo[modalidad]
+  if (data) return { ...data, iva_pct: universo.iva_pct }
+  // Compatibilidad con docs Firestore creados antes de la separación por modalidad
+  const flat = universo as unknown as {
+    transporte_tipo?: 'porcentual' | 'fijo'
+    transporte_pct?: number
+    instalacion_tipo?: 'porcentual' | 'fijo'
+    instalacion_pct?: number
+    imprevistos_pct?: number
+    utilidad_pct?: number
+  }
+  return {
+    transporte_tipo: flat.transporte_tipo,
+    transporte_pct: flat.transporte_pct ?? 0,
+    instalacion_tipo: flat.instalacion_tipo,
+    instalacion_pct: flat.instalacion_pct ?? 0,
+    imprevistos_pct: flat.imprevistos_pct ?? 0,
+    utilidad_pct: flat.utilidad_pct ?? 0,
+    iva_pct: universo.iva_pct,
+  }
 }
 
 export interface HistorialCondicionesDoc {

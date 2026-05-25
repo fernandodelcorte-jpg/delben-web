@@ -7,6 +7,7 @@ import { CaretDown, CaretUp, CircleNotch } from '@phosphor-icons/react'
 import { getCotizacion } from '@/lib/firestore/cotizaciones'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
 import { formatCOP } from '@/lib/datos-demo'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import type {
   Cotizacion,
   Distribuidor,
@@ -29,10 +30,10 @@ function formatFecha(ts: number) {
 
 // ─── Cálculo de resumen total del proyecto ────────────────────────────────────
 
-function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor) {
+function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: 'desarmado' | 'tradicional') {
   const base = r.costo_tras_descuentos
   const s = dist.servicios
-  const u = dist.universo
+  const u = getUniversoParaModalidad(dist.universo, modalidad)
   const transp_pct = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
   const instal_pct = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
   const universo_aditivo = r.costo_delben * (1 + (transp_pct + instal_pct + u.imprevistos_pct) / 100)
@@ -56,7 +57,7 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
     utilidad = 0, iva = 0, costoDelben = 0, sinIva = 0
 
   function acumular(r: ResultadoSnapshot, cantidad: number) {
-    const d = calcularDesglose(r, dist)
+    const d = calcularDesglose(r, dist, cotizacion.modalidad)
     base        += r.costo_tras_descuentos * cantidad
     diseno      += d.diseno * cantidad
     cotiz       += d.cotizacion * cantidad
@@ -111,7 +112,7 @@ function FilaCosto({
 
 function ResumenCostos({ cotizacion, distribuidor }: { cotizacion: Cotizacion; distribuidor: Distribuidor }) {
   const s = distribuidor.servicios
-  const u = distribuidor.universo
+  const u = getUniversoParaModalidad(distribuidor.universo, cotizacion.modalidad)
   const t = calcularResumenTotal(cotizacion, distribuidor)
   const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
   const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'

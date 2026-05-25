@@ -21,6 +21,7 @@ import {
   cotizacionInfoToInfoPDF,
   urlADataUrl,
 } from '@/lib/pdf-helpers'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 
 const CotizacionPDFButton = dynamic(
   () => import('@/components/cotizador/cotizacion-pdf-button').then((m) => m.CotizacionPDFButton),
@@ -70,8 +71,10 @@ export default function BorradorPage() {
   const [logoDistribuidorData, setLogoDistribuidorData] = useState<string | null>(null)
   const [logoDelbenData, setLogoDelbenData] = useState<string | null>(null)
 
-  const usaTransporteFijo = (distribuidorData?.universo.transporte_tipo ?? 'porcentual') === 'fijo'
-  const usaInstalacionFija = (distribuidorData?.universo.instalacion_tipo ?? 'porcentual') === 'fijo'
+  const modalidadBorrador = cotizacionInfo?.modalidad ?? 'desarmado'
+  const universoModal = distribuidorData ? getUniversoParaModalidad(distribuidorData.universo, modalidadBorrador) : null
+  const usaTransporteFijo = (universoModal?.transporte_tipo ?? 'porcentual') === 'fijo'
+  const usaInstalacionFija = (universoModal?.instalacion_tipo ?? 'porcentual') === 'fijo'
   const [transporteInput, setTransporteInput] = useState(
     cotizacionInfo?.transporteFijo ? String(cotizacionInfo.transporteFijo) : '',
   )
