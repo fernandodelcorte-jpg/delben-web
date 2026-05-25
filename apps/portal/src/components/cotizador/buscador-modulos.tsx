@@ -107,6 +107,8 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
   const [precios, setPrecios] = useState<Precio[]>([])
   const [variantes, setVariantes] = useState<Modulo[]>([])
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true)
+  const [cargandoPrecios, setCargandoPrecios] = useState(false)
+  const [errorPrecios, setErrorPrecios] = useState<string | null>(null)
 
   const [alturaSeleccionada, setAlturaSeleccionada] = useState<number | null>(null)
   const [profundidadSeleccionada, setProfundidadSeleccionada] = useState<number | null>(null)
@@ -170,7 +172,26 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
     )
     if (!variante) return
     setModuloActual(variante)
-    getPreciosModulo(variante.id).then(setPrecios)
+    setPrecios([])
+    setErrorPrecios(null)
+    setCargandoPrecios(true)
+    getPreciosModulo(variante.id)
+      .then((ps) => {
+        setPrecios(ps)
+        if (ps.length === 0) {
+          console.warn('[BuscadorModulos] getPreciosModulo returned empty for', variante.id)
+        } else {
+          console.log('[BuscadorModulos] precios cargados', ps.length, ps.map(p => `${p.tipo_estructura_id}×${p.tipo_fachada_id}`))
+        }
+      })
+      .catch((err) => {
+        console.error('[BuscadorModulos] Error cargando precios:', err)
+        const msg = (err as { code?: string })?.code === 'permission-denied'
+          ? 'Sin permiso para leer precios. Contacta al administrador.'
+          : 'Error al cargar precios. Intenta de nuevo.'
+        setErrorPrecios(msg)
+      })
+      .finally(() => setCargandoPrecios(false))
   }, [alturaSeleccionada, profundidadSeleccionada, variantes])
 
   useEffect(() => {
@@ -249,19 +270,31 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
       (v) => v.altura === alturaSeleccionada && v.profundidad === profundidadSeleccionada,
     )
 
+  const precioActual = (!cargandoPrecios && tipoEstructuraId && tipoFachadaId)
+    ? precios.find(
+        (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
+      )
+    : undefined
+
+  // Debug: log mismatch cuando hay precios pero no coincide la combinación seleccionada
+  if (!cargandoPrecios && !errorPrecios && hayVarianteSeleccionada && precios.length > 0 && !precioActual) {
+    console.warn('[BuscadorModulos] Sin match precio. Buscando:', tipoEstructuraId, '×', tipoFachadaId,
+      '| Disponibles:', precios.map(p => `${p.tipo_estructura_id}×${p.tipo_fachada_id}`))
+  }
+
   const listo =
     !cargandoCatalogo &&
+    !cargandoPrecios &&
+    !errorPrecios &&
+    !!precioActual &&
     hayVarianteSeleccionada &&
     (!requiereFachada || (!!subcategoriaId && !!acabadoId)) &&
     (!esPremium || !!acabadoEstructura)
 
   function handleAgregar() {
-    if (!moduloActual || !listo) return
+    if (!moduloActual || !listo || !precioActual) return
 
-    const precio = precios.find(
-      (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
-    )
-    if (!precio) return
+    const precio = precioActual
 
     const categoria = categorias.find((c) => c.id === moduloActual.categoria_id)
     if (!categoria) return
@@ -683,12 +716,25 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
 
       {/* Footer */}
       <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white">
+        {errorPrecios && (
+          <p className="mb-3 text-xs text-red-600">{errorPrecios}</p>
+        )}
+        {!cargandoCatalogo && !cargandoPrecios && !errorPrecios && !precioActual && hayVarianteSeleccionada && (
+          <p className="mb-3 text-xs text-amber-600">
+            {precios.length === 0
+              ? 'No hay precios importados para este módulo.'
+              : 'Sin precio para esta combinación de estructura y fachada.'}
+          </p>
+        )}
         <button
           type="button"
           onClick={handleAgregar}
           disabled={!listo}
-          className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
+          {(cargandoCatalogo || cargandoPrecios) && (
+            <CircleNotch size={14} className="animate-spin" />
+          )}
           Agregar al carrito
         </button>
       </div>
@@ -733,7 +779,6 @@ function PanelBusquedaModulos({
   }, [categoriaId])
 
   useEffect(() => {
-    if (categoriaIds === undefined) return
     if (busqueda.trim().length < 2) {
       setModulos([])
       return
@@ -743,6 +788,7 @@ function PanelBusquedaModulos({
     setError(null)
     const delay = setTimeout(async () => {
       try {
+        // categoriaIds undefined = aún cargando → buscar sin filtro de categoría
         const res = await buscarModulos(busqueda, categoriaIds ?? undefined)
         if (!cancelado) setModulos(res)
       } catch {
@@ -758,7 +804,7 @@ function PanelBusquedaModulos({
   }, [busqueda, categoriaIds])
 
   return (
-    <div className="w-[264px] shrink-0 flex flex-col border-r border-stone-100 h-full">
+    <div className="w-72 shrink-0 flex flex-col border-r border-stone-100 h-full">
       <div className="shrink-0 px-3 py-3 border-b border-stone-100">
         <div className="relative">
           <MagnifyingGlass
@@ -815,7 +861,7 @@ function PanelBusquedaModulos({
               <div className="flex-1 min-w-0">
                 <p
                   className={[
-                    'text-xs font-medium leading-snug truncate',
+                    'text-xs font-medium leading-snug line-clamp-2',
                     moduloSeleccionado?.id === m.id ? 'text-white' : 'text-stone-800',
                   ].join(' ')}
                 >
@@ -823,7 +869,7 @@ function PanelBusquedaModulos({
                 </p>
                 <p
                   className={[
-                    'text-xs capitalize mt-0.5 truncate',
+                    'text-xs capitalize mt-0.5',
                     moduloSeleccionado?.id === m.id ? 'text-stone-300' : 'text-stone-400',
                   ].join(' ')}
                 >
