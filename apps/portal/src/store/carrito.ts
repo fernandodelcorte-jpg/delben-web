@@ -62,6 +62,33 @@ export type ItemHerrajeCarrito = {
   resultado: ResultadoCalculo
 }
 
+export type HerrajeEspecial = {
+  accesorioId: string
+  nombre: string
+  codigo: string
+  cantidad: number
+}
+
+export type ItemEspecial = {
+  id: string
+  nombre: string
+  tipoEstructuraNombre: string
+  tipoFachadaNombre: string
+  acabadoNombre: string
+  acabadoEstructura: string | null
+  colorVidrio: string | null
+  ancho: number | null
+  alto: number
+  profundidad: number
+  cantidad: number
+  precioDelbenUnitario: number
+  precioClienteUnitario: number
+  observaciones: string
+  herrajes: HerrajeEspecial[]
+  moduloReferenciaId?: string
+  moduloReferenciaNombre?: string
+}
+
 export type CotizacionInfo = {
   clienteNombre: string
   clienteDireccion?: string
@@ -93,6 +120,7 @@ type CarritoState = {
   valoracionGuardadaId: string | null
   items: ItemCarrito[]
   itemsHerraje: ItemHerrajeCarrito[]
+  itemsEspeciales: ItemEspecial[]
   pantallaActiva: 'carrito' | 'buscador' | 'ficha'
   moduloPendiente: Modulo | null
   itemEditando: ItemCarrito | null
@@ -121,6 +149,10 @@ type CarritoState = {
   eliminarItem: (id: string) => void
   agregarHerraje: (accesorio: Accesorio, cantidad: number) => void
   eliminarHerraje: (id: string) => void
+  agregarEspecial: (item: Omit<ItemEspecial, 'id'>) => void
+  editarEspecial: (id: string, cambios: Omit<ItemEspecial, 'id'>) => void
+  eliminarEspecial: (id: string) => void
+  cambiarCantidadEspecial: (id: string, delta: number) => void
   guardar: (distribuidorId: string, userId: string) => Promise<string>
   guardarValoracion: (distribuidorId: string, distribuidorNombre: string, userId: string) => Promise<string>
   reabrirBorrador: (cotizacion: Cotizacion) => void
@@ -173,6 +205,7 @@ export const useCarrito = create<CarritoState>()(
   valoracionGuardadaId: null,
   items: [],
   itemsHerraje: [],
+  itemsEspeciales: [],
   pantallaActiva: 'carrito',
   moduloPendiente: null,
   itemEditando: null,
@@ -190,6 +223,7 @@ export const useCarrito = create<CarritoState>()(
       valoracionGuardadaId: null,
       items: [],
       itemsHerraje: [],
+      itemsEspeciales: [],
       pantallaActiva: 'carrito',
     }),
 
@@ -362,6 +396,27 @@ export const useCarrito = create<CarritoState>()(
   eliminarHerraje: (id) =>
     set((state) => ({ itemsHerraje: state.itemsHerraje.filter((i) => i.id !== id) })),
 
+  agregarEspecial: (item) =>
+    set((state) => ({
+      itemsEspeciales: [...state.itemsEspeciales, { ...item, id: crypto.randomUUID() }],
+      pantallaActiva: 'carrito',
+    })),
+
+  editarEspecial: (id, cambios) =>
+    set((state) => ({
+      itemsEspeciales: state.itemsEspeciales.map((i) => (i.id === id ? { ...cambios, id } : i)),
+    })),
+
+  eliminarEspecial: (id) =>
+    set((state) => ({ itemsEspeciales: state.itemsEspeciales.filter((i) => i.id !== id) })),
+
+  cambiarCantidadEspecial: (id, delta) =>
+    set((state) => ({
+      itemsEspeciales: state.itemsEspeciales.map((i) =>
+        i.id === id ? { ...i, cantidad: Math.max(1, i.cantidad + delta) } : i,
+      ),
+    })),
+
   guardar: async (distribuidorId, userId) => {
     const { cotizacionInfo, cotizacionGuardadaId, items, itemsHerraje } = get()
     if (!cotizacionInfo) throw new Error('Sin cotización activa')
@@ -522,6 +577,7 @@ export const useCarrito = create<CarritoState>()(
       valoracionGuardadaId: valoracion.id,
       items,
       itemsHerraje,
+      itemsEspeciales: [],
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,
@@ -629,6 +685,7 @@ export const useCarrito = create<CarritoState>()(
       cotizacionGuardadaId: cotizacion.id,
       items,
       itemsHerraje,
+      itemsEspeciales: [],
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,
@@ -759,6 +816,7 @@ export const useCarrito = create<CarritoState>()(
       valoracionGuardadaId: null,
       items: [],
       itemsHerraje: [],
+      itemsEspeciales: [],
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,

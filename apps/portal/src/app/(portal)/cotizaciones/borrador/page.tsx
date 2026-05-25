@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { Plus, Minus, Trash, CaretDown, CaretUp, FloppyDisk, CircleNotch, PencilSimple, ArrowLeft } from '@phosphor-icons/react'
+import { Plus, Minus, Trash, CaretDown, CaretUp, FloppyDisk, CircleNotch, PencilSimple, ArrowLeft, Sparkle } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
-import type { ItemCarrito, ItemHerrajeCarrito, HerrajeAsociado } from '@/store/carrito'
+import type { ItemCarrito, ItemHerrajeCarrito, HerrajeAsociado, ItemEspecial } from '@/store/carrito'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
 import { getTasaUsdActual, getLogoDelben } from '@/lib/firestore/config'
@@ -58,6 +58,9 @@ export default function BorradorPage() {
   const editarModulo = useCarrito((s) => s.editarModulo)
   const cambiarCantidadItem = useCarrito((s) => s.cambiarCantidadItem)
   const cambiarCantidadHerraje = useCarrito((s) => s.cambiarCantidadHerraje)
+  const itemsEspeciales = useCarrito((s) => s.itemsEspeciales)
+  const eliminarEspecial = useCarrito((s) => s.eliminarEspecial)
+  const cambiarCantidadEspecial = useCarrito((s) => s.cambiarCantidadEspecial)
   const guardar = useCarrito((s) => s.guardar)
   const setCampanas = useCarrito((s) => s.setCampanas)
   const setTasaUsd = useCarrito((s) => s.setTasaUsd)
@@ -122,8 +125,9 @@ export default function BorradorPage() {
     0,
   )
   const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-  const total = totalModulos + totalHerrajesAsociados + totalHerrajes
-  const hayItems = items.length > 0 || itemsHerraje.length > 0
+  const totalEspeciales = itemsEspeciales.reduce((s, i) => s + i.precioClienteUnitario * i.cantidad, 0)
+  const total = totalModulos + totalHerrajesAsociados + totalHerrajes + totalEspeciales
+  const hayItems = items.length > 0 || itemsHerraje.length > 0 || itemsEspeciales.length > 0
 
   const totalCostoDelben = puedeVerCosto
     ? items.reduce((s, i) => s + i.resultado.costo_delben * i.config.cantidad, 0) +
@@ -132,7 +136,8 @@ export default function BorradorPage() {
           s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.costo_delben * h.cantidad, 0),
         0,
       ) +
-      itemsHerraje.reduce((s, i) => s + i.resultado.costo_delben * i.cantidad, 0)
+      itemsHerraje.reduce((s, i) => s + i.resultado.costo_delben * i.cantidad, 0) +
+      itemsEspeciales.reduce((s, i) => s + i.precioDelbenUnitario * i.cantidad, 0)
     : 0
 
   function toggleExpandido(id: string) {
@@ -260,6 +265,35 @@ export default function BorradorPage() {
                   item={item}
                   onEliminar={() => eliminarHerraje(item.id)}
                   onCambiarCantidad={(delta) => cambiarCantidadHerraje(item.id, delta)}
+                  puedeVerCosto={puedeVerCosto}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Módulos especiales */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-stone-900 tracking-tight flex items-center gap-1.5">
+              <Sparkle size={14} weight="fill" className="text-stone-400" />
+              Especiales
+            </h2>
+          </div>
+          {itemsEspeciales.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-stone-200 bg-white py-8 text-center">
+              <p className="text-xs text-stone-400">
+                Sin módulos especiales. Úsalos en &ldquo;Agregar producto → Crear módulo especial&rdquo;.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {itemsEspeciales.map((item) => (
+                <EspecialItemRow
+                  key={item.id}
+                  item={item}
+                  onEliminar={() => eliminarEspecial(item.id)}
+                  onCambiarCantidad={(delta) => cambiarCantidadEspecial(item.id, delta)}
                   puedeVerCosto={puedeVerCosto}
                 />
               ))}
@@ -600,6 +634,94 @@ function HerrajesAsociadosList({
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function EspecialItemRow({
+  item,
+  onEliminar,
+  onCambiarCantidad,
+  puedeVerCosto,
+}: {
+  item: ItemEspecial
+  onEliminar: () => void
+  onCambiarCantidad: (delta: number) => void
+  puedeVerCosto: boolean
+}) {
+  const dims = [
+    item.ancho ? `${item.ancho}` : null,
+    `${item.alto}`,
+    `${item.profundidad}`,
+  ].filter(Boolean).join(' × ')
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100">
+          <Sparkle size={14} weight="fill" className="text-stone-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-stone-800 leading-snug truncate">{item.nombre}</p>
+          <p className="text-xs text-stone-400 truncate mt-0.5">
+            {[
+              item.tipoEstructuraNombre,
+              item.tipoFachadaNombre,
+              item.acabadoNombre,
+              dims ? `${dims} mm` : null,
+            ].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold text-stone-900 tabular-nums">
+            {formatCOP(item.precioClienteUnitario * item.cantidad)}
+          </p>
+          {puedeVerCosto && (
+            <p className="text-xs text-stone-400 tabular-nums">
+              costo: {formatCOP(item.precioDelbenUnitario * item.cantidad)}
+            </p>
+          )}
+          {item.cantidad > 1 && (
+            <p className="text-xs text-stone-400 tabular-nums">
+              {formatCOP(item.precioClienteUnitario)} c/u
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onCambiarCantidad(-1)}
+            className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
+          >
+            <Minus size={11} weight="bold" />
+          </button>
+          <span className="w-6 text-center text-xs font-semibold text-stone-700 tabular-nums">
+            {item.cantidad}
+          </span>
+          <button
+            onClick={() => onCambiarCantidad(1)}
+            className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
+          >
+            <Plus size={11} weight="bold" />
+          </button>
+        </div>
+
+        <button
+          onClick={onEliminar}
+          className="tactil shrink-0 rounded-md p-1.5 text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+        >
+          <Trash size={15} weight="bold" />
+        </button>
+      </div>
+      {(item.observaciones || item.moduloReferenciaNombre) && (
+        <div className="border-t border-stone-100 px-4 py-2.5 bg-stone-50 flex items-center gap-4 flex-wrap text-xs text-stone-400">
+          {item.moduloReferenciaNombre && (
+            <span>Ref: <span className="text-stone-600">{item.moduloReferenciaNombre}</span></span>
+          )}
+          {item.observaciones && <span>{item.observaciones}</span>}
+        </div>
+      )}
     </div>
   )
 }

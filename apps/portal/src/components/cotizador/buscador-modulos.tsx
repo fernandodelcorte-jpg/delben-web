@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   X,
   MagnifyingGlass,
@@ -10,9 +10,12 @@ import {
   Trash,
   CaretDown,
   Package,
+  Sparkle,
+  ArrowLeft,
 } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
-import type { ConfiguracionItem } from '@/store/carrito'
+import type { ConfiguracionItem, ItemEspecial, HerrajeEspecial } from '@/store/carrito'
+import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import { buscarModulos, buscarAccesorios, getPreciosModulo, getVariantesModulo } from '@/lib/firestore/modulos'
 import {
   resolverCategoriasParaMacro,
@@ -93,6 +96,453 @@ function Select({
   )
 }
 
+// ─── Tipos internos ───────────────────────────────────────────────────────────
+
+type ReferenciaEspecial = {
+  nombre: string
+  alto: number
+  profundidad: number
+  precioBaseRef: number
+  moduloId: string
+  moduloNombre: string
+  varianteId: string
+}
+
+// ─── Panel para módulo especial (precio y medidas manuales) ───────────────────
+
+function PanelEspecial({
+  referencia,
+  onVolver,
+}: {
+  referencia: ReferenciaEspecial | null
+  onVolver: () => void
+}) {
+  const agregarEspecial = useCarrito((s) => s.agregarEspecial)
+  const distribuidorData = useCarrito((s) => s.distribuidorData)
+  const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
+
+  // Catálogo
+  const [tiposEstructura, setTiposEstructura] = useState<TipoEstructura[]>([])
+  const [tiposFachada, setTiposFachada] = useState<TipoFachada[]>([])
+  const [subcategorias, setSubcategorias] = useState<Subcategoria[]>([])
+  const [acabados, setAcabados] = useState<Acabado[]>([])
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true)
+
+  // Form
+  const [nombre, setNombre] = useState(referencia?.nombre ?? '')
+  const [anchoStr, setAnchoStr] = useState('')
+  const [altoStr, setAltoStr] = useState(referencia?.alto ? String(referencia.alto) : '')
+  const [profStr, setProfStr] = useState(referencia?.profundidad ? String(referencia.profundidad) : '')
+  const [cantidad, setCantidad] = useState(1)
+  const [precioDelbenStr, setPrecioDelbenStr] = useState(
+    referencia?.precioBaseRef ? String(Math.round(referencia.precioBaseRef)) : '',
+  )
+  const [observaciones, setObservaciones] = useState('')
+
+  // Estructura / fachada
+  const [tipoEstructuraId, setTipoEstructuraId] = useState('')
+  const [tipoFachadaId, setTipoFachadaId] = useState('')
+  const [subcategoriaId, setSubcategoriaId] = useState('')
+  const [acabadoId, setAcabadoId] = useState('')
+  const [acabadoEstructura, setAcabadoEstructura] = useState<string | null>(null)
+  const [colorVidrio, setColorVidrio] = useState<string | null>(null)
+
+  // Herrajes
+  const [herrajes, setHerrajes] = useState<HerrajeEspecial[]>([])
+  const [busquedaHerraje, setBusquedaHerraje] = useState('')
+  const [resultadosHerraje, setResultadosHerraje] = useState<Accesorio[]>([])
+  const [buscandoHerraje, setBuscandoHerraje] = useState(false)
+  const herrajeRef = useRef<HTMLInputElement>(null)
+
+  const [errores, setErrores] = useState<Record<string, string>>({})
+  const [preciosRef, setPreciosRef] = useState<Precio[]>([])
+
+  // Carga inicial catálogo
+  useEffect(() => {
+    setCargandoCatalogo(true)
+    Promise.all([getTiposEstructura(), getTiposFachada()])
+      .then(([estructuras, fachadas]) => {
+        setTiposEstructura(estructuras)
+        setTiposFachada(fachadas)
+        if (estructuras[0]) setTipoEstructuraId(estructuras[0].id)
+        if (fachadas[0]) setTipoFachadaId(fachadas[0].id)
+      })
+      .finally(() => setCargandoCatalogo(false))
+  }, [])
+
+  useEffect(() => {
+    if (!tipoFachadaId) return
+    setSubcategorias([])
+    setSubcategoriaId('')
+    setAcabados([])
+    setAcabadoId('')
+    setColorVidrio(null)
+    getSubcategorias(tipoFachadaId).then((subs) => {
+      setSubcategorias(subs)
+      if (subs[0]) setSubcategoriaId(subs[0].id)
+    })
+  }, [tipoFachadaId])
+
+  useEffect(() => {
+    if (!subcategoriaId) return
+    setAcabados([])
+    setAcabadoId('')
+    getAcabados(subcategoriaId).then((abs) => {
+      setAcabados(abs)
+      if (abs[0]) setAcabadoId(abs[0].id)
+    })
+  }, [subcategoriaId])
+
+  useEffect(() => {
+    const est = tiposEstructura.find((e) => e.id === tipoEstructuraId)
+    setAcabadoEstructura(est?.es_premium ? (est.colores_premium[0] ?? null) : null)
+  }, [tipoEstructuraId, tiposEstructura])
+
+  // Carga precios del módulo de referencia para actualizar al cambiar estructura/fachada
+  useEffect(() => {
+    if (!referencia) return
+    getPreciosModulo(referencia.varianteId).then(setPreciosRef).catch(() => {})
+  }, [referencia?.varianteId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Actualiza precio Delben cuando cambia la combinación estructura+fachada
+  useEffect(() => {
+    if (!referencia || preciosRef.length === 0 || !tipoEstructuraId || !tipoFachadaId) return
+    const precio = preciosRef.find(
+      (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
+    )
+    if (precio) setPrecioDelbenStr(String(Math.round(precio.precio_cop)))
+  }, [preciosRef, tipoEstructuraId, tipoFachadaId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Búsqueda herrajes
+  useEffect(() => {
+    if (busquedaHerraje.trim().length < 2) { setResultadosHerraje([]); return }
+    let cancelado = false
+    setBuscandoHerraje(true)
+    const modalidad = cotizacionInfo?.modalidad ?? 'desarmado'
+    const timer = setTimeout(async () => {
+      try {
+        const res = await buscarAccesorios(busquedaHerraje, modalidad)
+        if (!cancelado) setResultadosHerraje(res.slice(0, 8))
+      } finally {
+        if (!cancelado) setBuscandoHerraje(false)
+      }
+    }, 300)
+    return () => { cancelado = true; clearTimeout(timer) }
+  }, [busquedaHerraje, cotizacionInfo?.modalidad])
+
+  const estructura = tiposEstructura.find((e) => e.id === tipoEstructuraId)
+  const fachada = tiposFachada.find((f) => f.id === tipoFachadaId)
+  const esAluminioVidrio = fachada?.es_aluminio_vidrio ?? false
+  const esPremium = estructura?.es_premium ?? false
+
+  const precioRefActual = referencia
+    ? (preciosRef.find(
+        (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
+      ) ?? null)
+    : null
+
+  const precioDelben = parseFloat(precioDelbenStr) || 0
+
+  // Cálculo automático precio cliente aplicando capa distribuidor
+  const precioClienteCalculado = useMemo(() => {
+    if (precioDelben <= 0 || !distribuidorData || !cotizacionInfo) return 0
+    const u = getUniversoParaModalidad(distribuidorData.universo, cotizacionInfo.modalidad)
+    const transporte = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
+    const instalacion = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
+    const subtotal2 = precioDelben * (1 + (transporte + instalacion + u.imprevistos_pct) / 100)
+    const precioSinIva = subtotal2 / (1 - u.utilidad_pct / 100)
+    const esColombia = distribuidorData.pais.trim().toLowerCase() === 'colombia'
+    const ivaAplicado = esColombia && u.iva_pct > 0
+    return Math.round(ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva)
+  }, [precioDelben, distribuidorData, cotizacionInfo])
+
+  function agregarHerrajeLocal(a: Accesorio) {
+    setHerrajes((prev) => {
+      const existente = prev.find((h) => h.accesorioId === a.id)
+      if (existente) return prev.map((h) => h.accesorioId === a.id ? { ...h, cantidad: h.cantidad + 1 } : h)
+      return [...prev, { accesorioId: a.id, nombre: a.nombre, codigo: String(a.codigo), cantidad: 1 }]
+    })
+    setBusquedaHerraje('')
+    setResultadosHerraje([])
+    herrajeRef.current?.focus()
+  }
+
+  function validar(): boolean {
+    const e: Record<string, string> = {}
+    if (!nombre.trim()) e.nombre = 'Requerido'
+    if (!altoStr || Number(altoStr) <= 0) e.alto = 'Valor inválido'
+    if (!profStr || Number(profStr) <= 0) e.prof = 'Valor inválido'
+    if (precioDelben <= 0) e.precioDelben = 'Ingresa un precio'
+    setErrores(e)
+    return Object.keys(e).length === 0
+  }
+
+  function handleAgregar() {
+    if (!validar()) return
+    const item: Omit<ItemEspecial, 'id'> = {
+      nombre: nombre.trim(),
+      tipoEstructuraNombre: estructura?.nombre ?? '',
+      tipoFachadaNombre: fachada?.nombre ?? '',
+      acabadoNombre: acabados.find((a) => a.id === acabadoId)?.nombre ?? '',
+      acabadoEstructura: esPremium ? acabadoEstructura : null,
+      colorVidrio: esAluminioVidrio ? colorVidrio : null,
+      ancho: anchoStr ? Number(anchoStr) : null,
+      alto: Number(altoStr),
+      profundidad: Number(profStr),
+      cantidad,
+      precioDelbenUnitario: precioDelben,
+      precioClienteUnitario: precioClienteCalculado,
+      observaciones: observaciones.trim(),
+      herrajes,
+      moduloReferenciaId: referencia?.moduloId,
+      moduloReferenciaNombre: referencia?.moduloNombre,
+    }
+    agregarEspecial(item)
+  }
+
+  const inputCls = 'w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all'
+  const errorCls = 'mt-1 text-xs text-red-600'
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="shrink-0 px-6 pt-4 pb-3 border-b border-stone-100">
+        <button type="button" onClick={onVolver}
+          className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-600 transition-colors mb-3"
+        >
+          <ArrowLeft size={12} weight="bold" />
+          Volver al catálogo
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-900">
+            <Sparkle size={14} className="text-white" weight="fill" />
+          </div>
+          <div>
+            <p className="text-xs text-stone-400">Módulo especial</p>
+            <h3 className="text-sm font-semibold text-stone-900 leading-tight">Medidas y precio manual</h3>
+          </div>
+        </div>
+        {referencia && (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="text-xs text-stone-400 min-w-0 truncate">
+              Ref: <span className="font-medium text-stone-600">{referencia.moduloNombre}</span>
+            </p>
+            {precioRefActual ? (
+              <span className="text-xs font-bold text-stone-800 tabular-nums shrink-0">
+                {formatCOP(precioRefActual.precio_cop)}
+              </span>
+            ) : preciosRef.length > 0 ? (
+              <span className="text-xs text-stone-400 shrink-0">Sin precio</span>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Formulario */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+        {/* Nombre */}
+        <Campo label="Nombre del mueble">
+          <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Alacena esquinera especial" className={inputCls} />
+          {errores.nombre && <p className={errorCls}>{errores.nombre}</p>}
+        </Campo>
+
+        {/* Dimensiones */}
+        <Campo label="Dimensiones (mm)">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Ancho', val: anchoStr, set: setAnchoStr, err: undefined },
+              { label: 'Alto', val: altoStr, set: setAltoStr, err: errores.alto },
+              { label: 'Prof.', val: profStr, set: setProfStr, err: errores.prof },
+            ].map(({ label, val, set, err }) => (
+              <div key={label}>
+                <input type="number" value={val} onChange={(e) => set(e.target.value)}
+                  placeholder={label} min={1} className={inputCls} />
+                {err && <p className={errorCls}>{err}</p>}
+                <p className="mt-1 text-xs text-stone-400 text-center">{label}</p>
+              </div>
+            ))}
+          </div>
+        </Campo>
+
+        {/* Estructura */}
+        {!cargandoCatalogo && tiposEstructura.length > 0 && (
+          <Campo label="Tipo de estructura">
+            <div className="grid grid-cols-2 gap-2">
+              {tiposEstructura.map((e) => (
+                <button key={e.id} type="button" onClick={() => setTipoEstructuraId(e.id)}
+                  className={['tactil rounded-lg border px-3 py-2.5 text-left text-xs transition-all',
+                    tipoEstructuraId === e.id ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 text-stone-600 hover:border-stone-300',
+                  ].join(' ')}
+                >
+                  <span className="font-medium">{e.nombre}</span>
+                </button>
+              ))}
+            </div>
+          </Campo>
+        )}
+
+        {/* Color estructura (si premium) */}
+        {esPremium && estructura && estructura.colores_premium.length > 0 && (
+          <Campo label="Color de estructura">
+            <Select
+              value={acabadoEstructura ?? ''}
+              onChange={setAcabadoEstructura}
+              options={estructura.colores_premium.map((c) => ({ value: c, label: c }))}
+            />
+          </Campo>
+        )}
+
+        {/* Fachada */}
+        {!cargandoCatalogo && tiposFachada.length > 0 && (
+          <Campo label="Tipo de fachada">
+            <div className="grid grid-cols-3 gap-2">
+              {tiposFachada.map((f) => (
+                <button key={f.id} type="button" onClick={() => setTipoFachadaId(f.id)}
+                  className={['tactil rounded-lg border px-3 py-2.5 text-xs font-medium transition-all',
+                    tipoFachadaId === f.id ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 text-stone-600 hover:border-stone-300',
+                  ].join(' ')}
+                >
+                  {f.nombre}
+                </button>
+              ))}
+            </div>
+          </Campo>
+        )}
+
+        {/* Subcategoría y acabado */}
+        {subcategorias.length > 0 && (
+          <Campo label="Subcategoría de acabado">
+            <Select value={subcategoriaId} onChange={setSubcategoriaId}
+              options={subcategorias.map((s) => ({
+                value: s.id,
+                label: s.nombre + (s.tipo_ajuste !== 'ninguno' ? ` (${s.tipo_ajuste === 'recargo' ? '+' : '−'}${s.ajuste_pct}%)` : ''),
+              }))}
+            />
+          </Campo>
+        )}
+        {acabados.length > 0 && (
+          <Campo label="Acabado de fachada">
+            <Select value={acabadoId} onChange={setAcabadoId}
+              options={acabados.map((a) => ({ value: a.id, label: a.nombre }))}
+            />
+          </Campo>
+        )}
+
+        {/* Color vidrio (aluminio-vidrio) */}
+        {esAluminioVidrio && (
+          <Campo label="Color de vidrio">
+            <input value={colorVidrio ?? ''} onChange={(e) => setColorVidrio(e.target.value || null)}
+              placeholder="Ej: Claro, bronce, azul…" className={inputCls} />
+          </Campo>
+        )}
+
+        {/* Precio Delben */}
+        <Campo label="Precio Delben al distribuidor (COP)">
+          <input type="number" value={precioDelbenStr}
+            onChange={(e) => setPrecioDelbenStr(e.target.value)}
+            placeholder="0" min={0} className={inputCls} />
+          {errores.precioDelben && <p className={errorCls}>{errores.precioDelben}</p>}
+          {precioClienteCalculado > 0 && (
+            <p className="mt-1.5 text-xs text-stone-500">
+              Precio al cliente calculado: <span className="font-semibold">{formatCOP(precioClienteCalculado)}</span>
+            </p>
+          )}
+        </Campo>
+
+        {/* Herrajes */}
+        <Campo label="Herrajes" nota="opcional">
+          <div className="relative mb-2">
+            <MagnifyingGlass size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" weight="bold" />
+            <input
+              ref={herrajeRef}
+              value={busquedaHerraje}
+              onChange={(e) => setBusquedaHerraje(e.target.value)}
+              placeholder="Buscar herraje…"
+              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-stone-300 focus:bg-white transition-all"
+            />
+            {buscandoHerraje && (
+              <CircleNotch size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 animate-spin" />
+            )}
+          </div>
+          {resultadosHerraje.length > 0 && (
+            <div className="mb-2 rounded-lg border border-stone-200 bg-white shadow-sm divide-y divide-stone-100 max-h-40 overflow-y-auto">
+              {resultadosHerraje.map((a) => (
+                <button key={a.id} type="button" onClick={() => agregarHerrajeLocal(a)}
+                  className="tactil w-full flex items-center justify-between px-3 py-2 text-left hover:bg-stone-50 transition-colors"
+                >
+                  <p className="text-xs font-medium text-stone-800 truncate">{a.nombre}</p>
+                  <Plus size={12} weight="bold" className="text-stone-400 shrink-0 ml-2" />
+                </button>
+              ))}
+            </div>
+          )}
+          {herrajes.length > 0 && (
+            <div className="space-y-1.5">
+              {herrajes.map((h) => (
+                <div key={h.accesorioId} className="flex items-center gap-2 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
+                  <p className="flex-1 min-w-0 text-xs font-medium text-stone-700 truncate">{h.nombre}</p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: Math.max(1, x.cantidad - 1) } : x))}
+                      className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
+                    >
+                      <Minus size={10} weight="bold" />
+                    </button>
+                    <span className="w-5 text-center text-xs font-semibold text-stone-700">{h.cantidad}</span>
+                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: x.cantidad + 1 } : x))}
+                      className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
+                    >
+                      <Plus size={10} weight="bold" />
+                    </button>
+                    <button type="button" onClick={() => setHerrajes((p) => p.filter((x) => x.accesorioId !== h.accesorioId))}
+                      className="tactil ml-1 flex h-6 w-6 items-center justify-center rounded-md text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    >
+                      <Trash size={11} weight="bold" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Campo>
+
+        {/* Cantidad y observaciones */}
+        <div className="grid grid-cols-2 gap-3">
+          <Campo label="Cantidad">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+                className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
+              >
+                <Minus size={12} weight="bold" />
+              </button>
+              <span className="flex-1 text-center text-sm font-semibold text-stone-900">{cantidad}</span>
+              <button type="button" onClick={() => setCantidad((c) => c + 1)}
+                className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
+              >
+                <Plus size={12} weight="bold" />
+              </button>
+            </div>
+          </Campo>
+          <Campo label="Observaciones">
+            <input value={observaciones} onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Opcional" className={inputCls} />
+          </Campo>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white">
+        <button type="button" onClick={handleAgregar}
+          className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 flex items-center justify-center gap-2"
+        >
+          <Sparkle size={14} weight="fill" />
+          Agregar especial al carrito
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Banner de imagen del módulo ─────────────────────────────────────────────
 
 function BannerModulo({ url, nombre }: { url: string | null; nombre: string }) {
@@ -118,7 +568,13 @@ function BannerModulo({ url, nombre }: { url: string | null; nombre: string }) {
 
 // ─── Panel de configuración de módulo (solo modo agregar) ─────────────────────
 
-function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
+function PanelConfigModulo({
+  modulo,
+  onCrearEspecial,
+}: {
+  modulo: Modulo
+  onCrearEspecial?: (ref: ReferenciaEspecial) => void
+}) {
   const agregarItem = useCarrito((s) => s.agregarItem)
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
 
@@ -763,6 +1219,26 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
           )}
           Agregar al carrito
         </button>
+        {onCrearEspecial && listo && precioActual && moduloActual && (
+          <button
+            type="button"
+            onClick={() =>
+              onCrearEspecial({
+                nombre: modulo.nombre,
+                alto: moduloActual.altura,
+                profundidad: moduloActual.profundidad,
+                precioBaseRef: precioActual.precio_cop,
+                moduloId: modulo.id,
+                moduloNombre: modulo.nombre,
+                varianteId: moduloActual.id,
+              })
+            }
+            className="tactil mt-2 w-full rounded-lg border border-stone-200 px-4 py-2.5 text-xs font-medium text-stone-500 hover:border-stone-300 hover:text-stone-700 transition-all flex items-center justify-center gap-1.5"
+          >
+            <Sparkle size={12} weight="fill" />
+            Usar como referencia para especial
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1076,6 +1552,30 @@ export function BuscadorModulos() {
   const cerrarBuscador = useCarrito((s) => s.cerrarBuscador)
   const [tab, setTab] = useState<Tab>('modulos')
   const [moduloSeleccionado, setModuloSeleccionado] = useState<Modulo | null>(null)
+  const [panelDerecho, setPanelDerecho] = useState<'catalogo' | 'especial'>('catalogo')
+  const [refEspecial, setRefEspecial] = useState<ReferenciaEspecial | null>(null)
+
+  function handleTabChange(t: Tab) {
+    setTab(t)
+    setModuloSeleccionado(null)
+    setPanelDerecho('catalogo')
+    setRefEspecial(null)
+  }
+
+  function handleCrearEspecial(ref: ReferenciaEspecial) {
+    setRefEspecial(ref)
+    setPanelDerecho('especial')
+  }
+
+  function handleCrearEspecialSinRef() {
+    setRefEspecial(null)
+    setPanelDerecho('especial')
+  }
+
+  function handleVolverCatalogo() {
+    setPanelDerecho('catalogo')
+    setRefEspecial(null)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1090,7 +1590,7 @@ export function BuscadorModulos() {
             {(['modulos', 'herrajes'] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => handleTabChange(t)}
                 className={[
                   'rounded-md px-4 py-1.5 text-xs font-semibold transition-all',
                   tab === t
@@ -1117,20 +1617,47 @@ export function BuscadorModulos() {
             <>
               <PanelBusquedaModulos
                 moduloSeleccionado={moduloSeleccionado}
-                onSeleccionar={setModuloSeleccionado}
+                onSeleccionar={(m) => {
+                  setModuloSeleccionado(m)
+                  setPanelDerecho('catalogo')
+                }}
               />
-              <div className="flex-1 overflow-hidden">
-                {moduloSeleccionado ? (
-                  <PanelConfigModulo key={moduloSeleccionado.id} modulo={moduloSeleccionado} />
+              <div className="flex-1 border-l border-stone-100 overflow-hidden">
+                {panelDerecho === 'especial' ? (
+                  <PanelEspecial
+                    referencia={refEspecial}
+                    onVolver={handleVolverCatalogo}
+                  />
+                ) : moduloSeleccionado ? (
+                  <PanelConfigModulo
+                    key={moduloSeleccionado.id}
+                    modulo={moduloSeleccionado}
+                    onCrearEspecial={handleCrearEspecial}
+                  />
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-center px-8">
-                    <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center mb-4">
-                      <Package size={22} className="text-stone-400" />
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-6">
+                    <div>
+                      <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center mb-4 mx-auto">
+                        <Package size={22} className="text-stone-400" />
+                      </div>
+                      <p className="text-sm font-medium text-stone-600">Selecciona un módulo</p>
+                      <p className="mt-1.5 text-xs text-stone-400 max-w-[200px] leading-relaxed">
+                        Busca en el catálogo y haz clic en el módulo que quieres configurar.
+                      </p>
                     </div>
-                    <p className="text-sm font-medium text-stone-600">Selecciona un módulo</p>
-                    <p className="mt-1.5 text-xs text-stone-400 max-w-[200px] leading-relaxed">
-                      Busca en el catálogo y haz clic en el módulo que quieres configurar.
-                    </p>
+                    <div className="w-full max-w-[220px]">
+                      <div className="border-t border-stone-100 pt-6">
+                        <p className="text-xs text-stone-400 mb-3">¿Mueble a medida?</p>
+                        <button
+                          type="button"
+                          onClick={handleCrearEspecialSinRef}
+                          className="tactil w-full flex items-center justify-center gap-2 rounded-lg border border-stone-200 px-4 py-2.5 text-xs font-semibold text-stone-600 hover:border-stone-300 hover:bg-stone-50 transition-all"
+                        >
+                          <Sparkle size={13} weight="fill" />
+                          Crear módulo especial
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
