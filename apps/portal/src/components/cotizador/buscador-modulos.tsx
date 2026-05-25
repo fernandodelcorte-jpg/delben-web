@@ -93,6 +93,29 @@ function Select({
   )
 }
 
+// ─── Banner de imagen del módulo ─────────────────────────────────────────────
+
+function BannerModulo({ url, nombre }: { url: string | null; nombre: string }) {
+  const [imgError, setImgError] = useState(false)
+  if (url && !imgError) {
+    return (
+      <div className="shrink-0 bg-stone-50 border-b border-stone-100">
+        <img
+          src={url}
+          alt={nombre}
+          onError={() => setImgError(true)}
+          className="w-full h-44 object-contain"
+        />
+      </div>
+    )
+  }
+  return (
+    <div className="shrink-0 h-24 bg-stone-100 border-b border-stone-100 flex items-center justify-center">
+      <span className="text-3xl font-bold text-stone-300">{nombre.slice(0, 2).toUpperCase()}</span>
+    </div>
+  )
+}
+
 // ─── Panel de configuración de módulo (solo modo agregar) ─────────────────────
 
 function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
@@ -372,14 +395,12 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Module header */}
-      <div className="shrink-0 flex items-start gap-4 px-6 pt-5 pb-4 border-b border-stone-100">
-        <ModuloImagen url={modulo.imagen_url} nombre={modulo.nombre} />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-stone-400 tracking-wide uppercase mb-0.5">
-            {modulo.tipologia}
-          </p>
-          <h3 className="text-base font-semibold text-stone-900 leading-snug">{modulo.nombre}</h3>
-        </div>
+      <BannerModulo url={modulo.imagen_url} nombre={modulo.nombre} />
+      <div className="shrink-0 px-6 pt-4 pb-4 border-b border-stone-100">
+        <p className="text-xs font-medium text-stone-400 tracking-wide uppercase mb-0.5">
+          {modulo.tipologia}
+        </p>
+        <h3 className="text-base font-semibold text-stone-900 leading-snug">{modulo.nombre}</h3>
       </div>
 
       {/* Scrollable form */}
@@ -425,8 +446,18 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
               <Select
                 value={alturaSeleccionada?.toString() ?? ''}
                 onChange={(v) => {
-                  setAlturaSeleccionada(Number(v))
-                  setProfundidadSeleccionada(null)
+                  const nuevaAltura = Number(v)
+                  setAlturaSeleccionada(nuevaAltura)
+                  const profsDisponibles = [
+                    ...new Set(
+                      variantes
+                        .filter((va) => va.altura === nuevaAltura)
+                        .map((va) => va.profundidad),
+                    ),
+                  ].sort((a, b) => a - b)
+                  if (!profsDisponibles.includes(profundidadSeleccionada ?? -1)) {
+                    setProfundidadSeleccionada(profsDisponibles[0] ?? null)
+                  }
                 }}
                 options={alturasDisponibles.map((a) => ({
                   value: a.toString(),
