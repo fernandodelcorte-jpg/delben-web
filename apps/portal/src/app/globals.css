@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Curvas de easing personalizadas — Emil Kowalski */
+  --ease-out-fuerte: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-fuerte: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Selección de texto con el acento caoba */
+  ::selection {
+    background-color: oklch(0.54 0.15 45 / 0.15);
+  }
+
+  /* Focus visible consistente */
+  :focus-visible {
+    outline: 2px solid oklch(0.54 0.15 45);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  /* Feedback táctil estándar — aplicar a elementos presionables */
+  .tactil {
+    transition: transform 160ms var(--ease-out-fuerte);
+  }
+  .tactil:active {
+    transform: scale(0.97);
+  }
+
+  /* Transición de opacidad y transformada coordinada */
+  .transicion-entrada {
+    transition:
+      opacity 200ms var(--ease-out-fuerte),
+      transform 200ms var(--ease-out-fuerte);
+  }
+}

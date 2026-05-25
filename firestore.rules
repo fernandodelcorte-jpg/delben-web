@@ -1,0 +1,229 @@
+rules_version = '2';
+
+// ============================================================
+// Firestore Security Rules — Plataforma Delben
+// ============================================================
+//
+// Modelo de seguridad:
+//   • El rol y distribuidor_id de cada usuario viven en /usuarios/{uid}.
+//   • Las reglas hacen un get() a ese documento para verificar permisos.
+//   • El costo Delben (costo_delben) está en snapshots de cotizaciones:
+//     el aislamiento de tenant impide que un distribuidor lea cotizaciones
+//     de otro. El filtro de campo por rol sigue siendo responsabilidad
+//     del cliente (filtrarPorRol en el motor).
+//
+// Para desplegar:
+//   firebase deploy --only firestore:rules
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Funciones helper ──────────────────────────────────────────────────────
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    // get() se cachea por request; no hay costo extra por llamarlo varias veces.
+    function perfilUsuario() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function esSuperAdmin() {
+      return autenticado() && perfilUsuario().rol == 'super_admin';
+    }
+
+    function miRol() {
+      return perfilUsuario().rol;
+    }
+
+    function miDistribuidorId() {
+      return perfilUsuario().distribuidor_id;
+    }
+
+    function esDeDistribuidor(distribuidorId) {
+      return autenticado() && miDistribuidorId() == distribuidorId;
+    }
+
+    function esAdminDeDistribuidor(distribuidorId) {
+      return esDeDistribuidor(distribuidorId) && miRol() == 'distribuidor_admin';
+    }
+
+    function esRolDistribuidor() {
+      return miRol() in ['distribuidor_admin', 'distribuidor_costos', 'distribuidor_comercial'];
+    }
+
+    function esFacturacionDelben() {
+      return autenticado() && miRol() == 'delben_facturacion';
+    }
+
+    // ── Catálogo (lectura: todos autenticados; escritura: solo super_admin) ───
+
+    match /tipos_estructura/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /tipos_fachada/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /subcategorias/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /acabados/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /categorias/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /modulos/{moduloId} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+
+      match /precios/{precioId} {
+        allow read: if autenticado();
+        allow write: if esSuperAdmin();
+      }
+    }
+
+    match /accesorios/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    match /categorias_macro/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    // ── Config global (logo Delben, etc.) ────────────────────────────────────
+    // Lectura: todos autenticados (PDF necesita la URL del logo).
+    // Escritura: solo super_admin.
+
+    match /config/{docId} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    // ── Tasa USD (lectura: todos autenticados; escritura: solo super_admin) ────
+    // El motor la necesita al cotizar. No contiene datos confidenciales.
+
+    match /tasa_usd_historial/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    // ── Campañas (lectura: todos autenticados; escritura: solo super_admin) ───
+    // El motor necesita leerlas para calcular. No contienen datos confidenciales.
+
+    match /campanas/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
+    // ── Collection group: cotizaciones ────────────────────────────────────────
+    // Cubre queries collectionGroup('cotizaciones') usadas en:
+    //   • super_admin: vista global /admin/cotizaciones
+    //   • distribuidor: getCotizaciones(distribuidorId) con where('distribuidor_id')
+    // Escritura se rige por las reglas anidadas específicas.
+
+    match /{path=**}/cotizaciones/{cotizacionId} {
+      allow read: if esSuperAdmin()
+                  || (autenticado() && esRolDistribuidor()
+                      && resource.data.distribuidor_id == miDistribuidorId());
+    }
+
+    // ── Distribuidores: aislamiento estricto por tenant ───────────────────────
+
+    match /distribuidores/{distribuidorId} {
+      // Lectura: super_admin + cualquier usuario del tenant
+      // Escritura: super_admin + distribuidor_admin de ESE tenant (editar universo)
+      allow read: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+      allow write: if esSuperAdmin() || esAdminDeDistribuidor(distribuidorId);
+
+      // Cotizaciones: aislamiento total entre tenants
+      match /cotizaciones/{cotizacionId} {
+        allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+      }
+
+      // Proyectos: aislamiento total entre tenants
+      match /proyectos/{proyectoId} {
+        allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+
+        // Cotizaciones anidadas dentro de proyectos
+        match /cotizaciones/{cotizacionId} {
+          allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+        }
+      }
+
+      // Historial de condiciones: escritura solo super_admin; lectura super_admin + tenant
+      match /historial_condiciones/{entradaId} {
+        allow read: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+        allow write: if esSuperAdmin();
+      }
+    }
+
+    // ── Valoraciones internas (solo Delben) ──────────────────────────────────
+    // No visibles para distribuidores. delben_facturacion tiene acceso completo.
+
+    match /valoraciones/{valoracionId} {
+      allow read, write: if esSuperAdmin() || esFacturacionDelben();
+    }
+
+    // ── Usuarios ──────────────────────────────────────────────────────────────
+
+    match /usuarios/{uid} {
+      // Lectura:
+      //   • super_admin: todos los usuarios
+      //   • El propio usuario: su propio documento
+      //   • distribuidor_admin: los usuarios de su mismo tenant
+      allow read: if esSuperAdmin()
+                  || request.auth.uid == uid
+                  || (autenticado()
+                      && miRol() == 'distribuidor_admin'
+                      && resource.data.distribuidor_id == miDistribuidorId());
+
+      // Creación:
+      //   • super_admin: cualquier usuario y rol
+      //   • distribuidor_admin: solo costos/comercial de su propio tenant
+      allow create: if esSuperAdmin()
+                    || (autenticado()
+                        && miRol() == 'distribuidor_admin'
+                        && request.resource.data.distribuidor_id == miDistribuidorId()
+                        && request.resource.data.rol in [
+                             'distribuidor_costos',
+                             'distribuidor_comercial'
+                           ]);
+
+      // Actualización:
+      //   • super_admin: sin restricciones
+      //   • Usuario propio: no puede cambiar rol ni distribuidor_id
+      //   • distribuidor_admin: puede actualizar usuarios de su tenant
+      //     mientras no cambie el distribuidor_id ni eleve el rol a admin
+      allow update: if esSuperAdmin()
+                    || (request.auth.uid == uid
+                        && request.resource.data.rol == resource.data.rol
+                        && request.resource.data.distribuidor_id == resource.data.distribuidor_id)
+                    || (autenticado()
+                        && miRol() == 'distribuidor_admin'
+                        && resource.data.distribuidor_id == miDistribuidorId()
+                        && request.resource.data.distribuidor_id == miDistribuidorId()
+                        && request.resource.data.rol in [
+                             'distribuidor_costos',
+                             'distribuidor_comercial'
+                           ]);
+
+      // Eliminación: solo super_admin
+      allow delete: if esSuperAdmin();
+    }
+  }
+}

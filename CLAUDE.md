@@ -3,6 +3,16 @@
 > Este archivo vive en la raíz del repositorio. Claude Code lo lee
 > automáticamente en cada sesión. Son las reglas permanentes del proyecto.
 
+## Documentación del proyecto (solo 2 documentos)
+
+- `docs/ESTADO_ACTUAL.md` — dónde va la obra HOY. **Léelo PRIMERO** en cada
+  sesión para saber en qué punto está el proyecto.
+- `docs/DISENO_SISTEMA.md` — el diseño completo en 6 secciones numeradas
+  (1 negocio, 2 motor, 3 datos, 4 interfaz, 5 plan, 6 herrajes). Consúltalo
+  según la tarea; no hace falta leerlo entero cada vez.
+
+No hay más documentos de diseño. Si algo no está en esos dos, pregunta.
+
 ## Qué es este proyecto
 
 Plataforma SaaS B2B de cotización para Delben (fábrica de carpintería, 45 años,
@@ -60,7 +70,7 @@ delben/
 6. **Avisar si una petición contradice los documentos** de `docs/` o es un
    anti-patrón. La honestidad técnica está por encima de complacer.
 
-## Modelo de cálculo (resumen — detalle en docs/11_MOTOR_CALCULO.md)
+## Modelo de cálculo (resumen — detalle en docs/DISENO_SISTEMA.md §2)
 
 Dos capas, todo SECUENCIAL:
 
@@ -96,6 +106,23 @@ el cliente final lo configura el admin del distribuidor.
 
 Todo en español: comentarios, commits, nombres de dominio (modulo, cotizacion,
 distribuidor, etc.), mensajes de UI. El código (keywords) en inglés por sintaxis.
+
+## Estilo de trabajo
+
+- **Piensa antes de actuar. Lee los archivos relevantes antes de escribir
+  código.** No asumas el contenido de un archivo: léelo.
+- **Edita solo lo que cambia.** No reescribas archivos enteros para un
+  cambio puntual.
+- **No releas innecesariamente** archivos sin cambios. PERO si editaste un
+  archivo, o no estás seguro de su estado actual, vuelve a leerlo antes de
+  modificarlo. La prudencia vale más que ahorrar una lectura.
+- **No repitas en tus respuestas** código que no cambió.
+- **Sé conciso:** sin preámbulos ni resúmenes innecesarios, no expliques lo
+  obvio. EXCEPCIÓN: si una decisión tiene implicaciones de arquitectura,
+  seguridad o integridad de datos, explica brevemente el porqué antes de
+  actuar, y avisa si algo contradice los documentos de `docs/`.
+- **Testea antes de dar por terminado.** Ver la sección siguiente.
+- Cambios pequeños y verificables. No grandes refactors sin pedirlos.
 
 ## Antes de dar una tarea por terminada
 

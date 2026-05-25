@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// ============================================================
+// Firebase Storage Rules — Plataforma Delben
+// ============================================================
+//
+// Nota de seguridad:
+//   Las reglas de Storage no pueden hacer get() a Firestore, así que
+//   no es posible verificar el rol del usuario sin custom claims en el JWT.
+//   Mientras el proyecto use roles solo en Firestore (no en JWT claims),
+//   la restricción es a nivel de "autenticado". Cuando se implementen
+//   custom claims, restringir escritura por rol:
+//     - logos/delben          → request.auth.token.rol == 'super_admin'
+//     - logos/distribuidores/ → request.auth.token.rol == 'distribuidor_admin'
+//     - imagenes/             → request.auth.token.rol == 'super_admin'
+//
+// Para desplegar:
+//   firebase deploy --only storage
+// ============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Catálogo: imágenes de módulos y herrajes ──────────────────────────────
+    // El importador (super_admin) escribe; el cotizador las lee.
+
+    match /imagenes/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // ── Logos ─────────────────────────────────────────────────────────────────
+    // logos/delben                   → logo de Delben (sube super_admin)
+    // logos/distribuidores/{id}      → logo del distribuidor (sube distribuidor_admin)
+    //
+    // Los getDownloadURL incluyen token en la URL, por lo que los PDFs cargan
+    // las imágenes correctamente sin requerir auth en cada fetch del renderer.
+
+    match /logos/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

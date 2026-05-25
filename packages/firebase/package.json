@@ -1,0 +1,13 @@
+{
+  "name": "@delben/firebase",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@delben/config": "*",
+    "typescript": "^5.5.4"
+  }
+}
