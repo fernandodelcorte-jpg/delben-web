@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CircleNotch } from '@phosphor-icons/react'
+import { CircleNotch, ArrowLeft } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
 import type { Distribuidor } from '@/lib/firebase/tipos-firestore'
@@ -60,6 +60,14 @@ export default function NuevaValoracionPage() {
     <div className="min-h-screen bg-stone-50 flex items-start justify-center px-4 pt-16 pb-24">
       <div className="w-full max-w-md">
         <div className="mb-8">
+          <button
+            type="button"
+            onClick={() => router.push('/admin/valoraciones')}
+            className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-700 mb-4 transition-colors"
+          >
+            <ArrowLeft size={14} />
+            Valoraciones
+          </button>
           <p className="text-xs font-medium tracking-widest text-stone-400 uppercase mb-2">
             Valoración interna
           </p>

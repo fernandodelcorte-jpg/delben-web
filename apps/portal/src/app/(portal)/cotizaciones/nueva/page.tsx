@@ -253,12 +253,19 @@ function NuevaCotizacionContent() {
                   )}
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-3">
                   <button
                     type="submit"
                     className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800"
                   >
                     Siguiente →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/cotizaciones')}
+                    className="w-full text-center text-sm text-stone-400 hover:text-stone-600 transition-colors"
+                  >
+                    Cancelar
                   </button>
                 </div>
               </form>
@@ -299,7 +306,7 @@ function NuevaCotizacionContent() {
                     ))}
                   </div>
                 )}
-                <div className="pt-2">
+                <div className="pt-2 space-y-3">
                   <button
                     type="button"
                     onClick={onElegirExistente}
@@ -307,6 +314,13 @@ function NuevaCotizacionContent() {
                     className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40"
                   >
                     Siguiente →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/cotizaciones')}
+                    className="w-full text-center text-sm text-stone-400 hover:text-stone-600 transition-colors"
+                  >
+                    Cancelar
                   </button>
                 </div>
               </div>

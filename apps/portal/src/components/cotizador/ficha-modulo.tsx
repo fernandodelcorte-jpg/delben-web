@@ -706,12 +706,19 @@ export function FichaModulo() {
         )}
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white">
+        <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white flex gap-3">
+          <button
+            type="button"
+            onClick={cerrarFicha}
+            className="rounded-lg border border-stone-200 px-4 py-3 text-sm font-medium text-stone-600 hover:bg-stone-50 transition-all"
+          >
+            Cancelar
+          </button>
           <button
             type="button"
             onClick={handleAgregar}
             disabled={!listo}
-            className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="tactil flex-1 rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {itemEditando ? 'Actualizar módulo' : 'Agregar al carrito'}
           </button>
