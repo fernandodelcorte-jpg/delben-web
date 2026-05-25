@@ -201,11 +201,6 @@ function PanelConfigModulo({ modulo }: { modulo: Modulo }) {
     getPreciosModulo(variante.id)
       .then((ps) => {
         setPrecios(ps)
-        if (ps.length === 0) {
-          console.warn('[BuscadorModulos] getPreciosModulo returned empty for', variante.id)
-        } else {
-          console.log('[BuscadorModulos] precios cargados', ps.length, ps.map(p => `${p.tipo_estructura_id}×${p.tipo_fachada_id}`))
-        }
       })
       .catch((err) => {
         console.error('[BuscadorModulos] Error cargando precios:', err)

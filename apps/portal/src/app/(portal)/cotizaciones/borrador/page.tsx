@@ -163,7 +163,8 @@ export default function BorradorPage() {
   const yaGuardada = !!cotizacionGuardadaId
 
   return (
-    <div className="max-w-4xl animate-aparecer">
+    <>
+      <div className="max-w-4xl animate-aparecer">
       {/* Breadcrumb + contexto */}
       <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
         <div className="flex items-center gap-3 min-w-0">
@@ -388,11 +389,10 @@ export default function BorradorPage() {
           </div>
         )}
       </div>
-
-      {/* Overlays */}
+      </div>
       {pantallaActiva === 'buscador' && <BuscadorModulos />}
       {pantallaActiva === 'ficha' && <FichaModulo />}
-    </div>
+    </>
   )
 }
 

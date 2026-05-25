@@ -9,7 +9,6 @@ import type { ItemCarrito, ItemHerrajeCarrito, HerrajeAsociado } from '@/store/c
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
 import { getTasaUsdActual } from '@/lib/firestore/config'
-import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import { BuscadorModulos } from '@/components/cotizador/buscador-modulos'
 import { FichaModulo } from '@/components/cotizador/ficha-modulo'
 import { ModuloImagen } from '@/components/cotizador/modulo-imagen'
@@ -33,28 +32,10 @@ export default function ValoracionBorradorPage() {
   const guardarValoracion = useCarrito((s) => s.guardarValoracion)
   const setCampanas = useCarrito((s) => s.setCampanas)
   const setTasaUsd = useCarrito((s) => s.setTasaUsd)
-  const actualizarCostosProyecto = useCarrito((s) => s.actualizarCostosProyecto)
 
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
   const [guardando, setGuardando] = useState(false)
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null)
-
-  const modalidadBorrador = cotizacionInfo?.modalidad ?? 'desarmado'
-  const universoModal = distribuidorData ? getUniversoParaModalidad(distribuidorData.universo, modalidadBorrador) : null
-  const usaTransporteFijo = (universoModal?.transporte_tipo ?? 'porcentual') === 'fijo'
-  const usaInstalacionFija = (universoModal?.instalacion_tipo ?? 'porcentual') === 'fijo'
-  const [transporteInput, setTransporteInput] = useState(
-    cotizacionInfo?.transporteFijo ? String(cotizacionInfo.transporteFijo) : '',
-  )
-  const [instalacionInput, setInstalacionInput] = useState(
-    cotizacionInfo?.instalacionFija ? String(cotizacionInfo.instalacionFija) : '',
-  )
-
-  function onCambiarCostosProyecto(transp: string, instal: string) {
-    const t = parseFloat(transp.replace(/\./g, '').replace(',', '.')) || 0
-    const i = parseFloat(instal.replace(/\./g, '').replace(',', '.')) || 0
-    actualizarCostosProyecto(t, i)
-  }
 
   useEffect(() => {
     if (!cotizacionInfo) {
@@ -69,14 +50,15 @@ export default function ValoracionBorradorPage() {
 
   if (!cotizacionInfo) return null
 
-  const totalModulos = items.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-  const totalHerrajesAsociados = items.reduce(
-    (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.subtotal_linea, 0),
-    0,
-  )
-  const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-  const total = totalModulos + totalHerrajesAsociados + totalHerrajes
   const hayItems = items.length > 0 || itemsHerraje.length > 0
+
+  const totalCostoTrasDescuentos =
+    items.reduce((s, i) => s + i.resultado.costo_tras_descuentos * i.config.cantidad, 0) +
+    items.reduce(
+      (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.costo_tras_descuentos * h.cantidad, 0),
+      0,
+    ) +
+    itemsHerraje.reduce((s, i) => s + i.resultado.costo_tras_descuentos * i.cantidad, 0)
 
   const totalCostoDelben =
     items.reduce((s, i) => s + i.resultado.costo_delben * i.config.cantidad, 0) +
@@ -213,68 +195,34 @@ export default function ValoracionBorradorPage() {
           )}
         </div>
 
-        {/* Costos fijos */}
-        {(usaTransporteFijo || usaInstalacionFija) && (
-          <div className="mt-8 rounded-xl border border-stone-200 bg-white p-5">
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
-              Costos fijos del proyecto
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              {usaTransporteFijo && (
-                <div>
-                  <label className="block text-xs text-stone-500 mb-1.5">Transporte</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={transporteInput}
-                    onChange={(e) => {
-                      setTransporteInput(e.target.value)
-                      onCambiarCostosProyecto(e.target.value, instalacionInput)
-                    }}
-                    placeholder="0"
-                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400 tabular-nums"
-                  />
-                </div>
-              )}
-              {usaInstalacionFija && (
-                <div>
-                  <label className="block text-xs text-stone-500 mb-1.5">Instalación</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={instalacionInput}
-                    onChange={(e) => {
-                      setInstalacionInput(e.target.value)
-                      onCambiarCostosProyecto(transporteInput, e.target.value)
-                    }}
-                    placeholder="0"
-                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400 tabular-nums"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Totales */}
+        {/* Totales internos Delben */}
         {hayItems && (
           <div className="mt-10 space-y-4">
-            {/* Costo Delben — siempre visible en valoraciones internas */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50 px-5 py-4">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
-                Costo a Delben (orden de compra)
+            <div className="rounded-xl border border-stone-200 bg-stone-50 px-5 py-4 space-y-3">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                Resumen interno Delben
               </p>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-stone-600">Total costo a Delben</p>
-                <p className="text-sm font-bold text-stone-900 tabular-nums">
+                <p className="text-sm text-stone-500">Costo de producción</p>
+                <p className="text-sm font-medium text-stone-700 tabular-nums">
+                  {formatCOP(totalCostoTrasDescuentos)}
+                </p>
+              </div>
+              <div className="flex items-center justify-between border-t border-stone-200 pt-3">
+                <p className="text-sm text-stone-800 font-medium">Precio Delben al distribuidor</p>
+                <p className="text-base font-bold text-stone-900 tabular-nums">
                   {formatCOP(totalCostoDelben)}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-end justify-between gap-6 flex-wrap">
+            <div className="flex items-center justify-between gap-6 flex-wrap">
+              <p className="text-xs text-stone-400">
+                {items.length} módulo{items.length !== 1 ? 's' : ''}
+                {itemsHerraje.length > 0 &&
+                  ` · ${itemsHerraje.length} herraje${itemsHerraje.length !== 1 ? 's' : ''}`}{' '}
+                · COP
+              </p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleGuardar}
@@ -291,17 +239,6 @@ export default function ValoracionBorradorPage() {
                 {errorGuardar && (
                   <p className="text-xs text-red-600">{errorGuardar}</p>
                 )}
-              </div>
-
-              <div className="text-right">
-                <p className="text-xs text-stone-400 mb-1">Total con IVA</p>
-                <p className="text-2xl font-bold text-stone-900 tabular-nums">{formatCOP(total)}</p>
-                <p className="text-xs text-stone-400 mt-1">
-                  {items.length} módulo{items.length !== 1 ? 's' : ''}
-                  {itemsHerraje.length > 0 &&
-                    ` · ${itemsHerraje.length} herraje${itemsHerraje.length !== 1 ? 's' : ''}`}{' '}
-                  · COP
-                </p>
               </div>
             </div>
           </div>
@@ -351,11 +288,11 @@ function CarritoItemRow({
 
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-stone-900 tabular-nums">
-            {formatCOP(item.resultado.subtotal_linea)}
+            {formatCOP(item.resultado.costo_delben * item.config.cantidad)}
           </p>
           {item.config.cantidad > 1 && (
             <p className="text-xs text-stone-400 tabular-nums">
-              {formatCOP(item.resultado.precio_final_unitario)} c/u
+              {formatCOP(item.resultado.costo_delben)} c/u
             </p>
           )}
         </div>
@@ -427,11 +364,13 @@ function HerrajeItemRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-stone-900 tabular-nums">
-            {formatCOP(item.resultado.subtotal_linea)}
+            {formatCOP(item.resultado.costo_delben * item.cantidad)}
           </p>
-          <p className="text-xs text-stone-400 tabular-nums">
-            costo: {formatCOP(item.resultado.costo_delben * item.cantidad)}
-          </p>
+          {item.cantidad > 1 && (
+            <p className="text-xs text-stone-400 tabular-nums">
+              {formatCOP(item.resultado.costo_delben)} c/u
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -476,14 +415,9 @@ function HerrajesAsociadosList({ herrajes }: { herrajes: HerrajeAsociado[] }) {
               {h.accesorio.nombre}
               <span className="text-stone-400 ml-1.5">×{h.cantidad}</span>
             </span>
-            <div className="shrink-0 text-right">
-              <span className="font-medium text-stone-700 tabular-nums">
-                {formatCOP(h.resultado.subtotal_linea)}
-              </span>
-              <span className="block text-stone-400 tabular-nums">
-                costo: {formatCOP(h.resultado.costo_delben * h.cantidad)}
-              </span>
-            </div>
+            <span className="font-medium text-stone-700 tabular-nums shrink-0">
+              {formatCOP(h.resultado.costo_delben * h.cantidad)}
+            </span>
           </div>
         ))}
       </div>
@@ -515,16 +449,12 @@ function DetalleGrid({ item }: { item: ItemCarrito }) {
       <div className="col-span-2 mt-2 pt-2 border-t border-stone-200">
         <div className="flex gap-6 flex-wrap">
           <div>
-            <span className="text-stone-400">Sin IVA:</span>{' '}
-            <span className="font-medium text-stone-700">{formatCOP(item.resultado.precio_sin_iva)}</span>
+            <span className="text-stone-400">Costo producción:</span>{' '}
+            <span className="font-medium text-stone-700">{formatCOP(item.resultado.costo_tras_descuentos)}</span>
           </div>
           <div>
-            <span className="text-stone-400">Con IVA:</span>{' '}
-            <span className="font-semibold text-stone-900">{formatCOP(item.resultado.precio_final_unitario)}</span>
-          </div>
-          <div>
-            <span className="text-stone-400">Costo Delben:</span>{' '}
-            <span className="font-medium text-stone-500">{formatCOP(item.resultado.costo_delben)}</span>
+            <span className="text-stone-400">Precio Delben:</span>{' '}
+            <span className="font-semibold text-stone-900">{formatCOP(item.resultado.costo_delben)}</span>
           </div>
         </div>
       </div>
