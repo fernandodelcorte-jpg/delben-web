@@ -28,6 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const cancelar = onAuthStateChanged(auth, async (usuario) => {
       if (usuario) {
+        // Marcar cargando=true antes del primer await para evitar que la guardia
+        // del portal layout redirija a /login mientras se resuelve el estado.
+        setEstado((prev) => ({ ...prev, cargando: true }))
         const token = await usuario.getIdTokenResult()
         let rol = extraerRol(token)
         let distribuidorId =

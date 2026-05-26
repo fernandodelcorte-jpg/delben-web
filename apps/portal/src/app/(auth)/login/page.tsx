@@ -48,9 +48,9 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-[3.25rem] font-light leading-[1.08] tracking-tight text-stone-50">
-            Carpintería<br />
-            colombiana<br />
-            <span style={{ color: 'oklch(0.63 0.14 50)' }}>desde 1979.</span>
+            Fabricación<br />
+            con tradición<br />
+            <span style={{ color: 'oklch(0.63 0.14 50)' }}>desde 1976.</span>
           </h1>
 
           <p className="text-stone-500 text-sm leading-relaxed max-w-[36ch]">
