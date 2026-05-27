@@ -72,6 +72,7 @@ export type InfoPDF = {
   clienteNombre: string
   clienteDireccion?: string
   proyectoNombre: string
+  espacioNombre?: string
   categoriaNombre?: string
   modalidad: 'tradicional' | 'desarmado'
   fecha: Date
@@ -176,6 +177,7 @@ export function cotizacionInfoToInfoPDF(
     clienteNombre: info.clienteNombre,
     clienteDireccion: info.clienteDireccion,
     proyectoNombre: info.proyectoNombre,
+    espacioNombre: info.espacioNombre,
     categoriaNombre: info.categoriaNombre,
     modalidad: info.modalidad,
     fecha: new Date(info.fecha),

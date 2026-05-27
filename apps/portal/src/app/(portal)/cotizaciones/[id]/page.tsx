@@ -212,6 +212,7 @@ function CotizacionDetalleContent() {
     clienteNombre: cotizacion.clienteNombre,
     clienteDireccion: cotizacion.clienteDireccion,
     proyectoNombre: cotizacion.proyectoNombre,
+    espacioNombre: cotizacion.espacio_nombre,
     categoriaNombre: cotizacion.categoriaNombre,
     modalidad: cotizacion.modalidad,
     fecha: new Date(cotizacion.fecha),
@@ -393,55 +394,70 @@ function CotizacionDetalleContent() {
               const t = calcularResumenTotal(cotizacion, distribuidor)
               const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
               const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'
+              const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0
               return (
-                <div className="rounded-xl border border-stone-200 bg-white px-5 py-5">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
-                    Desglose de costos del proyecto
-                  </p>
-                  <div className="space-y-0 text-sm divide-y divide-stone-50">
-                    <FilaCosto label="Precio base (tras descuentos y campaña)" valor={t.base} resaltado />
-                    <FilaCosto label={`Diseño (${s.diseno_pct}%)`} valor={t.diseno} signo="+" />
-                    <FilaCosto label={`Cotización (${s.cotizacion_pct}%)`} valor={t.cotizacion} signo="+" />
-                    <FilaCosto label={`Producción (${s.produccion_pct}%)`} valor={t.produccion} signo="+" />
-                    <FilaCosto label={`Logística (${s.logistica_pct}%)`} valor={t.logistica} signo="+" />
-                    <FilaCosto label={`Gestión comercial (${s.gestion_comercial_pct}% margin)`} valor={t.gestion} signo="+" />
-                    <FilaCosto label="→ Costo Delben" valor={t.costoDelben} resaltado />
-                    {!transp_fijo && <FilaCosto label={`Transporte (${u.transporte_pct}%)`} valor={t.transporte} signo="+" />}
-                    {!instal_fija && <FilaCosto label={`Instalación (${u.instalacion_pct}%)`} valor={t.instalacion} signo="+" />}
-                    <FilaCosto label={`Imprevistos (${u.imprevistos_pct}%)`} valor={t.imprevistos} signo="+" />
-                    <FilaCosto label={`Utilidad (${u.utilidad_pct}% margin)`} valor={t.utilidad} signo="+" />
-                    <FilaCosto label="Sin IVA" valor={t.sinIva} resaltado />
-                    {t.iva > 0 && <FilaCosto label={`IVA (${u.iva_pct}%)`} valor={t.iva} signo="+" />}
-                    {t.transporteFijo > 0 && <FilaCosto label="Transporte fijo" valor={t.transporteFijo} signo="+" />}
-                    {t.instalacionFija > 0 && <FilaCosto label="Instalación fija" valor={t.instalacionFija} signo="+" />}
-                    <div className="pt-1">
-                      <FilaCosto label="→ Total del proyecto" valor={cotizacion.totales.total} resaltado destacado />
+                <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+
+                  {/* Capa Delben */}
+                  <div className="px-5 pt-4 pb-3">
+                    <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
+                      Capa Delben
+                    </p>
+                    <div className="text-sm divide-y divide-stone-50">
+                      <FilaCosto label="Precio base (tras descuentos y campaña)" valor={t.base} resaltado />
+                      <FilaCosto label={`Diseño (${s.diseno_pct}%)`} valor={t.diseno} signo="+" />
+                      <FilaCosto label={`Cotización (${s.cotizacion_pct}%)`} valor={t.cotizacion} signo="+" />
+                      <FilaCosto label={`Producción (${s.produccion_pct}%)`} valor={t.produccion} signo="+" />
+                      <FilaCosto label={`Logística (${s.logistica_pct}%)`} valor={t.logistica} signo="+" />
+                      <FilaCosto label={`Gestión comercial (${s.gestion_comercial_pct}% margin)`} valor={t.gestion} signo="+" />
                     </div>
+                  </div>
+                  <div className="bg-stone-50 border-t border-b border-stone-100 px-5 py-2.5 flex justify-between items-center">
+                    <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Precio Delben</span>
+                    <span className="text-sm font-bold text-stone-900 tabular-nums">{formatCOP(t.costoDelben)}</span>
+                  </div>
+
+                  {/* Capa distribuidor */}
+                  <div className="px-5 pt-4 pb-3">
+                    <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
+                      Capa distribuidor
+                    </p>
+                    <div className="text-sm divide-y divide-stone-50">
+                      {!transp_fijo && <FilaCosto label={`Transporte (${u.transporte_pct}%)`} valor={t.transporte} signo="+" />}
+                      {!instal_fija && <FilaCosto label={`Instalación (${u.instalacion_pct}%)`} valor={t.instalacion} signo="+" />}
+                      <FilaCosto label={`Imprevistos (${u.imprevistos_pct}%)`} valor={t.imprevistos} signo="+" />
+                      <FilaCosto label={`Utilidad (${u.utilidad_pct}% margin)`} valor={t.utilidad} signo="+" />
+                    </div>
+                  </div>
+                  <div className="bg-stone-50 border-t border-stone-100 px-5 py-2.5 flex justify-between items-center">
+                    <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Sin IVA</span>
+                    <span className="text-sm font-bold text-stone-900 tabular-nums">{formatCOP(t.sinIva)}</span>
+                  </div>
+
+                  {/* IVA y costos fijos */}
+                  {hayIvaOFijos && (
+                    <div className="px-5 pt-4 pb-3 border-t border-stone-100">
+                      <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
+                        IVA y costos fijos
+                      </p>
+                      <div className="text-sm divide-y divide-stone-50">
+                        {t.iva > 0 && <FilaCosto label={`IVA (${u.iva_pct}%)`} valor={t.iva} signo="+" />}
+                        {t.transporteFijo > 0 && <FilaCosto label="Transporte fijo" valor={t.transporteFijo} signo="+" />}
+                        {t.instalacionFija > 0 && <FilaCosto label="Instalación fija" valor={t.instalacionFija} signo="+" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Total — fila oscura */}
+                  <div className="bg-stone-900 px-5 py-3.5 flex justify-between items-center">
+                    <span className="text-sm font-semibold text-stone-300">Total del proyecto</span>
+                    <span className="text-base font-bold text-white tabular-nums">
+                      {formatCOP(cotizacion.totales.total)}
+                    </span>
                   </div>
                 </div>
               )
             })()}
-
-            {/* Costos fijos del proyecto */}
-            {((cotizacion.totales.transporteFijo ?? 0) > 0 || (cotizacion.totales.instalacionFija ?? 0) > 0) && puedeVerCosto && (
-              <div className="rounded-xl border border-stone-200 bg-white px-5 py-4 space-y-2">
-                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">
-                  Costos fijos del proyecto
-                </p>
-                {(cotizacion.totales.transporteFijo ?? 0) > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-stone-600">Transporte</span>
-                    <span className="font-medium tabular-nums">{formatCOP(cotizacion.totales.transporteFijo!)}</span>
-                  </div>
-                )}
-                {(cotizacion.totales.instalacionFija ?? 0) > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-stone-600">Instalación</span>
-                    <span className="font-medium tabular-nums">{formatCOP(cotizacion.totales.instalacionFija!)}</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="flex items-end justify-between gap-6 flex-wrap">
               <div className="flex items-center gap-3 flex-wrap">
@@ -687,16 +703,16 @@ function FilaCosto({
 }) {
   return (
     <div className={[
-      'flex items-center justify-between py-0.5',
+      'flex items-center justify-between py-1',
       resaltado ? 'font-semibold' : '',
     ].join(' ')}>
-      <span className={resaltado ? 'text-stone-700' : 'text-stone-400'}>
+      <span className={resaltado ? 'text-stone-700' : 'text-stone-600'}>
         {signo && <span className="mr-1 text-stone-300">{signo}</span>}
         {label}
       </span>
       <span className={[
         'tabular-nums',
-        destacado ? 'text-stone-900 text-sm' : resaltado ? 'text-stone-700' : 'text-stone-500',
+        destacado ? 'text-stone-900 text-sm' : resaltado ? 'text-stone-700' : 'text-stone-600',
       ].join(' ')}>
         {formatCOP(valor)}
       </span>

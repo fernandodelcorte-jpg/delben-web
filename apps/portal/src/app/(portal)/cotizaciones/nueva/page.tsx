@@ -5,13 +5,47 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CircleNotch, ArrowLeft } from '@phosphor-icons/react'
+import { CircleNotch, ArrowLeft, ArrowRight } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCategoriasMacro } from '@/lib/firestore/catalogo'
 import { getProyectos, crearProyecto } from '@/lib/firestore/proyectos'
 import { getSiguienteVersion } from '@/lib/firestore/cotizaciones'
 import type { CategoriaMacro, Proyecto } from '@/lib/firebase/tipos-firestore'
+
+// ─── Indicador de pasos ───────────────────────────────────────────────────────
+
+function PasosIndicador({ paso }: { paso: 1 | 2 }) {
+  const pasos = [
+    { n: 1, label: 'Proyecto' },
+    { n: 2, label: 'Cotización' },
+  ]
+  return (
+    <div className="flex items-center gap-1.5 mb-8">
+      {pasos.map(({ n, label }, i) => (
+        <div key={n} className="flex items-center gap-1.5">
+          {i > 0 && <div className="h-px w-8 bg-stone-200" />}
+          <div className="flex items-center gap-2">
+            <div className={[
+              'h-6 w-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0',
+              paso >= n
+                ? 'bg-stone-900 text-white'
+                : 'bg-stone-100 text-stone-400',
+            ].join(' ')}>
+              {n}
+            </div>
+            <span className={[
+              'text-xs',
+              paso >= n ? 'text-stone-700 font-medium' : 'text-stone-400',
+            ].join(' ')}>
+              {label}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -166,13 +200,13 @@ function NuevaCotizacionContent() {
     <div className="flex justify-center pt-4 pb-12">
       <div className="w-full max-w-md">
 
+        {/* Indicador de pasos */}
+        <PasosIndicador paso={paso} />
+
         {/* ── Paso 1: Proyecto ─────────────────────────────────────────────── */}
         {paso === 1 && (
           <>
             <div className="mb-8">
-              <p className="text-xs font-medium tracking-widest text-stone-400 uppercase mb-2">
-                Paso 1 de 2
-              </p>
               <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">
                 Proyecto
               </h1>
@@ -256,9 +290,10 @@ function NuevaCotizacionContent() {
                 <div className="pt-2 space-y-3">
                   <button
                     type="submit"
-                    className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800"
+                    className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 flex items-center justify-center gap-2"
                   >
-                    Siguiente →
+                    Siguiente
+                    <ArrowRight size={14} weight="bold" />
                   </button>
                   <button
                     type="button"
@@ -311,9 +346,10 @@ function NuevaCotizacionContent() {
                     type="button"
                     onClick={onElegirExistente}
                     disabled={!proyectoSeleccionadoId}
-                    className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40"
+                    className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 flex items-center justify-center gap-2"
                   >
-                    Siguiente →
+                    Siguiente
+                    <ArrowRight size={14} weight="bold" />
                   </button>
                   <button
                     type="button"
@@ -335,14 +371,11 @@ function NuevaCotizacionContent() {
               <button
                 type="button"
                 onClick={() => setPaso(1)}
-                className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-700 mb-4 transition-colors"
+                className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-700 mb-6 transition-colors"
               >
                 <ArrowLeft size={14} />
                 Volver
               </button>
-              <p className="text-xs font-medium tracking-widest text-stone-400 uppercase mb-2">
-                Paso 2 de 2
-              </p>
               <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">
                 Cotización
               </h1>
@@ -449,8 +482,11 @@ function NuevaCotizacionContent() {
                   disabled={guardando}
                   className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {guardando && <CircleNotch size={14} className="animate-spin" />}
-                  Comenzar cotización →
+                  {guardando ? (
+                    <CircleNotch size={14} className="animate-spin" />
+                  ) : null}
+                  Comenzar cotización
+                  {!guardando && <ArrowRight size={14} weight="bold" />}
                 </button>
               </div>
             </form>

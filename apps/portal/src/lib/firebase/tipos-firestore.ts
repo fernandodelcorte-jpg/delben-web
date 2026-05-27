@@ -68,6 +68,7 @@ export interface ModuloDoc {
   activo: boolean
   requiere_fachada?: boolean    // false → sin selector fachada; precio usa sentinel sin-fachada
   requiere_estructura?: boolean // false → sin selector estructura; precio usa sentinel sin-estructura
+  precio_min?: number           // precio mínimo del catálogo (denormalizado del import para mostrar en buscador)
 }
 
 export interface PrecioDoc {

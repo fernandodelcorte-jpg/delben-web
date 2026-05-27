@@ -8,12 +8,7 @@ import { getCotizacionesTodas } from '@/lib/firestore/cotizaciones'
 import { getValoraciones } from '@/lib/firestore/valoraciones'
 import { formatCOP } from '@/lib/datos-demo'
 import type { Cotizacion, Valoracion, Distribuidor } from '@/lib/firebase/tipos-firestore'
-import {
-  Buildings,
-  FileText,
-  Receipt,
-  ArrowUpRight,
-} from '@phosphor-icons/react'
+import { ArrowUpRight } from '@phosphor-icons/react'
 
 function formatFecha(ts: number) {
   return new Date(ts).toLocaleDateString('es-CO', {
@@ -76,33 +71,34 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 animate-aparecer" style={{ animationDelay: '60ms' }}>
-        <StatCard
-          label="Distribuidores activos"
-          value={cargando ? '—' : String(stats?.distribuidoresActivos ?? 0)}
-          href="/admin/distribuidores"
-          icon={Buildings}
-        />
-        <StatCard
-          label="Cotizaciones"
-          value={cargando ? '—' : String(stats?.cotizacionesTotal ?? 0)}
-          href="/admin/cotizaciones"
-          icon={FileText}
-        />
-        <StatCard
-          label="Valoraciones pendientes"
-          value={cargando ? '—' : String(stats?.valoracionesBorrador ?? 0)}
-          href="/admin/valoraciones"
-          icon={Receipt}
-          highlight={!!stats && stats.valoracionesBorrador > 0}
-        />
-        <StatCard
-          label="Volumen cotizado"
-          value={cargando ? '—' : formatCOP(stats?.volumenTotal ?? 0)}
-          href="/admin/cotizaciones"
-          icon={FileText}
-          small
-        />
+      <div
+        className="rounded-xl border border-stone-200 bg-white overflow-hidden animate-aparecer"
+        style={{ animationDelay: '60ms' }}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x sm:divide-stone-100 [&>*:nth-child(-n+2)]:border-b [&>*:nth-child(-n+2)]:border-stone-100 sm:[&>*:nth-child(-n+2)]:border-b-0">
+          <StatCard
+            label="Distribuidores activos"
+            value={cargando ? '—' : String(stats?.distribuidoresActivos ?? 0)}
+            href="/admin/distribuidores"
+          />
+          <StatCard
+            label="Cotizaciones"
+            value={cargando ? '—' : String(stats?.cotizacionesTotal ?? 0)}
+            href="/admin/cotizaciones"
+          />
+          <StatCard
+            label="Valoraciones pendientes"
+            value={cargando ? '—' : String(stats?.valoracionesBorrador ?? 0)}
+            href="/admin/valoraciones"
+            highlight={!!stats && stats.valoracionesBorrador > 0}
+          />
+          <StatCard
+            label="Volumen cotizado"
+            value={cargando ? '—' : formatCOP(stats?.volumenTotal ?? 0)}
+            href="/admin/cotizaciones"
+            small
+          />
+        </div>
       </div>
 
       {/* Dos columnas: cotizaciones recientes + acciones rápidas */}
@@ -253,53 +249,27 @@ function StatCard({
   label,
   value,
   href,
-  icon: Icon,
   highlight = false,
   small = false,
 }: {
   label: string
   value: string
   href: string
-  icon: React.ElementType
   highlight?: boolean
   small?: boolean
 }) {
   return (
-    <Link
-      href={href}
-      className={[
-        'group flex flex-col gap-3 rounded-xl border p-5 transition-all hover:border-stone-300',
-        highlight
-          ? 'border-amber-200 bg-amber-50'
-          : 'border-stone-200 bg-white',
-      ].join(' ')}
-    >
-      <div className="flex items-center justify-between">
-        <Icon
-          size={16}
-          weight="fill"
-          className={highlight ? 'text-amber-500' : 'text-stone-400'}
-        />
-        <ArrowUpRight
-          size={13}
-          className="text-stone-200 group-hover:text-stone-400 transition-colors"
-        />
-      </div>
-      <div>
-        <p className={[
-          'font-semibold tabular-nums leading-none',
-          small ? 'text-lg' : 'text-2xl',
-          highlight ? 'text-amber-900' : 'text-stone-900',
-        ].join(' ')}>
-          {value}
-        </p>
-        <p className={[
-          'mt-1.5 text-xs',
-          highlight ? 'text-amber-600' : 'text-stone-400',
-        ].join(' ')}>
-          {label}
-        </p>
-      </div>
+    <Link href={href} className="block px-5 py-4 hover:bg-stone-50 transition-colors">
+      <p className={[
+        'font-semibold tabular-nums leading-none',
+        small ? 'text-lg' : 'text-2xl',
+        highlight ? 'text-amber-600' : 'text-stone-900',
+      ].join(' ')}>
+        {value}
+      </p>
+      <p className={['mt-1.5 text-xs', highlight ? 'text-amber-500' : 'text-stone-400'].join(' ')}>
+        {label}
+      </p>
     </Link>
   )
 }

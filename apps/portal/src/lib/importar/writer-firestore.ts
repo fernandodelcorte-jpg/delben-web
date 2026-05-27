@@ -65,7 +65,7 @@ export async function escribirModulos(
   const CAMPOS_MODULO = [
     'codigo_excel', 'categoria_id', 'tipologia', 'nombre',
     'altura', 'profundidad', 'imagen_nombre', 'search_keywords', 'activo',
-    'requiere_fachada', 'requiere_estructura',
+    'requiere_fachada', 'requiere_estructura', 'precio_min',
   ]
 
   const pasos: Array<{

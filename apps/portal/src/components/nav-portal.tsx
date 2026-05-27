@@ -15,10 +15,10 @@ function NavLink({ href, label }: { href: string; label: string }) {
     <Link
       href={href}
       className={[
-        'tactil text-sm transition-colors',
+        'tactil text-sm transition-colors rounded-md px-2.5 py-1',
         activo
-          ? 'text-stone-900 font-medium'
-          : 'text-stone-500 hover:text-stone-800',
+          ? 'bg-stone-100 text-stone-900 font-medium'
+          : 'text-stone-500 hover:text-stone-800 hover:bg-stone-50',
       ].join(' ')}
     >
       {label}
@@ -72,10 +72,19 @@ export function NavPortal() {
             </span>
           )}
 
-          {/* Email */}
-          <span className="hidden md:block text-sm text-stone-400 tabular-nums">
-            {usuario?.email}
-          </span>
+          {/* Avatar + usuario */}
+          {usuario && (
+            <div className="hidden md:flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-stone-900 flex items-center justify-center shrink-0">
+                <span className="text-[9px] font-semibold text-white uppercase leading-none">
+                  {usuario.email?.charAt(0) ?? '?'}
+                </span>
+              </div>
+              <span className="text-sm text-stone-600">
+                {usuario.email?.split('@')[0] ?? ''}
+              </span>
+            </div>
+          )}
 
           {/* Botón salir */}
           <button

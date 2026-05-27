@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { UploadSimple, CheckCircle, Warning, CircleNotch } from '@phosphor-icons/react'
 import { parsearExcelModulos } from '@/lib/importar/parser-modulos'
 import { escribirModulos } from '@/lib/importar/writer-firestore'
+import { limpiarCacheModulos } from '@/lib/firestore/modulos'
 import type { ResultadoParserModulos } from '@/lib/importar/parser-modulos'
 
 type Fase = 'idle' | 'parseando' | 'previo' | 'importando' | 'listo' | 'error'
@@ -46,6 +47,7 @@ export function ImportarModulos() {
         setProgreso(pct)
         setMensajeProgreso(msg)
       })
+      limpiarCacheModulos() // invalidar caché para que el buscador use datos frescos
       setFase('listo')
       setProgreso(100)
     } catch (err) {

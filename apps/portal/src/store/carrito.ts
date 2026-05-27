@@ -250,7 +250,7 @@ export const useCarrito = create<CarritoState>()(
     set((state) => ({
       items: state.items.map((i) => {
         if (i.id !== id) return i
-        const nuevaCantidad = Math.max(1, i.config.cantidad + delta)
+        const nuevaCantidad = Math.max(0.1, parseFloat((i.config.cantidad + delta).toFixed(4)))
         return {
           ...i,
           config: { ...i.config, cantidad: nuevaCantidad },

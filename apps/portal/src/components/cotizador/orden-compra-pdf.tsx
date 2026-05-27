@@ -282,6 +282,9 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, distribuidorNombr
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Proyecto</Text>
             <Text style={s.infoValor}>{info.proyectoNombre}</Text>
+            {info.espacioNombre ? (
+              <Text style={s.infoSub}>{info.espacioNombre}</Text>
+            ) : null}
           </View>
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Moneda</Text>

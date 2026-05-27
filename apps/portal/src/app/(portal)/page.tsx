@@ -66,7 +66,7 @@ export default function PortalHomePage() {
   const recientes = proyectos.slice(0, 4)
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-3xl space-y-8">
 
       {/* Saludo */}
       <div className="animate-aparecer">
@@ -84,34 +84,36 @@ export default function PortalHomePage() {
 
       {/* Stats */}
       <div
-        className="grid grid-cols-3 gap-3 animate-aparecer"
+        className="rounded-xl border border-stone-200 bg-white overflow-hidden animate-aparecer"
         style={{ animationDelay: '60ms' }}
       >
-        {[
-          {
-            label: 'Proyectos activos',
-            value: cargando ? '—' : String(proyectosActivos.length),
-          },
-          {
-            label: 'Proyectos en total',
-            value: cargando ? '—' : String(proyectos.length),
-          },
-          {
-            label: 'Volumen cotizado',
-            value: cargando ? '—' : formatCOP(volumenTotal),
-            small: true,
-          },
-        ].map(({ label, value, small }) => (
-          <div key={label} className="rounded-xl border border-stone-200 bg-white px-4 py-4">
-            <p className={[
-              'font-semibold tabular-nums leading-none text-stone-900',
-              small ? 'text-base' : 'text-2xl',
-            ].join(' ')}>
-              {value}
-            </p>
-            <p className="mt-1.5 text-xs text-stone-400">{label}</p>
-          </div>
-        ))}
+        <div className="grid grid-cols-3 divide-x divide-stone-100">
+          {[
+            {
+              label: 'Proyectos activos',
+              value: cargando ? '—' : String(proyectosActivos.length),
+            },
+            {
+              label: 'Proyectos en total',
+              value: cargando ? '—' : String(proyectos.length),
+            },
+            {
+              label: 'Volumen cotizado',
+              value: cargando ? '—' : formatCOP(volumenTotal),
+              small: true,
+            },
+          ].map(({ label, value, small }) => (
+            <div key={label} className="px-5 py-4">
+              <p className={[
+                'font-semibold tabular-nums leading-none text-stone-900',
+                small ? 'text-base' : 'text-2xl',
+              ].join(' ')}>
+                {value}
+              </p>
+              <p className="mt-1.5 text-xs text-stone-400">{label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Proyectos recientes */}

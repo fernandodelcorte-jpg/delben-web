@@ -509,14 +509,26 @@ function PanelEspecial({
         {/* Cantidad y observaciones */}
         <div className="grid grid-cols-2 gap-3">
           <Campo label="Cantidad">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+            <div className="flex items-center gap-1.5">
+              <button type="button"
+                onClick={() => setCantidad((c) => Math.max(0.1, parseFloat((c - 1).toFixed(4))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
               >
                 <Minus size={12} weight="bold" />
               </button>
-              <span className="flex-1 text-center text-sm font-semibold text-stone-900">{cantidad}</span>
-              <button type="button" onClick={() => setCantidad((c) => c + 1)}
+              <input
+                type="number"
+                value={cantidad}
+                min="0.1"
+                step="0.5"
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0.1) setCantidad(v)
+                }}
+                className="flex-1 min-w-0 text-center text-sm font-semibold text-stone-900 border border-stone-200 rounded-lg py-2 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all"
+              />
+              <button type="button"
+                onClick={() => setCantidad((c) => parseFloat((c + 1).toFixed(4)))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
               >
                 <Plus size={12} weight="bold" />
@@ -1056,17 +1068,25 @@ function PanelConfigModulo({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCantidad((n) => Math.max(1, n - 1))}
+                onClick={() => setCantidad((n) => Math.max(0.1, parseFloat((n - 1).toFixed(4))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
               >
                 −
               </button>
-              <span className="w-8 text-center text-sm font-semibold text-stone-900">
-                {cantidad}
-              </span>
+              <input
+                type="number"
+                value={cantidad}
+                min="0.1"
+                step="0.5"
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v) && v >= 0.1) setCantidad(v)
+                }}
+                className="w-16 text-center text-sm font-semibold text-stone-900 border border-stone-200 rounded-lg py-2 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all"
+              />
               <button
                 type="button"
-                onClick={() => setCantidad((n) => n + 1)}
+                onClick={() => setCantidad((n) => parseFloat((n + 1).toFixed(4)))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
               >
                 +
@@ -1377,6 +1397,14 @@ function PanelBusquedaModulos({
                 >
                   {m.tipologia}
                 </p>
+                {m.precio_min ? (
+                  <p className={[
+                    'text-xs tabular-nums mt-0.5',
+                    moduloSeleccionado?.id === m.id ? 'text-stone-400' : 'text-stone-400',
+                  ].join(' ')}>
+                    Desde {formatCOP(m.precio_min)}
+                  </p>
+                ) : null}
               </div>
             </button>
           ))}

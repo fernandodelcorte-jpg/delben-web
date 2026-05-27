@@ -61,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (cargando || !usuario || !ROLES_ADMIN.includes(rol ?? '')) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-stone-200 border-t-stone-700" />
       </div>
     )
@@ -102,17 +102,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Footer usuario */}
-        <div className="border-t border-stone-100 px-3 py-3 space-y-1">
-          <div className="px-2 py-1">
-            <p className="text-xs font-medium text-stone-700 truncate">{usuario.email}</p>
+        <div className="border-t border-stone-100 px-3 py-3">
+          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+            <div className="h-6 w-6 rounded-full bg-stone-900 flex items-center justify-center shrink-0">
+              <span className="text-[9px] font-semibold text-white uppercase leading-none">
+                {usuario.email?.charAt(0) ?? '?'}
+              </span>
+            </div>
+            <p className="flex-1 min-w-0 text-xs text-stone-600 truncate">
+              {usuario.email?.split('@')[0] ?? ''}
+            </p>
+            <button
+              onClick={handleSalir}
+              aria-label="Cerrar sesión"
+              className="shrink-0 rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+            >
+              <SignOut size={13} />
+            </button>
           </div>
-          <button
-            onClick={handleSalir}
-            className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-xs text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
-          >
-            <SignOut size={14} />
-            Cerrar sesión
-          </button>
         </div>
       </aside>
 

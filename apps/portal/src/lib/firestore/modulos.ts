@@ -15,17 +15,46 @@ import type {
   AccesorioDoc,
 } from '@/lib/firebase/tipos-firestore'
 
-// ─── Caché de sesión ──────────────────────────────────────────────────────────
+// ─── Caché de sesión + localStorage ──────────────────────────────────────────
+// Sesión: evita re-queries al tipear. localStorage: evita descarga en cada sesión nueva.
+
+const CACHE_KEY = 'delben_modulos_v1'
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 horas
 
 let _modulosCache: Modulo[] | null = null
 let _accesoriosCache: Accesorio[] | null = null
 
+/** Limpia la caché de sesión y localStorage. Llamar tras reimportar el catálogo. */
+export function limpiarCacheModulos(): void {
+  _modulosCache = null
+  try { localStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
+}
+
 async function cargarModulos(): Promise<Modulo[]> {
   if (_modulosCache) return _modulosCache
+
+  // Intentar desde localStorage (evita Firestore en sesiones posteriores)
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (raw) {
+      const { data, ts } = JSON.parse(raw) as { data: Modulo[]; ts: number }
+      if (Date.now() - ts < CACHE_TTL) {
+        _modulosCache = data
+        return _modulosCache
+      }
+    }
+  } catch { /* localStorage no disponible o dato corrupto */ }
+
   const snap = await getDocs(
     query(collection(db, 'modulos'), where('activo', '==', true)),
   )
   _modulosCache = snap.docs.map((d) => ({ id: d.id, ...(d.data() as ModuloDoc) }))
+
+  // Persistir en localStorage para la próxima sesión
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data: _modulosCache, ts: Date.now() }))
+  } catch { /* cuota excedida — continuar sin caché persistente */ }
+
   return _modulosCache
 }
 

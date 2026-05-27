@@ -194,7 +194,7 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
             ) : (
               <>
                 <Text style={s.marca}>DELBEN</Text>
-                <Text style={s.marcaSub}>Carpintería de alta calidad · Desde 1979</Text>
+                <Text style={s.marcaSub}>Carpintería de alta calidad · Desde 1976</Text>
               </>
             )}
           </View>
@@ -222,6 +222,9 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Proyecto</Text>
             <Text style={s.infoValor}>{info.proyectoNombre}</Text>
+            {info.espacioNombre ? (
+              <Text style={s.infoSub}>{info.espacioNombre}</Text>
+            ) : null}
           </View>
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Moneda</Text>

@@ -68,13 +68,13 @@ export async function parsearExcelModulos(
   const SIN_ESTRUCTURA_ID = 'sin-estructura'
   const SIN_FACHADA_ID = 'sin-fachada'
 
-  // Acepta filas con al menos una dimensión de precio: fachada válida OR estructura presente
+  // Acepta cualquier fila con CODIGO numérico y NOMBRE no vacío.
+  // Productos sin fachada/estructura (regletas, entrepaños, tubos…) se importan
+  // con sentinel sin-fachada / sin-estructura para que el cotizador los reconozca.
   const filasValidas = rawRows.filter((r) => {
     if (typeof r['CODIGO'] !== 'number') return false
-    const tieneFachada =
-      r['TIPO FACHADA'] !== '' && r['TIPO FACHADA'] !== 'NO INCLUYE ACCESORIO'
-    const tieneEstructura = r['TIPO ESTRUCTURA'] !== ''
-    return tieneFachada || tieneEstructura
+    const nombre = r['NOMBRE']?.toString().trim() ?? ''
+    return nombre !== ''
   })
 
   // ── Tipos de estructura ────────────────────────────────────────────────────
@@ -257,6 +257,8 @@ export async function parsearExcelModulos(
   // Rastrea qué módulos tienen precios reales (no sentinel) por dimensión
   const moduloTieneFachada = new Map<string, boolean>()
   const moduloTieneEstructura = new Map<string, boolean>()
+  // Precio mínimo por módulo (para mostrar "Desde $X" en el buscador)
+  const moduloPrecioMin = new Map<string, number>()
 
   for (const r of filasValidas) {
     const nombreRaw = normalizarNombre(r['NOMBRE']?.toString() ?? '')
@@ -308,13 +310,18 @@ export async function parsearExcelModulos(
         modulo_id: moduloId,
         doc: { tipo_estructura_id: estrId, tipo_fachada_id: fachId, precio_cop: precio },
       })
+      // Actualizar precio mínimo del módulo
+      const pMin = moduloPrecioMin.get(moduloKey)
+      if (pMin === undefined || precio < pMin) moduloPrecioMin.set(moduloKey, precio)
     }
   }
 
-  // Anotar flags requiere_fachada / requiere_estructura en cada módulo
+  // Anotar flags requiere_fachada / requiere_estructura / precio_min en cada módulo
   for (const [key, item] of modulosMap) {
     item.doc.requiere_fachada = moduloTieneFachada.get(key) ?? false
     item.doc.requiere_estructura = moduloTieneEstructura.get(key) ?? false
+    const pMin = moduloPrecioMin.get(key)
+    if (pMin !== undefined) item.doc.precio_min = pMin
   }
 
   const categoriasConDescuento0 = Array.from(categoriasMap.values())
