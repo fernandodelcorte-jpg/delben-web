@@ -487,16 +487,24 @@ function CarritoItemRow({
         {/* Controles de cantidad */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-1)}
+            onClick={() => onCambiarCantidad(-0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
           </button>
-          <span className="w-6 text-center text-xs font-semibold text-stone-700 tabular-nums">
-            {item.config.cantidad}
-          </span>
+          <input
+            type="number"
+            min="0.1"
+            step="0.5"
+            value={item.config.cantidad}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value)
+              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.config.cantidad).toFixed(4)))
+            }}
+            className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
           <button
-            onClick={() => onCambiarCantidad(1)}
+            onClick={() => onCambiarCantidad(0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />
@@ -575,16 +583,24 @@ function HerrajeItemRow({
         {/* Controles de cantidad */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-1)}
+            onClick={() => onCambiarCantidad(-0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
           </button>
-          <span className="w-6 text-center text-xs font-semibold text-stone-700 tabular-nums">
-            {item.cantidad}
-          </span>
+          <input
+            type="number"
+            min="0.1"
+            step="0.5"
+            value={item.cantidad}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value)
+              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.cantidad).toFixed(4)))
+            }}
+            className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
           <button
-            onClick={() => onCambiarCantidad(1)}
+            onClick={() => onCambiarCantidad(0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />
@@ -691,16 +707,24 @@ function EspecialItemRow({
 
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-1)}
+            onClick={() => onCambiarCantidad(-0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
           </button>
-          <span className="w-6 text-center text-xs font-semibold text-stone-700 tabular-nums">
-            {item.cantidad}
-          </span>
+          <input
+            type="number"
+            min="0.1"
+            step="0.5"
+            value={item.cantidad}
+            onChange={(e) => {
+              const n = parseFloat(e.target.value)
+              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.cantidad).toFixed(4)))
+            }}
+            className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
           <button
-            onClick={() => onCambiarCantidad(1)}
+            onClick={() => onCambiarCantidad(0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />

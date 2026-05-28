@@ -133,7 +133,8 @@ function PanelEspecial({
   const [anchoStr, setAnchoStr] = useState('')
   const [altoStr, setAltoStr] = useState(referencia?.alto ? String(referencia.alto) : '')
   const [profStr, setProfStr] = useState(referencia?.profundidad ? String(referencia.profundidad) : '')
-  const [cantidad, setCantidad] = useState(1)
+  const [cantidadStr, setCantidadStr] = useState('1')
+  const cantidad = Math.max(0.1, parseFloat(cantidadStr) || 0.1)
   const [precioDelbenStr, setPrecioDelbenStr] = useState(
     referencia?.precioBaseRef ? String(Math.round(referencia.precioBaseRef)) : '',
   )
@@ -483,13 +484,24 @@ function PanelEspecial({
                 <div key={h.accesorioId} className="flex items-center gap-2 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
                   <p className="flex-1 min-w-0 text-xs font-medium text-stone-700 truncate">{h.nombre}</p>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: Math.max(1, x.cantidad - 1) } : x))}
+                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: Math.max(0.1, parseFloat((x.cantidad - 0.5).toFixed(4))) } : x))}
                       className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                     >
                       <Minus size={10} weight="bold" />
                     </button>
-                    <span className="w-5 text-center text-xs font-semibold text-stone-700">{h.cantidad}</span>
-                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: x.cantidad + 1 } : x))}
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      value={h.cantidad}
+                      onChange={(e) => {
+                        const n = parseFloat(e.target.value)
+                        if (!isNaN(n) && n > 0)
+                          setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: parseFloat(n.toFixed(4)) } : x))
+                      }}
+                      className="w-10 text-center text-xs font-semibold text-stone-700 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <button type="button" onClick={() => setHerrajes((p) => p.map((x) => x.accesorioId === h.accesorioId ? { ...x, cantidad: parseFloat((x.cantidad + 0.5).toFixed(4)) } : x))}
                       className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                     >
                       <Plus size={10} weight="bold" />
@@ -511,24 +523,24 @@ function PanelEspecial({
           <Campo label="Cantidad">
             <div className="flex items-center gap-1.5">
               <button type="button"
-                onClick={() => setCantidad((c) => Math.max(0.1, parseFloat((c - 1).toFixed(4))))}
+                onClick={() => setCantidadStr(String(Math.max(0.1, parseFloat((cantidad - 0.5).toFixed(4)))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
               >
                 <Minus size={12} weight="bold" />
               </button>
               <input
-                type="number"
-                value={cantidad}
-                min="0.1"
-                step="0.5"
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0.1) setCantidad(v)
+                type="text"
+                inputMode="decimal"
+                value={cantidadStr}
+                onChange={(e) => setCantidadStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(cantidadStr)
+                  setCantidadStr(String(isNaN(v) || v < 0.1 ? 0.1 : parseFloat(v.toFixed(4))))
                 }}
                 className="flex-1 min-w-0 text-center text-sm font-semibold text-stone-900 border border-stone-200 rounded-lg py-2 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all"
               />
               <button type="button"
-                onClick={() => setCantidad((c) => parseFloat((c + 1).toFixed(4)))}
+                onClick={() => setCantidadStr(String(parseFloat((cantidad + 0.5).toFixed(4))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
               >
                 <Plus size={12} weight="bold" />
@@ -612,7 +624,8 @@ function PanelConfigModulo({
   const [acabadoEstructura, setAcabadoEstructura] = useState<string | null>(null)
   const [colorVidrio, setColorVidrio] = useState<string | null>(null)
   const [colorMetal, setColorMetal] = useState<string | null>(null)
-  const [cantidad, setCantidad] = useState(1)
+  const [cantidadStr, setCantidadStr] = useState('1')
+  const cantidad = Math.max(0.1, parseFloat(cantidadStr) || 0.1)
   const [observaciones, setObservaciones] = useState('')
 
   const [herrajesBorrador, setHerrajesBorrador] = useState<
@@ -744,7 +757,7 @@ function PanelConfigModulo({
   const esPremium = estructura?.es_premium ?? false
 
   const alturasDisponibles = [...new Set(variantes.map((v) => v.altura))].sort((a, b) => a - b)
-  const profundidadesDisponibles = alturaSeleccionada
+  const profundidadesDisponibles = alturaSeleccionada !== null
     ? [...new Set(
         variantes.filter((v) => v.altura === alturaSeleccionada).map((v) => v.profundidad),
       )].sort((a, b) => a - b)
@@ -850,7 +863,11 @@ function PanelConfigModulo({
   function cambiarCantidadHerraje(id: string, delta: number) {
     setHerrajesBorrador((prev) =>
       prev
-        .map((h) => (h.accesorio.id === id ? { ...h, cantidad: h.cantidad + delta } : h))
+        .map((h) =>
+          h.accesorio.id === id
+            ? { ...h, cantidad: Math.max(0.1, parseFloat((h.cantidad + delta).toFixed(4))) }
+            : h,
+        )
         .filter((h) => h.cantidad > 0),
     )
   }
@@ -1068,25 +1085,25 @@ function PanelConfigModulo({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCantidad((n) => Math.max(0.1, parseFloat((n - 1).toFixed(4))))}
+                onClick={() => setCantidadStr(String(Math.max(0.1, parseFloat((cantidad - 0.5).toFixed(4)))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
               >
                 −
               </button>
               <input
-                type="number"
-                value={cantidad}
-                min="0.1"
-                step="0.5"
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value)
-                  if (!isNaN(v) && v >= 0.1) setCantidad(v)
+                type="text"
+                inputMode="decimal"
+                value={cantidadStr}
+                onChange={(e) => setCantidadStr(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(cantidadStr)
+                  setCantidadStr(String(isNaN(v) || v < 0.1 ? 0.1 : parseFloat(v.toFixed(4))))
                 }}
                 className="w-16 text-center text-sm font-semibold text-stone-900 border border-stone-200 rounded-lg py-2 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all"
               />
               <button
                 type="button"
-                onClick={() => setCantidad((n) => parseFloat((n + 1).toFixed(4)))}
+                onClick={() => setCantidadStr(String(parseFloat((cantidad + 0.5).toFixed(4))))}
                 className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
               >
                 +
@@ -1181,17 +1198,30 @@ function PanelConfigModulo({
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => cambiarCantidadHerraje(accesorio.id, -1)}
+                        onClick={() => cambiarCantidadHerraje(accesorio.id, -0.5)}
                         className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                       >
                         <Minus size={11} weight="bold" />
                       </button>
-                      <span className="w-5 text-center text-xs font-semibold text-stone-700">
-                        {cant}
-                      </span>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.5"
+                        value={cant}
+                        onChange={(e) => {
+                          const n = parseFloat(e.target.value)
+                          if (!isNaN(n) && n > 0)
+                            setHerrajesBorrador((prev) =>
+                              prev.map((h) =>
+                                h.accesorio.id === accesorio.id ? { ...h, cantidad: parseFloat(n.toFixed(4)) } : h,
+                              ),
+                            )
+                        }}
+                        className="w-10 text-center text-xs font-semibold text-stone-700 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                       <button
                         type="button"
-                        onClick={() => cambiarCantidadHerraje(accesorio.id, 1)}
+                        onClick={() => cambiarCantidadHerraje(accesorio.id, 0.5)}
                         className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                       >
                         <Plus size={11} weight="bold" />
@@ -1439,7 +1469,7 @@ function PanelHerrajes() {
     return cantidades[id] ?? 1
   }
   function setCantidad(id: string, val: number) {
-    setCantidades((prev) => ({ ...prev, [id]: Math.max(1, val) }))
+    setCantidades((prev) => ({ ...prev, [id]: Math.max(0.1, parseFloat(val.toFixed(4))) }))
   }
 
   useEffect(() => {
@@ -1531,16 +1561,24 @@ function PanelHerrajes() {
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="flex items-center rounded-lg border border-stone-200 bg-white overflow-hidden">
                         <button
-                          onClick={() => setCantidad(a.id, cant - 1)}
+                          onClick={() => setCantidad(a.id, cant - 0.5)}
                           className="px-2.5 py-2 text-stone-400 hover:bg-stone-50 transition-colors"
                         >
                           <Minus size={12} weight="bold" />
                         </button>
-                        <span className="w-8 text-center text-sm font-medium text-stone-700">
-                          {cant}
-                        </span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.5"
+                          value={cant}
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value)
+                            if (!isNaN(n) && n > 0) setCantidad(a.id, n)
+                          }}
+                          className="w-10 text-center text-sm font-medium text-stone-700 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
                         <button
-                          onClick={() => setCantidad(a.id, cant + 1)}
+                          onClick={() => setCantidad(a.id, cant + 0.5)}
                           className="px-2.5 py-2 text-stone-400 hover:bg-stone-50 transition-colors"
                         >
                           <Plus size={12} weight="bold" />

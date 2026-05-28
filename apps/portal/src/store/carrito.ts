@@ -267,7 +267,7 @@ export const useCarrito = create<CarritoState>()(
     set((state) => ({
       itemsHerraje: state.itemsHerraje.map((i) => {
         if (i.id !== id) return i
-        const nuevaCantidad = Math.max(1, i.cantidad + delta)
+        const nuevaCantidad = Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4)))
         return {
           ...i,
           cantidad: nuevaCantidad,
@@ -289,7 +289,7 @@ export const useCarrito = create<CarritoState>()(
     const motorBase = {
       modelo: cotizacionInfo.modalidad,
       distribuidor: distribuidorMotor,
-      fecha_cotizacion: cotizacionInfo.fecha,
+      fecha_cotizacion: new Date(cotizacionInfo.fecha),
       campanas_disponibles: campanasDisponibles,
       servicios_delben: serviciosMotor,
       universo: universoMotor,
@@ -376,7 +376,7 @@ export const useCarrito = create<CarritoState>()(
       distribuidor: distribuidorMotor,
       categoria: { id: 'herraje', desc_base_pct: 0, desc_premium_pct: 0 },
       linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
-      fecha_cotizacion: cotizacionInfo.fecha,
+      fecha_cotizacion: new Date(cotizacionInfo.fecha),
       campanas_disponibles: campanasDisponibles,
       servicios_delben: serviciosMotor,
       universo: universoMotor,
@@ -413,7 +413,7 @@ export const useCarrito = create<CarritoState>()(
   cambiarCantidadEspecial: (id, delta) =>
     set((state) => ({
       itemsEspeciales: state.itemsEspeciales.map((i) =>
-        i.id === id ? { ...i, cantidad: Math.max(1, i.cantidad + delta) } : i,
+        i.id === id ? { ...i, cantidad: Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4))) } : i,
       ),
     })),
 

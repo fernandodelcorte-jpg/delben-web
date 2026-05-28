@@ -54,7 +54,8 @@ export function FichaModulo() {
   const [acabadoEstructura, setAcabadoEstructura] = useState<string | null>(null)
   const [colorVidrio, setColorVidrio] = useState<string | null>(null)
   const [colorMetal, setColorMetal] = useState<string | null>(null)
-  const [cantidad, setCantidad] = useState(1)
+  const [cantidadStr, setCantidadStr] = useState('1')
+  const cantidad = Math.max(0.1, parseFloat(cantidadStr) || 0.1)
   const [observaciones, setObservaciones] = useState('')
 
   // Herrajes del módulo
@@ -87,7 +88,7 @@ export function FichaModulo() {
       pendingColorVidrio.current = itemEditando.config.colorVidrio
       pendingColorMetal.current = itemEditando.config.colorMetal
       pendingAcabadoEstructura.current = itemEditando.config.acabadoEstructura
-      setCantidad(itemEditando.config.cantidad)
+      setCantidadStr(String(itemEditando.config.cantidad))
       setObservaciones(itemEditando.config.observaciones)
       setHerrajesBorrador(
         itemEditando.herrajesAsociados.map((h) => ({ accesorio: h.accesorio, cantidad: h.cantidad })),
@@ -341,7 +342,11 @@ export function FichaModulo() {
   function cambiarCantidadHerraje(id: string, delta: number) {
     setHerrajesBorrador((prev) =>
       prev
-        .map((h) => (h.accesorio.id === id ? { ...h, cantidad: h.cantidad + delta } : h))
+        .map((h) =>
+          h.accesorio.id === id
+            ? { ...h, cantidad: Math.max(0.1, parseFloat((h.cantidad + delta).toFixed(4))) }
+            : h,
+        )
         .filter((h) => h.cantidad > 0),
     )
   }
@@ -564,17 +569,25 @@ export function FichaModulo() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setCantidad((n) => Math.max(1, n - 1))}
+                  onClick={() => setCantidadStr(String(Math.max(0.1, parseFloat((cantidad - 0.5).toFixed(4)))))}
                   className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
                 >
                   −
                 </button>
-                <span className="w-8 text-center text-sm font-semibold text-stone-900">
-                  {cantidad}
-                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={cantidadStr}
+                  onChange={(e) => setCantidadStr(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(cantidadStr)
+                    setCantidadStr(String(isNaN(v) || v < 0.1 ? 0.1 : parseFloat(v.toFixed(4))))
+                  }}
+                  className="w-12 text-center text-sm font-semibold text-stone-900 bg-transparent border-none outline-none"
+                />
                 <button
                   type="button"
-                  onClick={() => setCantidad((n) => n + 1)}
+                  onClick={() => setCantidadStr(String(parseFloat((cantidad + 0.5).toFixed(4))))}
                   className="tactil flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors text-lg font-medium"
                 >
                   +
@@ -670,17 +683,30 @@ export function FichaModulo() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={() => cambiarCantidadHerraje(accesorio.id, -1)}
+                          onClick={() => cambiarCantidadHerraje(accesorio.id, -0.5)}
                           className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                         >
                           <Minus size={11} weight="bold" />
                         </button>
-                        <span className="w-5 text-center text-xs font-semibold text-stone-700">
-                          {cant}
-                        </span>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.5"
+                          value={cant}
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value)
+                            if (!isNaN(n) && n > 0)
+                              setHerrajesBorrador((prev) =>
+                                prev.map((h) =>
+                                  h.accesorio.id === accesorio.id ? { ...h, cantidad: parseFloat(n.toFixed(4)) } : h,
+                                ),
+                              )
+                          }}
+                          className="w-10 text-center text-xs font-semibold text-stone-700 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
                         <button
                           type="button"
-                          onClick={() => cambiarCantidadHerraje(accesorio.id, 1)}
+                          onClick={() => cambiarCantidadHerraje(accesorio.id, 0.5)}
                           className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
                         >
                           <Plus size={11} weight="bold" />
