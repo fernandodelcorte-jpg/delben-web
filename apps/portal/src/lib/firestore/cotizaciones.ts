@@ -98,7 +98,7 @@ export async function guardarCotizacion(
     categoriaId: info.categoriaId,
     categoriaNombre: info.categoriaNombre,
     modalidad: info.modalidad,
-    fecha: info.fecha.getTime(),
+    fecha: new Date(info.fecha).getTime(),
     estado: 'borrador',
     proyecto_id: info.proyectoId,
     espacio_nombre: info.espacioNombre,

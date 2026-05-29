@@ -358,7 +358,7 @@ export function FichaModulo() {
         onClick={cerrarFicha}
       />
 
-      <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-aparecer overflow-hidden">
+      <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-deslizarse-derecha overflow-hidden">
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between border-b border-stone-100 px-6 py-5 gap-4">
           <div className="flex items-start gap-4 min-w-0">
@@ -382,32 +382,32 @@ export function FichaModulo() {
 
         {/* Formulario — scrollable */}
         {cargandoCatalogo ? (
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 animate-pulse">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             <div className="grid grid-cols-2 gap-4">
-              <div className="h-10 rounded-lg bg-stone-100" />
-              <div className="h-10 rounded-lg bg-stone-100" />
+              <div className="h-10 rounded-lg skeleton" />
+              <div className="h-10 rounded-lg skeleton" />
             </div>
             <div className="space-y-2">
-              <div className="h-3.5 w-28 rounded bg-stone-100" />
+              <div className="h-3.5 w-28 rounded skeleton" />
               <div className="grid grid-cols-2 gap-2">
-                <div className="h-9 rounded-lg bg-stone-100" />
-                <div className="h-9 rounded-lg bg-stone-100" />
+                <div className="h-9 rounded-lg skeleton" />
+                <div className="h-9 rounded-lg skeleton" />
               </div>
             </div>
             <div className="space-y-2">
-              <div className="h-3.5 w-28 rounded bg-stone-100" />
+              <div className="h-3.5 w-28 rounded skeleton" />
               <div className="grid grid-cols-3 gap-2">
-                {[0, 1, 2].map((i) => <div key={i} className="h-9 rounded-lg bg-stone-100" />)}
+                {[0, 1, 2].map((i) => <div key={i} className="h-9 rounded-lg skeleton" />)}
               </div>
             </div>
             <div className="space-y-2">
-              <div className="h-3.5 w-36 rounded bg-stone-100" />
-              <div className="h-10 rounded-lg bg-stone-100" />
+              <div className="h-3.5 w-36 rounded skeleton" />
+              <div className="h-10 rounded-lg skeleton" />
             </div>
             <div className="space-y-2">
-              <div className="h-3.5 w-40 rounded bg-stone-100" />
+              <div className="h-3.5 w-40 rounded skeleton" />
               <div className="flex gap-2 flex-wrap">
-                {[0, 1, 2, 3].map((i) => <div key={i} className="h-7 w-20 rounded-full bg-stone-100" />)}
+                {[0, 1, 2, 3].map((i) => <div key={i} className="h-7 w-20 rounded-full skeleton" />)}
               </div>
             </div>
           </div>
@@ -628,7 +628,7 @@ export function FichaModulo() {
                   value={busquedaHerraje}
                   onChange={(e) => setBusquedaHerraje(e.target.value)}
                   placeholder="Buscar herraje (bisagra, corredera…)"
-                  className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-8 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-all"
+                  className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-8 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-colors"
                 />
               </div>
 
@@ -744,7 +744,7 @@ export function FichaModulo() {
             type="button"
             onClick={handleAgregar}
             disabled={!listo}
-            className="tactil flex-1 rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="tactil flex-1 rounded-lg bg-caoba-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-caoba-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {itemEditando ? 'Actualizar módulo' : 'Agregar al carrito'}
           </button>
@@ -793,7 +793,7 @@ function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full appearance-none rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 pr-9 text-sm text-stone-900 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all disabled:opacity-50"
+        className="w-full appearance-none rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 pr-9 text-sm text-stone-900 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-colors disabled:opacity-50"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

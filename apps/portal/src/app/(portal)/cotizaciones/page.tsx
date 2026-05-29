@@ -139,7 +139,7 @@ export default function CotizacionesPage() {
         {/* Cabecera */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-semibold text-stone-900 tracking-tight">Proyectos</h1>
+            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">Proyectos</h1>
             {!cargando && !error && hayContenido && (
               <p className="mt-0.5 text-sm text-stone-400">
                 {hayFiltrosActivos
@@ -150,7 +150,7 @@ export default function CotizacionesPage() {
           </div>
           <a
             href="/cotizaciones/nueva"
-            className="tactil flex items-center gap-1.5 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 transition-colors"
+            className="tactil flex items-center gap-1.5 rounded-lg bg-caoba-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-caoba-700 transition-colors"
           >
             <Plus size={15} weight="bold" />
             Nuevo proyecto
@@ -201,9 +201,11 @@ export default function CotizacionesPage() {
 
         {!cargando && !cargandoAuth && !error && !hayContenido && (
           <div className="rounded-xl border border-dashed border-stone-200 bg-white py-24 text-center">
-            <FolderOpen size={32} className="mx-auto mb-3 text-stone-300" />
-            <p className="text-sm font-medium text-stone-400">Sin proyectos aún</p>
-            <p className="mt-1 text-xs text-stone-300">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-caoba-50 mb-4">
+              <FolderOpen size={22} weight="duotone" className="text-caoba-500" />
+            </div>
+            <p className="text-sm font-semibold text-stone-700">Sin proyectos aún</p>
+            <p className="mt-1.5 text-xs text-stone-400 max-w-[180px] mx-auto leading-relaxed">
               Crea tu primera cotización con el botón de arriba.
             </p>
           </div>
@@ -258,35 +260,35 @@ export default function CotizacionesPage() {
 
 function SkeletonProyectoCard() {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden animate-pulse">
+    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
       <div className="flex items-start justify-between gap-4 px-5 py-4">
         <div className="space-y-2 flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded-sm bg-stone-100" />
-            <div className="h-4 w-40 rounded-md bg-stone-100" />
-            <div className="h-4 w-16 rounded-full bg-stone-100" />
+            <div className="h-4 w-4 rounded-sm skeleton" />
+            <div className="h-4 w-40 rounded-md skeleton" />
+            <div className="h-4 w-16 rounded-full skeleton" />
           </div>
-          <div className="h-3 w-52 rounded-md bg-stone-100 ml-6" />
-          <div className="h-3 w-32 rounded-md bg-stone-100 ml-6" />
+          <div className="h-3 w-52 rounded-md skeleton ml-6" />
+          <div className="h-3 w-32 rounded-md skeleton ml-6" />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="h-7 w-28 rounded-md bg-stone-100" />
-          <div className="h-7 w-7 rounded-md bg-stone-100" />
+          <div className="h-7 w-28 rounded-md skeleton" />
+          <div className="h-7 w-7 rounded-md skeleton" />
         </div>
       </div>
       <div className="border-t border-stone-100">
         <div className="flex items-center justify-between px-5 py-2.5 bg-stone-50">
-          <div className="h-3 w-32 rounded-md bg-stone-200" />
-          <div className="h-3 w-16 rounded-md bg-stone-200" />
+          <div className="h-3 w-32 rounded-md skeleton" />
+          <div className="h-3 w-16 rounded-md skeleton" />
         </div>
         {[0, 1].map((i) => (
           <div key={i} className="flex items-center justify-between px-5 py-3 border-t border-stone-100">
             <div className="flex items-center gap-3">
-              <div className="h-5 w-8 rounded-md bg-stone-100" />
-              <div className="h-3 w-32 rounded-md bg-stone-100" />
-              <div className="h-3 w-16 rounded-full bg-stone-100" />
+              <div className="h-5 w-8 rounded-md skeleton" />
+              <div className="h-3 w-32 rounded-md skeleton" />
+              <div className="h-3 w-16 rounded-full skeleton" />
             </div>
-            <div className="h-4 w-20 rounded-md bg-stone-100" />
+            <div className="h-4 w-20 rounded-md skeleton" />
           </div>
         ))}
       </div>

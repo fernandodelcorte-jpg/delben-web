@@ -141,6 +141,44 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 > Registro cronológico inverso de cambios relevantes. Agregar una entrada cada vez que se implemente o corrija algo importante.
 
+### 2026-05-29 — Polish pass: shimmer consistente, stagger cap, page title, DESIGN.md sincronizado
+- `SkeletonProyectoCard` migrado de `animate-pulse` a `.skeleton` en cada placeholder — igual que el resto del sistema.
+- Stagger cap a 5 ítems (`Math.min(i, 4) * 40ms`) en cotizaciones y valoraciones borrador. Carrito con 10+ ítems ya no espera 400ms.
+- `h1 "Proyectos"` corregido a `text-2xl` (design system compliance).
+- DESIGN.md sincronizado: animation values actuales, `.skeleton` pattern, caoba como botón primario, `transition-colors` en inputs, `deslizarse-derecha` documentado.
+- Archivos: `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `DESIGN.md`.
+
+### 2026-05-29 — Design engineering: correcciones de animación (Emil Kowalski)
+- `aparecer` 500ms → 200ms, `translateY(10px)` → `translateY(5px)`: bajo 300ms, offset más sutil.
+- `aparecer-lento` eliminado: 700ms nunca es correcto en una app de trabajo diario.
+- `shimmer` `ease-in-out` → `linear`: los loops infinitos deben ser constantes, sin pulso irregular.
+- `FichaModulo` panel lateral: `animate-aparecer` (sube) → `animate-deslizarse-derecha` (entra desde derecha). Coherencia espacial.
+- `transition-all` → `transition-colors` en todos los inputs y selects: no animar layout, solo color/borde.
+- `prefers-reduced-motion` añadido a globals.css: accesibilidad para usuarios con sensibilidad al movimiento.
+- Nuevo keyframe `deslizarse-derecha` en tailwind.config.ts.
+- Archivos: `tailwind.config.ts`, `globals.css`, `ficha-modulo.tsx`, `buscador-modulos.tsx`.
+
+### 2026-05-29 — Design polish: 7 mejoras de UI (caoba, divide-y, shimmer, stagger, nav, empty states)
+- **P1 — Color caoba en CTAs primarios**: todos los botones de acción principal (Guardar, Agregar al carrito, Nuevo proyecto) usan ahora `bg-caoba-600` en vez de `bg-stone-900`. Diferenciación clara de jerarquía.
+- **P2 — Cards → divide-y en borrador**: las listas de módulos, herrajes y especiales en borrador (cotizaciones y valoraciones) usan ahora un único contenedor con `divide-y` en lugar de cards individuales. Menos ruido visual.
+- **P3 — Shimmer en skeletons**: reemplazado `animate-pulse` por clase `.skeleton` con gradiente barrido de izquierda a derecha. Nuevo keyframe `shimmer` en tailwind.config.ts y clase en globals.css.
+- **P4 — Stagger en listas**: ítems del carrito aparecen con `animationDelay` escalonado de 40ms por ítem usando `animate-aparecer`.
+- **P5 — Nav: indicador de ruta activa**: cambio de pill `bg-stone-100` a `border-b-2 border-caoba-500` de altura completa. Más refinado.
+- **P6 — Avatar de usuario**: `h-7 w-7` con `ring-2 ring-stone-200`. Legible en retina.
+- **P7 — Empty states**: ícono en contenedor `bg-caoba-50` + jerarquía tipográfica en 2 niveles. Cotizaciones, borrador (módulos, herrajes, especiales) y valoraciones.
+- Archivos: `tailwind.config.ts`, `globals.css`, `nav-portal.tsx`, `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `buscador-modulos.tsx`, `ficha-modulo.tsx`.
+
+### 2026-05-29 — UX: mejoras al cotizador (observaciones, staging herrajes, costos unitarios)
+- **Observaciones visibles en carrito**: el texto de observaciones de cada módulo aparece ahora directamente en la fila del carrito (cursiva, debajo del subtítulo), sin necesidad de expandir el ítem. Aplica en cotizaciones y valoraciones.
+- **Staging de herrajes en buscador**: en la pestaña Herrajes del buscador, el botón ya no agrega directamente al carrito. Se acumulan en una lista "Seleccionados" donde se puede ajustar la cantidad o quitar antes de confirmar. Botón "Agregar N al carrito" en el footer cierra el buscador y agrega todos de una vez.
+- **Costos unitarios por producto**: para roles con acceso a costos (`super_admin`, `delben_facturacion`, `distribuidor_admin`, `distribuidor_costos`), se muestra ahora el costo unitario por ítem (módulo y herraje) además del total de línea, cuando la cantidad es mayor a 1.
+- Archivos: `buscador-modulos.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`.
+
+### 2026-05-29 — Fix: guardar cotización duplicada fallaba (fecha.getTime)
+- `guardarCotizacion` en `cotizaciones.ts` llamaba `info.fecha.getTime()`. Al duplicar desde localStorage, `fecha` era string → error en runtime.
+- Solución: `new Date(info.fecha).getTime()`.
+- Archivo: `apps/portal/src/lib/firestore/cotizaciones.ts`.
+
 ### 2026-05-28 — Fix: fecha_cotizacion.getTime is not a function
 - Al rehidratar el store desde `localStorage`, `cotizacionInfo.fecha` quedaba como string ISO en vez de `Date`. El motor de cálculo llamaba `.getTime()` y fallaba al agregar herrajes o módulos.
 - Solución: `new Date(cotizacionInfo.fecha)` en los dos puntos donde se construye `motorBase` y el payload de `agregarHerraje`.

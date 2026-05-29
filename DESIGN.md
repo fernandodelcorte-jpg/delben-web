@@ -77,17 +77,18 @@ caoba-950: oklch(0.16 0.04 34)
 - No shadow by default — reserve `shadow-sm` for hover feedback only
 
 ### Buttons
-**Primary (dark):** `rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 transition-colors tactil`
-**Secondary (border):** `rounded-lg border border-stone-200 px-4 py-2.5 text-sm text-stone-600 hover:border-stone-300 hover:bg-stone-50 transition-all tactil`
+**Primary (caoba):** `rounded-lg bg-caoba-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-caoba-700 transition-colors tactil`
+**Secondary (border):** `rounded-lg border border-stone-200 px-4 py-2.5 text-sm text-stone-600 hover:border-stone-300 hover:bg-stone-50 transition-colors tactil`
+**Dark:** `rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 transition-colors tactil` — use for selector toggles (structure type, facade type), NOT for primary CTA actions
 **Ghost:** `text-sm text-stone-500 hover:text-stone-800 transition-colors tactil`
-**Caoba primary:** `rounded-lg bg-caoba-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-caoba-700 transition-colors tactil`
 
 ### Inputs
 ```
 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm
 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100
-transition-all
+transition-colors
 ```
+Use `transition-colors` (not `transition-all`) — only border color and ring change on focus.
 
 ### Badges / Pills
 - Rounded full, `px-2.5 py-1 text-xs font-medium`
@@ -107,34 +108,40 @@ transition-all
 
 ### Keyframes
 ```css
-aparecer: opacity 0→1, translateY 10px→0 (duration: 0.5s)
-sacudir: horizontal shake for validation errors
+aparecer:           opacity 0→1, translateY 5px→0    (duration: 0.2s)
+deslizarse-derecha: opacity 0→1, translateX 16px→0   (duration: 0.2s)  ← side panels
+desplegarse:        opacity 0→1, scale 0.96→1 + translateY -4px→0 (150ms) ← dropdowns
+sacudir:            horizontal shake for validation errors
 ```
 
 ### Utility classes
 - `.tactil` — `transition: transform 160ms var(--ease-out-fuerte); :active { scale(0.97) }` — applies to all pressable elements
 - `.transicion-entrada` — coordinated opacity + transform transition
+- `.skeleton` — shimmer gradient (linear, sweeping left→right) for placeholder loading elements
 
 ### Timing guidelines
 | Element | Duration |
 |---|---|
 | Button press | 160ms (via `.tactil`) |
 | Dropdown entry | 150ms |
-| Page element stagger | 60ms per item, max 5 items staggered |
-| Skeleton pulse | CSS pulse animation |
+| Side panel entry | 200ms (`animate-deslizarse-derecha`) |
+| Page element stagger | 40ms per item, cap at 5 items (items 6+ no delay) |
+| Skeleton shimmer | 1.6s linear infinite |
 | Toast / notification | 250ms enter, 200ms exit |
 
 ### Stagger pattern
 ```tsx
 <div
   className="animate-aparecer"
-  style={{ animationDelay: `${index * 60}ms` }}
+  style={{ animationDelay: `${Math.min(index, 4) * 40}ms` }}
 />
 ```
-Cap stagger at 5 items (~300ms max). Items 6+ appear without delay.
+Cap stagger at 5 items (160ms max). Items 6+ appear without delay.
 
 ## Skeleton loaders
-Match the exact shape of the content being loaded. Use `animate-pulse` with stone-100 fills.
+Match the exact shape of the content being loaded.
+Apply `.skeleton` class to each individual placeholder element (NOT the wrapper container).
+Never use `animate-pulse` — it was replaced by `.skeleton` shimmer.
 Never use `CircleNotch` spinner for page-level content loads.
 Reserve the circular spinner (`border-t-caoba-600 animate-spin`) for:
 - Initial auth check (full-page)

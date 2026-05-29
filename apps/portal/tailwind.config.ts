@@ -9,15 +9,20 @@ const config: Config = {
         mono: ['var(--font-geist-mono)', 'ui-monospace', 'monospace'],
       },
       animation: {
-        aparecer: 'aparecer 0.5s cubic-bezier(0.23, 1, 0.32, 1) both',
-        'aparecer-lento': 'aparecer 0.7s cubic-bezier(0.23, 1, 0.32, 1) both',
+        aparecer: 'aparecer 0.2s cubic-bezier(0.23, 1, 0.32, 1) both',
         sacudir: 'sacudir 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both',
         desplegarse: 'desplegarse 150ms cubic-bezier(0.23, 1, 0.32, 1) both',
+        shimmer: 'shimmer 1.6s linear infinite',
+        'deslizarse-derecha': 'deslizarse-derecha 0.2s cubic-bezier(0.23, 1, 0.32, 1) both',
       },
       keyframes: {
         aparecer: {
-          from: { opacity: '0', transform: 'translateY(10px)' },
+          from: { opacity: '0', transform: 'translateY(5px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        'deslizarse-derecha': {
+          from: { opacity: '0', transform: 'translateX(16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
         },
         desplegarse: {
           from: { opacity: '0', transform: 'scale(0.96) translateY(-4px)' },
@@ -28,6 +33,10 @@ const config: Config = {
           '20%, 80%': { transform: 'translateX(2px)' },
           '30%, 50%, 70%': { transform: 'translateX(-3px)' },
           '40%, 60%': { transform: 'translateX(3px)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
       colors: {

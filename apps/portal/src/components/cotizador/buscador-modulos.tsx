@@ -79,7 +79,7 @@ function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full appearance-none rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 pr-9 text-sm text-stone-900 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all disabled:opacity-50"
+        className="w-full appearance-none rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 pr-9 text-sm text-stone-900 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-colors disabled:opacity-50"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -557,7 +557,7 @@ function PanelEspecial({
       {/* Footer */}
       <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white">
         <button type="button" onClick={handleAgregar}
-          className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 flex items-center justify-center gap-2"
+          className="tactil w-full rounded-lg bg-caoba-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-caoba-700 flex items-center justify-center gap-2"
         >
           <Sparkle size={14} weight="fill" />
           Agregar especial al carrito
@@ -885,35 +885,35 @@ function PanelConfigModulo({
 
       {/* Scrollable form */}
       {cargandoCatalogo ? (
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 animate-pulse">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <div className="h-10 rounded-lg bg-stone-100" />
-            <div className="h-10 rounded-lg bg-stone-100" />
+            <div className="h-10 rounded-lg skeleton" />
+            <div className="h-10 rounded-lg skeleton" />
           </div>
           <div className="space-y-2">
-            <div className="h-3.5 w-28 rounded bg-stone-100" />
+            <div className="h-3.5 w-28 rounded skeleton" />
             <div className="grid grid-cols-2 gap-2">
-              <div className="h-9 rounded-lg bg-stone-100" />
-              <div className="h-9 rounded-lg bg-stone-100" />
+              <div className="h-9 rounded-lg skeleton" />
+              <div className="h-9 rounded-lg skeleton" />
             </div>
           </div>
           <div className="space-y-2">
-            <div className="h-3.5 w-28 rounded bg-stone-100" />
+            <div className="h-3.5 w-28 rounded skeleton" />
             <div className="grid grid-cols-3 gap-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-9 rounded-lg bg-stone-100" />
+                <div key={i} className="h-9 rounded-lg skeleton" />
               ))}
             </div>
           </div>
           <div className="space-y-2">
-            <div className="h-3.5 w-36 rounded bg-stone-100" />
-            <div className="h-10 rounded-lg bg-stone-100" />
+            <div className="h-3.5 w-36 rounded skeleton" />
+            <div className="h-10 rounded-lg skeleton" />
           </div>
           <div className="space-y-2">
-            <div className="h-3.5 w-40 rounded bg-stone-100" />
+            <div className="h-3.5 w-40 rounded skeleton" />
             <div className="flex gap-2 flex-wrap">
               {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-7 w-20 rounded-full bg-stone-100" />
+                <div key={i} className="h-7 w-20 rounded-full skeleton" />
               ))}
             </div>
           </div>
@@ -1143,7 +1143,7 @@ function PanelConfigModulo({
                 value={busquedaHerraje}
                 onChange={(e) => setBusquedaHerraje(e.target.value)}
                 placeholder="Buscar herraje (bisagra, corredera…)"
-                className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-8 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-all"
+                className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-8 pr-8 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-colors"
               />
             </div>
 
@@ -1262,7 +1262,7 @@ function PanelConfigModulo({
           type="button"
           onClick={handleAgregar}
           disabled={!listo}
-          className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="tactil w-full rounded-lg bg-caoba-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-caoba-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {(cargandoCatalogo || cargandoPrecios) && (
             <CircleNotch size={14} className="animate-spin" />
@@ -1371,7 +1371,7 @@ function PanelBusquedaModulos({
             placeholder={
               categoriaNombre ? `Buscar en ${categoriaNombre}…` : 'Ej: alto cocina, bajo 60…'
             }
-            className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2.5 pl-8 pr-3 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-all"
+            className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2.5 pl-8 pr-3 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-colors"
           />
         </div>
       </div>
@@ -1455,8 +1455,11 @@ function PanelBusquedaModulos({
 
 // ─── Panel de herrajes (ancho completo) ───────────────────────────────────────
 
+type HerrajeStagiado = { accesorio: Accesorio; cantidad: number }
+
 function PanelHerrajes() {
   const agregarHerraje = useCarrito((s) => s.agregarHerraje)
+  const cerrarBuscador = useCarrito((s) => s.cerrarBuscador)
   const modalidad = useCarrito((s) => s.cotizacionInfo?.modalidad ?? 'desarmado')
 
   const [busqueda, setBusqueda] = useState('')
@@ -1464,12 +1467,45 @@ function PanelHerrajes() {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cantidades, setCantidades] = useState<Record<string, number>>({})
+  const [staged, setStaged] = useState<HerrajeStagiado[]>([])
 
   function getCantidad(id: string) {
     return cantidades[id] ?? 1
   }
   function setCantidad(id: string, val: number) {
     setCantidades((prev) => ({ ...prev, [id]: Math.max(0.1, parseFloat(val.toFixed(4))) }))
+  }
+
+  function agregarAlStaging(a: Accesorio) {
+    const cant = getCantidad(a.id)
+    setStaged((prev) => {
+      const existente = prev.find((h) => h.accesorio.id === a.id)
+      if (existente) {
+        return prev.map((h) =>
+          h.accesorio.id === a.id
+            ? { ...h, cantidad: parseFloat((h.cantidad + cant).toFixed(4)) }
+            : h,
+        )
+      }
+      return [...prev, { accesorio: a, cantidad: cant }]
+    })
+  }
+
+  function setCantidadStaged(id: string, val: number) {
+    setStaged((prev) =>
+      prev.map((h) =>
+        h.accesorio.id === id ? { ...h, cantidad: Math.max(0.1, parseFloat(val.toFixed(4))) } : h,
+      ),
+    )
+  }
+
+  function eliminarDelStaging(id: string) {
+    setStaged((prev) => prev.filter((h) => h.accesorio.id !== id))
+  }
+
+  function confirmarAgregarAlCarrito() {
+    staged.forEach((h) => agregarHerraje(h.accesorio, h.cantidad))
+    cerrarBuscador()
   }
 
   useEffect(() => {
@@ -1502,6 +1538,7 @@ function PanelHerrajes() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Barra de búsqueda */}
       <div className="shrink-0 px-6 py-4 border-b border-stone-100">
         <div className="relative max-w-sm">
           <MagnifyingGlass
@@ -1514,11 +1551,12 @@ function PanelHerrajes() {
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Ej: bisagra, corredera, jalador…"
-            className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2.5 pl-9 pr-3.5 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-all"
+            className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2.5 pl-9 pr-3.5 text-sm text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-300 focus:bg-white focus:ring-2 focus:ring-stone-100 transition-colors"
           />
         </div>
       </div>
 
+      {/* Resultados de búsqueda */}
       <div className="flex-1 overflow-y-auto px-6 py-2">
         {cargando && (
           <div className="flex items-center justify-center py-16 gap-2 text-stone-400 text-sm">
@@ -1531,13 +1569,13 @@ function PanelHerrajes() {
             {error}
           </div>
         )}
-        {!cargando && !error && busqueda.trim().length < 2 && (
+        {!cargando && !error && busqueda.trim().length < 2 && staged.length === 0 && (
           <p className="py-16 text-center text-sm text-stone-400">
             Escribe al menos 2 letras para buscar herrajes.
           </p>
         )}
         {!cargando && !error && busqueda.trim().length >= 2 && accesorios.length === 0 && (
-          <p className="py-16 text-center text-sm text-stone-400">
+          <p className="py-8 text-center text-sm text-stone-400">
             Sin resultados para &ldquo;{busqueda}&rdquo;
           </p>
         )}
@@ -1546,6 +1584,7 @@ function PanelHerrajes() {
             {accesorios.map((a) => {
               const p = precio(a)
               const cant = getCantidad(a.id)
+              const yaEnStaging = staged.some((h) => h.accesorio.id === a.id)
               return (
                 <div key={a.id} className="flex items-center gap-4 py-3.5">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-xs font-semibold text-stone-500">
@@ -1585,10 +1624,15 @@ function PanelHerrajes() {
                         </button>
                       </div>
                       <button
-                        onClick={() => agregarHerraje(a, cant)}
-                        className="tactil rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition-colors"
+                        onClick={() => agregarAlStaging(a)}
+                        className={[
+                          'tactil rounded-lg px-4 py-2 text-xs font-semibold transition-colors',
+                          yaEnStaging
+                            ? 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                            : 'bg-caoba-600 text-white hover:bg-caoba-700',
+                        ].join(' ')}
                       >
-                        Agregar
+                        {yaEnStaging ? '+ Sumar' : 'Seleccionar'}
                       </button>
                     </div>
                   )}
@@ -1597,9 +1641,70 @@ function PanelHerrajes() {
             })}
           </div>
         )}
+
+        {/* Lista de herrajes seleccionados (staging) */}
+        {staged.length > 0 && (
+          <div className="mt-4 border-t border-stone-100 pt-4">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
+              Seleccionados ({staged.length})
+            </p>
+            <div className="space-y-2">
+              {staged.map((h) => {
+                const p = precio(h.accesorio)
+                return (
+                  <div
+                    key={h.accesorio.id}
+                    className="flex items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-stone-800 truncate">{h.accesorio.nombre}</p>
+                      {p && (
+                        <p className="text-xs text-stone-400 tabular-nums">
+                          {formatCOP(p * h.cantidad)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setCantidadStaged(h.accesorio.id, h.cantidad - 0.5)}
+                        className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
+                      >
+                        <Minus size={10} weight="bold" />
+                      </button>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.5"
+                        value={h.cantidad}
+                        onChange={(e) => {
+                          const n = parseFloat(e.target.value)
+                          if (!isNaN(n) && n > 0) setCantidadStaged(h.accesorio.id, n)
+                        }}
+                        className="w-10 text-center text-xs font-semibold text-stone-700 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={() => setCantidadStaged(h.accesorio.id, h.cantidad + 0.5)}
+                        className="tactil flex h-6 w-6 items-center justify-center rounded-md text-stone-400 hover:bg-stone-200 transition-colors"
+                      >
+                        <Plus size={10} weight="bold" />
+                      </button>
+                      <button
+                        onClick={() => eliminarDelStaging(h.accesorio.id)}
+                        className="tactil ml-1 flex h-6 w-6 items-center justify-center rounded-md text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash size={11} weight="bold" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="shrink-0 border-t border-stone-100 px-6 py-3">
+      {/* Footer */}
+      <div className="shrink-0 border-t border-stone-100 px-6 py-3 flex items-center justify-between gap-4">
         <p className="text-xs text-stone-400">
           {cargando
             ? 'Buscando…'
@@ -1607,6 +1712,15 @@ function PanelHerrajes() {
               ? `Herrajes · modalidad ${modalidad}`
               : `${accesorios.length} herraje${accesorios.length !== 1 ? 's' : ''}`}
         </p>
+        {staged.length > 0 && (
+          <button
+            onClick={confirmarAgregarAlCarrito}
+            className="tactil flex items-center gap-2 rounded-lg bg-caoba-600 px-4 py-2 text-xs font-semibold text-white hover:bg-caoba-700 transition-colors"
+          >
+            <Plus size={12} weight="bold" />
+            Agregar {staged.length} al carrito
+          </button>
+        )}
       </div>
     </div>
   )

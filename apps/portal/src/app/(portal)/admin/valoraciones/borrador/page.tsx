@@ -146,7 +146,7 @@ export default function ValoracionBorradorPage() {
           <h2 className="text-sm font-semibold text-stone-900 tracking-tight">Módulos</h2>
           <button
             onClick={abrirBuscador}
-            className="tactil flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:border-stone-300 hover:bg-stone-50 transition-all"
+            className="tactil flex items-center gap-1.5 rounded-lg bg-caoba-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-caoba-700 transition-all"
           >
             <Plus size={13} weight="bold" />
             Agregar producto
@@ -154,24 +154,26 @@ export default function ValoracionBorradorPage() {
         </div>
 
         {items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-stone-200 bg-white py-16 text-center">
-            <p className="text-sm text-stone-400">Sin módulos aún.</p>
-            <p className="mt-1 text-xs text-stone-300">
-              Presiona &ldquo;Agregar producto&rdquo; para comenzar.
-            </p>
+          <div className="rounded-xl border border-dashed border-stone-200 bg-white py-14 text-center">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-caoba-50 mb-3">
+              <Plus size={18} weight="bold" className="text-caoba-500" />
+            </div>
+            <p className="text-sm font-semibold text-stone-700">Sin módulos aún</p>
+            <p className="mt-1 text-xs text-stone-400">Usa &ldquo;Agregar producto&rdquo; para comenzar.</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {items.map((item) => (
-              <CarritoItemRow
-                key={item.id}
-                item={item}
-                expandido={expandidos.has(item.id)}
-                onToggle={() => toggleExpandido(item.id)}
-                onEliminar={() => eliminarItem(item.id)}
-                onEditar={() => editarModulo(item)}
-                onCambiarCantidad={(delta) => cambiarCantidadItem(item.id, delta)}
-              />
+          <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+            {items.map((item, i) => (
+              <div key={item.id} className="animate-aparecer" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
+                <CarritoItemRow
+                  item={item}
+                  expandido={expandidos.has(item.id)}
+                  onToggle={() => toggleExpandido(item.id)}
+                  onEliminar={() => eliminarItem(item.id)}
+                  onEditar={() => editarModulo(item)}
+                  onCambiarCantidad={(delta) => cambiarCantidadItem(item.id, delta)}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -188,14 +190,15 @@ export default function ValoracionBorradorPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {itemsHerraje.map((item) => (
-                <HerrajeItemRow
-                  key={item.id}
-                  item={item}
-                  onEliminar={() => eliminarHerraje(item.id)}
-                  onCambiarCantidad={(delta) => cambiarCantidadHerraje(item.id, delta)}
-                />
+            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+              {itemsHerraje.map((item, i) => (
+                <div key={item.id} className="animate-aparecer" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
+                  <HerrajeItemRow
+                    item={item}
+                    onEliminar={() => eliminarHerraje(item.id)}
+                    onCambiarCantidad={(delta) => cambiarCantidadHerraje(item.id, delta)}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -216,14 +219,15 @@ export default function ValoracionBorradorPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {itemsEspeciales.map((item) => (
-                <EspecialItemRowVal
-                  key={item.id}
-                  item={item}
-                  onEliminar={() => eliminarEspecial(item.id)}
-                  onCambiarCantidad={(delta) => cambiarCantidadEspecial(item.id, delta)}
-                />
+            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+              {itemsEspeciales.map((item, i) => (
+                <div key={item.id} className="animate-aparecer" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
+                  <EspecialItemRowVal
+                    item={item}
+                    onEliminar={() => eliminarEspecial(item.id)}
+                    onCambiarCantidad={(delta) => cambiarCantidadEspecial(item.id, delta)}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -261,7 +265,7 @@ export default function ValoracionBorradorPage() {
                 <button
                   onClick={handleGuardar}
                   disabled={guardando || !hayItems}
-                  className="tactil flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50 transition-colors"
+                  className="tactil flex items-center gap-2 rounded-lg bg-caoba-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-caoba-700 disabled:opacity-50 transition-colors"
                 >
                   {guardando ? (
                     <CircleNotch size={16} className="animate-spin" />
@@ -303,7 +307,7 @@ function CarritoItemRow({
   onCambiarCantidad: (delta: number) => void
 }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div>
       <div className="flex items-center gap-3 px-4 py-3.5">
         <button onClick={onToggle} className="tactil flex-1 flex items-center gap-3 text-left min-w-0">
           <ModuloImagen url={item.modulo.imagen_url} nombre={item.modulo.nombre} size="sm" />
@@ -312,6 +316,11 @@ function CarritoItemRow({
             <p className="text-xs text-stone-400 truncate mt-0.5">
               {item.config.tipoEstructuraNombre} · {item.config.tipoFachadaNombre} · {item.config.acabadoNombre}
             </p>
+            {item.config.observaciones && (
+              <p className="text-xs text-stone-500 italic truncate mt-0.5">
+                {item.config.observaciones}
+              </p>
+            )}
           </div>
           {expandido ? (
             <CaretUp size={14} className="shrink-0 text-stone-400" weight="bold" />
@@ -395,8 +404,7 @@ function HerrajeItemRow({
   onCambiarCantidad: (delta: number) => void
 }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3.5">
+    <div className="flex items-center gap-3 px-4 py-3.5">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-stone-100 text-xs font-semibold text-stone-500">
           {String(item.accesorio.codigo).slice(0, 3)}
         </div>
@@ -447,7 +455,6 @@ function HerrajeItemRow({
         >
           <Trash size={15} weight="bold" />
         </button>
-      </div>
     </div>
   )
 }
@@ -528,7 +535,7 @@ function EspecialItemRowVal({
   ].filter(Boolean).join(' × ')
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+    <div>
       <div className="flex items-center gap-3 px-4 py-3.5">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-100">
           <Sparkle size={14} weight="fill" className="text-stone-500" />
