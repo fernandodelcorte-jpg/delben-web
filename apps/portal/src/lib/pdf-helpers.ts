@@ -4,10 +4,11 @@
  * o desde snapshots de Firestore ([id] guardada), sin duplicar lógica.
  */
 
-import type { ItemCarrito, ItemHerrajeCarrito, CotizacionInfo } from '@/store/carrito'
+import type { ItemCarrito, ItemHerrajeCarrito, ItemEspecial, CotizacionInfo } from '@/store/carrito'
 import type {
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
+  ItemEspecialSnapshot,
 } from '@/lib/firebase/tipos-firestore'
 
 // ─── Utilidad: convierte una URL remota a data URL (evita CORS en react-pdf) ──
@@ -50,6 +51,19 @@ export type HerrajePDF = {
   costoSubtotal: number
 }
 
+export type EspecialPDF = {
+  id: string
+  nombre: string
+  configLinea: string
+  cantidad: number
+  // Capa Distribuidor (precio cliente)
+  precioSubtotal: number
+  // Capa Delben (no mostrar a distribuidor_comercial)
+  costoSubtotal: number
+  observaciones: string
+  herrajes: { nombre: string; cantidad: number }[]
+}
+
 export type ItemPDF = {
   id: string
   nombre: string
@@ -76,6 +90,8 @@ export type InfoPDF = {
   categoriaNombre?: string
   modalidad: 'tradicional' | 'desarmado'
   fecha: Date
+  transporteFijo?: number
+  instalacionFija?: number
   logoDistribuidorUrl?: string | null
   logoDelbenUrl?: string | null
 }
@@ -169,6 +185,50 @@ export function herrajeSnapshotToPDF(item: ItemHerraCotizacionSnapshot): Herraje
   }
 }
 
+function configLineaEspecial(e: {
+  tipoEstructuraNombre: string
+  tipoFachadaNombre: string
+  acabadoNombre: string
+  acabadoEstructura: string | null
+  colorVidrio: string | null
+  ancho: number | null
+  alto: number
+  profundidad: number
+}): string {
+  const partes = [e.tipoEstructuraNombre, e.tipoFachadaNombre, e.acabadoNombre].filter(Boolean) as string[]
+  if (e.acabadoEstructura) partes.push(`Estr. ${e.acabadoEstructura}`)
+  if (e.colorVidrio) partes.push(`Vidrio: ${e.colorVidrio}`)
+  const dim = `${e.ancho ? `${e.ancho} × ` : ''}${e.alto} × ${e.profundidad} mm`
+  partes.push(dim)
+  return partes.join(' · ')
+}
+
+export function especialCarritoToPDF(item: ItemEspecial): EspecialPDF {
+  return {
+    id: item.id,
+    nombre: item.nombre,
+    configLinea: configLineaEspecial(item),
+    cantidad: item.cantidad,
+    precioSubtotal: item.precioClienteUnitario * item.cantidad,
+    costoSubtotal: item.precioDelbenUnitario * item.cantidad,
+    observaciones: item.observaciones,
+    herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),
+  }
+}
+
+export function especialSnapshotToPDF(item: ItemEspecialSnapshot): EspecialPDF {
+  return {
+    id: crypto.randomUUID(),
+    nombre: item.nombre,
+    configLinea: configLineaEspecial(item),
+    cantidad: item.cantidad,
+    precioSubtotal: item.precioClienteUnitario * item.cantidad,
+    costoSubtotal: item.precioDelbenUnitario * item.cantidad,
+    observaciones: item.observaciones,
+    herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),
+  }
+}
+
 export function cotizacionInfoToInfoPDF(
   info: CotizacionInfo,
   logos?: { logoDistribuidorUrl?: string | null; logoDelbenUrl?: string | null },
@@ -181,6 +241,8 @@ export function cotizacionInfoToInfoPDF(
     categoriaNombre: info.categoriaNombre,
     modalidad: info.modalidad,
     fecha: new Date(info.fecha),
+    transporteFijo: info.transporteFijo,
+    instalacionFija: info.instalacionFija,
     logoDistribuidorUrl: logos?.logoDistribuidorUrl,
     logoDelbenUrl: logos?.logoDelbenUrl,
   }

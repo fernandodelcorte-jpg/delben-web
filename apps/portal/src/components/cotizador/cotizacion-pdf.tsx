@@ -2,7 +2,7 @@
 
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { formatCOP } from '@/lib/datos-demo'
-import type { ItemPDF, HerrajePDF, InfoPDF } from '@/lib/pdf-helpers'
+import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const s = StyleSheet.create({
   page: {
@@ -164,9 +164,10 @@ type Props = {
   info: InfoPDF
   items: ItemPDF[]
   herrajesSueltos?: HerrajePDF[]
+  especiales?: EspecialPDF[]
 }
 
-export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
+export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = [] }: Props) {
   const subtotalSinIva = items.reduce((s, i) => s + i.precioSinIva * i.cantidad, 0)
   const ivaTotal = items.reduce((s, i) => s + i.ivaMonto, 0)
   const totalModulos = items.reduce((s, i) => s + i.precioSubtotal, 0)
@@ -175,7 +176,17 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
     0,
   )
   const totalHerrajesSueltos = herrajesSueltos.reduce((s, h) => s + h.precioSubtotal, 0)
-  const total = totalModulos + totalHerrajesAsoc + totalHerrajesSueltos
+  const totalEspeciales = especiales.reduce((s, e) => s + e.precioSubtotal, 0)
+  const transporteFijo = info.transporteFijo ?? 0
+  const instalacionFija = info.instalacionFija ?? 0
+  // Total canónico: idéntico a calcularTotalesCotizacion() del carrito.
+  const total =
+    totalModulos +
+    totalHerrajesAsoc +
+    totalHerrajesSueltos +
+    totalEspeciales +
+    transporteFijo +
+    instalacionFija
 
   const fecha = info.fecha.toLocaleDateString('es-CO', {
     year: 'numeric',
@@ -291,6 +302,42 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
           </>
         )}
 
+        {/* Muebles especiales */}
+        {especiales.length > 0 && (
+          <>
+            <Text style={s.seccionTitulo}>Muebles especiales</Text>
+            <View style={s.tabla}>
+              <View style={s.tablaHeader}>
+                <Text style={s.thNombre}>Mueble</Text>
+                <Text style={s.thConfig}>Configuración</Text>
+                <Text style={s.thQty}>Cant</Text>
+              </View>
+              {especiales.map((e) => (
+                <View key={e.id}>
+                  <View style={s.tablaFila}>
+                    <View style={s.tdNombre}>
+                      <Text style={s.tdNombreTexto}>{e.nombre}</Text>
+                      {e.observaciones ? (
+                        <Text style={s.observaciones}>{e.observaciones}</Text>
+                      ) : null}
+                    </View>
+                    <View style={s.tdConfig}>
+                      <Text style={s.tdConfigTexto}>{e.configLinea}</Text>
+                    </View>
+                    <Text style={s.tdQty}>{e.cantidad}</Text>
+                  </View>
+                  {e.herrajes.map((h, j) => (
+                    <View key={j} style={s.herrajesFila}>
+                      <Text style={s.herrajeNombre}>↳ {h.nombre}</Text>
+                      <Text style={s.herrajeQty}>×{h.cantidad}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* Totales */}
         <View style={s.totalesBloque}>
           <View style={s.totalesInner}>
@@ -302,6 +349,24 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [] }: Props) {
               <Text style={s.totalLabel}>IVA 19%</Text>
               <Text style={s.totalValor}>{formatCOP(ivaTotal)}</Text>
             </View>
+            {totalEspeciales > 0 && (
+              <View style={s.totalFila}>
+                <Text style={s.totalLabel}>Muebles especiales</Text>
+                <Text style={s.totalValor}>{formatCOP(totalEspeciales)}</Text>
+              </View>
+            )}
+            {transporteFijo > 0 && (
+              <View style={s.totalFila}>
+                <Text style={s.totalLabel}>Transporte</Text>
+                <Text style={s.totalValor}>{formatCOP(transporteFijo)}</Text>
+              </View>
+            )}
+            {instalacionFija > 0 && (
+              <View style={s.totalFila}>
+                <Text style={s.totalLabel}>Instalación</Text>
+                <Text style={s.totalValor}>{formatCOP(instalacionFija)}</Text>
+              </View>
+            )}
             <View style={s.totalFinalFila}>
               <Text style={s.totalFinalLabel}>Total</Text>
               <Text style={s.totalFinalValor}>{formatCOP(total)}</Text>

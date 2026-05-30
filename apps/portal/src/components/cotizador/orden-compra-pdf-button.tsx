@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { FileText } from '@phosphor-icons/react'
 import { OrdenCompraPDF } from './orden-compra-pdf'
-import type { ItemPDF, HerrajePDF, InfoPDF } from '@/lib/pdf-helpers'
+import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
@@ -26,10 +26,11 @@ type Props = {
   info: InfoPDF
   items: ItemPDF[]
   herrajesSueltos: HerrajePDF[]
+  especiales?: EspecialPDF[]
   distribuidorNombre?: string
 }
 
-export function OrdenCompraPDFButton({ info, items, herrajesSueltos, distribuidorNombre }: Props) {
+export function OrdenCompraPDFButton({ info, items, herrajesSueltos, especiales = [], distribuidorNombre }: Props) {
   const nombreArchivo = `OrdenCompra_${info.clienteNombre.replace(/\s+/g, '_')}_${info.proyectoNombre.replace(/\s+/g, '_')}.pdf`
 
   return (
@@ -39,6 +40,7 @@ export function OrdenCompraPDFButton({ info, items, herrajesSueltos, distribuido
           info={info}
           items={items}
           herrajesSueltos={herrajesSueltos}
+          especiales={especiales}
           distribuidorNombre={distribuidorNombre}
         />
       }

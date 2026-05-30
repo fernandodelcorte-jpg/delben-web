@@ -79,9 +79,17 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
   }
   for (const h of cotizacion.itemsHerraje) acumular(h.resultado, h.cantidad)
 
+  const totalEspeciales =
+    cotizacion.totales.totalEspeciales ??
+    (cotizacion.itemsEspeciales ?? []).reduce(
+      (acc, e) => acc + e.precioClienteUnitario * e.cantidad,
+      0,
+    )
+
   return {
     base, diseno, cotizacion: cotiz, produccion, logistica, gestion,
     transporte, instalacion, imprevistos, utilidad, iva, costoDelben, sinIva,
+    totalEspeciales,
     transporteFijo: cotizacion.totales.transporteFijo ?? 0,
     instalacionFija: cotizacion.totales.instalacionFija ?? 0,
   }
@@ -136,6 +144,7 @@ function ResumenCostos({ cotizacion, distribuidor }: { cotizacion: Cotizacion; d
         <FilaCosto label={`Utilidad (${u.utilidad_pct}% margin)`} valor={t.utilidad} signo="+" />
         <FilaCosto label="Sin IVA" valor={t.sinIva} resaltado />
         {t.iva > 0 && <FilaCosto label={`IVA (${u.iva_pct}%)`} valor={t.iva} signo="+" />}
+        {t.totalEspeciales > 0 && <FilaCosto label="Muebles especiales" valor={t.totalEspeciales} signo="+" />}
         {t.transporteFijo > 0 && <FilaCosto label="Transporte fijo" valor={t.transporteFijo} signo="+" />}
         {t.instalacionFija > 0 && <FilaCosto label="Instalación fija" valor={t.instalacionFija} signo="+" />}
         <div className="pt-1">
@@ -378,6 +387,12 @@ export default function AdminCotizacionDetallePage() {
           <div className="flex justify-between text-sm">
             <span className="text-stone-600">Herrajes sueltos</span>
             <span className="font-medium tabular-nums">{formatCOP(cotizacion.totales.totalHerrajes)}</span>
+          </div>
+        )}
+        {(cotizacion.totales.totalEspeciales ?? 0) > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-stone-600">Muebles especiales</span>
+            <span className="font-medium tabular-nums">{formatCOP(cotizacion.totales.totalEspeciales!)}</span>
           </div>
         )}
         {(cotizacion.totales.transporteFijo ?? 0) > 0 && (

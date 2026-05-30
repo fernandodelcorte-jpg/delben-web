@@ -12,7 +12,7 @@ import { recalcularCotizacion } from '@/lib/firestore/recalcular'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
 import { getLogoDelben } from '@/lib/firestore/config'
 import { formatCOP } from '@/lib/datos-demo'
-import { itemSnapshotToPDF, herrajeSnapshotToPDF, urlADataUrl } from '@/lib/pdf-helpers'
+import { itemSnapshotToPDF, herrajeSnapshotToPDF, especialSnapshotToPDF, urlADataUrl } from '@/lib/pdf-helpers'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import type {
   Cotizacion,
@@ -133,6 +133,7 @@ function CotizacionDetalleContent() {
         distribuidorData: result.distribuidorData,
         items: result.items,
         itemsHerraje: result.itemsHerraje,
+        itemsEspeciales: result.itemsEspeciales,
       })
       router.push('/cotizaciones/borrador')
     } catch {
@@ -206,7 +207,11 @@ function CotizacionDetalleContent() {
     year: 'numeric',
   })
 
-  const hayItems = cotizacion.items.length > 0 || cotizacion.itemsHerraje.length > 0
+  const itemsEspecialesSnap = cotizacion.itemsEspeciales ?? []
+  const hayItems =
+    cotizacion.items.length > 0 ||
+    cotizacion.itemsHerraje.length > 0 ||
+    itemsEspecialesSnap.length > 0
 
   const infoParaPDF = {
     clienteNombre: cotizacion.clienteNombre,
@@ -216,11 +221,14 @@ function CotizacionDetalleContent() {
     categoriaNombre: cotizacion.categoriaNombre,
     modalidad: cotizacion.modalidad,
     fecha: new Date(cotizacion.fecha),
+    transporteFijo: cotizacion.totales.transporteFijo,
+    instalacionFija: cotizacion.totales.instalacionFija,
     logoDistribuidorUrl: logoDistribuidorData,
     logoDelbenUrl: logoDelbenData,
   }
   const itemsPDF = cotizacion.items.map(itemSnapshotToPDF)
   const herrajesSueltosPDF = cotizacion.itemsHerraje.map(herrajeSnapshotToPDF)
+  const especialesPDF = itemsEspecialesSnap.map(especialSnapshotToPDF)
 
   return (
     <div>
@@ -394,7 +402,7 @@ function CotizacionDetalleContent() {
               const t = calcularResumenTotal(cotizacion, distribuidor)
               const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
               const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'
-              const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0
+              const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0 || t.totalEspeciales > 0
               return (
                 <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
 
@@ -442,6 +450,7 @@ function CotizacionDetalleContent() {
                       </p>
                       <div className="text-sm divide-y divide-stone-50">
                         {t.iva > 0 && <FilaCosto label={`IVA (${u.iva_pct}%)`} valor={t.iva} signo="+" />}
+                        {t.totalEspeciales > 0 && <FilaCosto label="Muebles especiales" valor={t.totalEspeciales} signo="+" />}
                         {t.transporteFijo > 0 && <FilaCosto label="Transporte fijo" valor={t.transporteFijo} signo="+" />}
                         {t.instalacionFija > 0 && <FilaCosto label="Instalación fija" valor={t.instalacionFija} signo="+" />}
                       </div>
@@ -461,12 +470,13 @@ function CotizacionDetalleContent() {
 
             <div className="flex items-end justify-between gap-6 flex-wrap">
               <div className="flex items-center gap-3 flex-wrap">
-                <CotizacionPDFButton info={infoParaPDF} items={itemsPDF} herrajesSueltos={herrajesSueltosPDF} />
+                <CotizacionPDFButton info={infoParaPDF} items={itemsPDF} herrajesSueltos={herrajesSueltosPDF} especiales={especialesPDF} />
                 {puedeVerCosto && (
                   <OrdenCompraPDFButton
                     info={infoParaPDF}
                     items={itemsPDF}
                     herrajesSueltos={herrajesSueltosPDF}
+                    especiales={especialesPDF}
                     distribuidorNombre={distribuidor?.nombre}
                   />
                 )}
@@ -637,9 +647,17 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
   }
   for (const h of cotizacion.itemsHerraje) acumular(h.resultado, h.cantidad)
 
+  const totalEspeciales =
+    cotizacion.totales.totalEspeciales ??
+    (cotizacion.itemsEspeciales ?? []).reduce(
+      (s, e) => s + e.precioClienteUnitario * e.cantidad,
+      0,
+    )
+
   return {
     base, diseno, cotizacion: cotiz, produccion, logistica, gestion,
     transporte, instalacion, imprevistos, utilidad, iva, costoDelben, sinIva,
+    totalEspeciales,
     transporteFijo: cotizacion.totales.transporteFijo ?? 0,
     instalacionFija: cotizacion.totales.instalacionFija ?? 0,
   }

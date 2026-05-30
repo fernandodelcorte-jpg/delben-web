@@ -15,8 +15,10 @@ import type {
   Cotizacion,
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
+  ItemEspecialSnapshot,
+  TotalesCotizacion,
 } from '@/lib/firebase/tipos-firestore'
-import type { ItemCarrito, ItemHerrajeCarrito, CotizacionInfo } from '@/store/carrito'
+import type { ItemCarrito, ItemHerrajeCarrito, ItemEspecial, CotizacionInfo } from '@/store/carrito'
 
 // ─── Path helper ──────────────────────────────────────────────────────────────
 
@@ -70,6 +72,33 @@ function serializarItemsHerraje(items: ItemHerrajeCarrito[]): ItemHerraCotizacio
   }))
 }
 
+// Firestore rechaza `undefined`: las refs a módulo se omiten cuando no existen.
+function serializarEspeciales(items: ItemEspecial[]): ItemEspecialSnapshot[] {
+  return items.map((item) => ({
+    nombre: item.nombre,
+    tipoEstructuraNombre: item.tipoEstructuraNombre,
+    tipoFachadaNombre: item.tipoFachadaNombre,
+    acabadoNombre: item.acabadoNombre,
+    acabadoEstructura: item.acabadoEstructura,
+    colorVidrio: item.colorVidrio,
+    ancho: item.ancho,
+    alto: item.alto,
+    profundidad: item.profundidad,
+    cantidad: item.cantidad,
+    precioDelbenUnitario: item.precioDelbenUnitario,
+    precioClienteUnitario: item.precioClienteUnitario,
+    observaciones: item.observaciones,
+    herrajes: item.herrajes.map((h) => ({
+      accesorioId: h.accesorioId,
+      nombre: h.nombre,
+      codigo: h.codigo,
+      cantidad: h.cantidad,
+    })),
+    ...(item.moduloReferenciaId ? { moduloReferenciaId: item.moduloReferenciaId } : {}),
+    ...(item.moduloReferenciaNombre ? { moduloReferenciaNombre: item.moduloReferenciaNombre } : {}),
+  }))
+}
+
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function guardarCotizacion(
@@ -78,14 +107,8 @@ export async function guardarCotizacion(
   info: CotizacionInfo,
   items: ItemCarrito[],
   itemsHerraje: ItemHerrajeCarrito[],
-  totales: {
-    totalModulos: number
-    totalHerrajesAsociados: number
-    totalHerrajes: number
-    transporteFijo: number
-    instalacionFija: number
-    total: number
-  },
+  itemsEspeciales: ItemEspecial[],
+  totales: TotalesCotizacion,
 ): Promise<string> {
   if (!info.proyectoId) throw new Error('proyectoId requerido para guardar una cotización')
 
@@ -105,6 +128,7 @@ export async function guardarCotizacion(
     version: info.version,
     items: serializarItems(items),
     itemsHerraje: serializarItemsHerraje(itemsHerraje),
+    itemsEspeciales: serializarEspeciales(itemsEspeciales),
     totales,
     createdBy,
     createdAt: ahora,
@@ -123,14 +147,8 @@ export async function actualizarCotizacion(
   info: CotizacionInfo,
   items: ItemCarrito[],
   itemsHerraje: ItemHerrajeCarrito[],
-  totales: {
-    totalModulos: number
-    totalHerrajesAsociados: number
-    totalHerrajes: number
-    transporteFijo: number
-    instalacionFija: number
-    total: number
-  },
+  itemsEspeciales: ItemEspecial[],
+  totales: TotalesCotizacion,
 ): Promise<void> {
   if (!info.proyectoId) throw new Error('proyectoId requerido para actualizar una cotización')
 
@@ -144,6 +162,7 @@ export async function actualizarCotizacion(
     version: info.version,
     items: serializarItems(items),
     itemsHerraje: serializarItemsHerraje(itemsHerraje),
+    itemsEspeciales: serializarEspeciales(itemsEspeciales),
     totales,
     updatedAt: Date.now(),
   })

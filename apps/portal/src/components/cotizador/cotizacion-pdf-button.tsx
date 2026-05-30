@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { FilePdf } from '@phosphor-icons/react'
 import { CotizacionPDF } from './cotizacion-pdf'
-import type { ItemPDF, HerrajePDF, InfoPDF } from '@/lib/pdf-helpers'
+import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
@@ -26,14 +26,15 @@ type Props = {
   info: InfoPDF
   items: ItemPDF[]
   herrajesSueltos?: HerrajePDF[]
+  especiales?: EspecialPDF[]
 }
 
-export function CotizacionPDFButton({ info, items, herrajesSueltos = [] }: Props) {
+export function CotizacionPDFButton({ info, items, herrajesSueltos = [], especiales = [] }: Props) {
   const nombreArchivo = `Cotizacion_${info.clienteNombre.replace(/\s+/g, '_')}_${info.proyectoNombre.replace(/\s+/g, '_')}.pdf`
 
   return (
     <PDFDownloadLink
-      document={<CotizacionPDF info={info} items={items} herrajesSueltos={herrajesSueltos} />}
+      document={<CotizacionPDF info={info} items={items} herrajesSueltos={herrajesSueltos} especiales={especiales} />}
       fileName={nombreArchivo}
     >
       {({ loading }) =>

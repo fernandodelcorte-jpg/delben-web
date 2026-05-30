@@ -2,7 +2,7 @@
 
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { formatCOP } from '@/lib/datos-demo'
-import type { ItemPDF, HerrajePDF, InfoPDF } from '@/lib/pdf-helpers'
+import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const s = StyleSheet.create({
   page: {
@@ -215,10 +215,11 @@ type Props = {
   info: InfoPDF
   items: ItemPDF[]
   herrajesSueltos: HerrajePDF[]
+  especiales?: EspecialPDF[]
   distribuidorNombre?: string
 }
 
-export function OrdenCompraPDF({ info, items, herrajesSueltos, distribuidorNombre }: Props) {
+export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], distribuidorNombre }: Props) {
   const fecha = info.fecha.toLocaleDateString('es-CO', {
     year: 'numeric',
     month: 'long',
@@ -231,7 +232,10 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, distribuidorNombr
     0,
   )
   const totalHerrajesSueltos = herrajesSueltos.reduce((s, h) => s + h.costoSubtotal, 0)
-  const totalCosto = totalModulos + totalHerrajesAsociados + totalHerrajesSueltos
+  const totalEspeciales = especiales.reduce((s, e) => s + e.costoSubtotal, 0)
+  // Costo de fábrica al distribuidor: NO incluye transporte/instalación fijos
+  // (esos son costos propios del distribuidor, no de Delben).
+  const totalCosto = totalModulos + totalHerrajesAsociados + totalHerrajesSueltos + totalEspeciales
 
   return (
     <Document>
@@ -360,6 +364,44 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, distribuidorNombr
           </>
         )}
 
+        {/* Muebles especiales */}
+        {especiales.length > 0 && (
+          <>
+            <Text style={s.seccionTitulo}>Muebles especiales</Text>
+            <View style={s.tabla}>
+              <View style={s.tablaHeader}>
+                <Text style={s.thNombre}>Mueble</Text>
+                <Text style={s.thConfig}>Configuración</Text>
+                <Text style={s.thQty}>Cant</Text>
+                <Text style={s.thSubtotal}>Costo</Text>
+              </View>
+              {especiales.map((e) => (
+                <View key={e.id}>
+                  <View style={s.tablaFila}>
+                    <View style={s.tdNombre}>
+                      <Text style={s.tdNombreTexto}>{e.nombre}</Text>
+                      {e.observaciones ? (
+                        <Text style={s.observaciones}>{e.observaciones}</Text>
+                      ) : null}
+                    </View>
+                    <View style={s.tdConfig}>
+                      <Text style={s.tdConfigTexto}>{e.configLinea}</Text>
+                    </View>
+                    <Text style={s.tdQty}>{e.cantidad}</Text>
+                    <Text style={s.tdSubtotal}>{formatCOP(e.costoSubtotal)}</Text>
+                  </View>
+                  {e.herrajes.map((h, j) => (
+                    <View key={j} style={s.herrajesFila}>
+                      <Text style={s.herrajeNombre}>↳ {h.nombre}</Text>
+                      <Text style={s.herrajeQty}>×{h.cantidad}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         {/* Totales */}
         <View style={s.totalesBloque}>
           <View style={s.totalesInner}>
@@ -379,6 +421,12 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, distribuidorNombr
               <View style={s.totalFila}>
                 <Text style={s.totalLabel}>Herrajes sueltos</Text>
                 <Text style={s.totalValor}>{formatCOP(totalHerrajesSueltos)}</Text>
+              </View>
+            )}
+            {totalEspeciales > 0 && (
+              <View style={s.totalFila}>
+                <Text style={s.totalLabel}>Muebles especiales</Text>
+                <Text style={s.totalValor}>{formatCOP(totalEspeciales)}</Text>
               </View>
             )}
             <View style={s.totalFinalFila}>

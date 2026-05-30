@@ -9,7 +9,7 @@ import {
   SERVICIOS_DELBEN_DEMO,
   UNIVERSO_DEMO,
 } from '@/lib/datos-demo'
-import type { Accesorio, Cotizacion, Distribuidor, Modulo, Subcategoria, Valoracion } from '@/lib/firebase/tipos-firestore'
+import type { Accesorio, Cotizacion, Distribuidor, Modulo, Subcategoria, Valoracion, TotalesCotizacion, ItemEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import {
   guardarCotizacion as _guardarCotizacion,
@@ -164,6 +164,7 @@ type CarritoState = {
     distribuidorData: Distribuidor | null
     items: ItemCarrito[]
     itemsHerraje: ItemHerrajeCarrito[]
+    itemsEspeciales?: ItemEspecial[]
   }) => void
   limpiar: () => void
 }
@@ -191,6 +192,65 @@ function buildMotorParams(dist: Distribuidor | null, modalidad: 'desarmado' | 't
       iva: u.iva_pct,
     },
     pais: dist.pais,
+  }
+}
+
+// ─── Total canónico ───────────────────────────────────────────────────────────
+// ÚNICA fuente de verdad del total al cliente. La usan la pantalla del carrito,
+// guardar() y guardarValoracion(). El total incluye TODO lo que paga el cliente:
+// módulos + herrajes asociados + herrajes sueltos + muebles especiales +
+// transporte fijo + instalación fija.
+export function calcularTotalesCotizacion(
+  items: ItemCarrito[],
+  itemsHerraje: ItemHerrajeCarrito[],
+  itemsEspeciales: ItemEspecial[],
+  transporteFijo: number,
+  instalacionFija: number,
+): TotalesCotizacion {
+  const totalModulos = items.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
+  const totalHerrajesAsociados = items.reduce(
+    (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.subtotal_linea, 0),
+    0,
+  )
+  const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
+  const totalEspeciales = itemsEspeciales.reduce((s, i) => s + i.precioClienteUnitario * i.cantidad, 0)
+  return {
+    totalModulos,
+    totalHerrajesAsociados,
+    totalHerrajes,
+    totalEspeciales,
+    transporteFijo,
+    instalacionFija,
+    total:
+      totalModulos +
+      totalHerrajesAsociados +
+      totalHerrajes +
+      totalEspeciales +
+      transporteFijo +
+      instalacionFija,
+  }
+}
+
+// Reconstruye un ItemEspecial (del carrito) desde su snapshot de Firestore.
+export function buildEspecialDesdeSnapshot(snap: ItemEspecialSnapshot): ItemEspecial {
+  return {
+    id: crypto.randomUUID(),
+    nombre: snap.nombre,
+    tipoEstructuraNombre: snap.tipoEstructuraNombre,
+    tipoFachadaNombre: snap.tipoFachadaNombre,
+    acabadoNombre: snap.acabadoNombre,
+    acabadoEstructura: snap.acabadoEstructura,
+    colorVidrio: snap.colorVidrio,
+    ancho: snap.ancho,
+    alto: snap.alto,
+    profundidad: snap.profundidad,
+    cantidad: snap.cantidad,
+    precioDelbenUnitario: snap.precioDelbenUnitario,
+    precioClienteUnitario: snap.precioClienteUnitario,
+    observaciones: snap.observaciones,
+    herrajes: snap.herrajes.map((h) => ({ ...h })),
+    moduloReferenciaId: snap.moduloReferenciaId,
+    moduloReferenciaNombre: snap.moduloReferenciaNombre,
   }
 }
 
@@ -418,63 +478,45 @@ export const useCarrito = create<CarritoState>()(
     })),
 
   guardar: async (distribuidorId, userId) => {
-    const { cotizacionInfo, cotizacionGuardadaId, items, itemsHerraje } = get()
+    const { cotizacionInfo, cotizacionGuardadaId, items, itemsHerraje, itemsEspeciales } = get()
     if (!cotizacionInfo) throw new Error('Sin cotización activa')
 
-    const totalModulos = items.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-    const totalHerrajesAsociados = items.reduce(
-      (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.subtotal_linea, 0),
-      0,
+    const totales = calcularTotalesCotizacion(
+      items,
+      itemsHerraje,
+      itemsEspeciales,
+      cotizacionInfo.transporteFijo,
+      cotizacionInfo.instalacionFija,
     )
-    const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-    const transporteFijo = cotizacionInfo.transporteFijo
-    const instalacionFija = cotizacionInfo.instalacionFija
-    const totales = {
-      totalModulos,
-      totalHerrajesAsociados,
-      totalHerrajes,
-      transporteFijo,
-      instalacionFija,
-      total: totalModulos + totalHerrajesAsociados + totalHerrajes + transporteFijo + instalacionFija,
-    }
 
     if (cotizacionGuardadaId) {
-      await _actualizarCotizacion(distribuidorId, cotizacionGuardadaId, cotizacionInfo, items, itemsHerraje, totales)
+      await _actualizarCotizacion(distribuidorId, cotizacionGuardadaId, cotizacionInfo, items, itemsHerraje, itemsEspeciales, totales)
       return cotizacionGuardadaId
     }
 
-    const id = await _guardarCotizacion(distribuidorId, userId, cotizacionInfo, items, itemsHerraje, totales)
+    const id = await _guardarCotizacion(distribuidorId, userId, cotizacionInfo, items, itemsHerraje, itemsEspeciales, totales)
     set({ cotizacionGuardadaId: id })
     return id
   },
 
   guardarValoracion: async (distribuidorId, distribuidorNombre, userId) => {
-    const { cotizacionInfo, valoracionGuardadaId, items, itemsHerraje } = get()
+    const { cotizacionInfo, valoracionGuardadaId, items, itemsHerraje, itemsEspeciales } = get()
     if (!cotizacionInfo) throw new Error('Sin cotización activa')
 
-    const totalModulos = items.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-    const totalHerrajesAsociados = items.reduce(
-      (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.subtotal_linea, 0),
-      0,
+    const totales = calcularTotalesCotizacion(
+      items,
+      itemsHerraje,
+      itemsEspeciales,
+      cotizacionInfo.transporteFijo,
+      cotizacionInfo.instalacionFija,
     )
-    const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-    const transporteFijo = cotizacionInfo.transporteFijo
-    const instalacionFija = cotizacionInfo.instalacionFija
-    const totales = {
-      totalModulos,
-      totalHerrajesAsociados,
-      totalHerrajes,
-      transporteFijo,
-      instalacionFija,
-      total: totalModulos + totalHerrajesAsociados + totalHerrajes + transporteFijo + instalacionFija,
-    }
 
     if (valoracionGuardadaId) {
-      await _actualizarValoracion(valoracionGuardadaId, cotizacionInfo, items, itemsHerraje, totales)
+      await _actualizarValoracion(valoracionGuardadaId, cotizacionInfo, items, itemsHerraje, itemsEspeciales, totales)
       return valoracionGuardadaId
     }
 
-    const id = await _guardarValoracion(userId, cotizacionInfo, distribuidorId, distribuidorNombre, items, itemsHerraje, totales)
+    const id = await _guardarValoracion(userId, cotizacionInfo, distribuidorId, distribuidorNombre, items, itemsHerraje, itemsEspeciales, totales)
     set({ valoracionGuardadaId: id })
     return id
   },
@@ -577,7 +619,7 @@ export const useCarrito = create<CarritoState>()(
       valoracionGuardadaId: valoracion.id,
       items,
       itemsHerraje,
-      itemsEspeciales: [],
+      itemsEspeciales: (valoracion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot),
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,
@@ -685,7 +727,7 @@ export const useCarrito = create<CarritoState>()(
       cotizacionGuardadaId: cotizacion.id,
       items,
       itemsHerraje,
-      itemsEspeciales: [],
+      itemsEspeciales: (cotizacion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot),
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,
@@ -792,19 +834,21 @@ export const useCarrito = create<CarritoState>()(
       cotizacionGuardadaId: null,
       items,
       itemsHerraje,
+      itemsEspeciales: (cotizacion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot),
       pantallaActiva: 'carrito',
       moduloPendiente: null,
       itemEditando: null,
     })
   },
 
-  cargarBorrador: ({ cotizacionInfo, cotizacionGuardadaId, distribuidorData, items, itemsHerraje }) =>
+  cargarBorrador: ({ cotizacionInfo, cotizacionGuardadaId, distribuidorData, items, itemsHerraje, itemsEspeciales }) =>
     set({
       cotizacionInfo,
       cotizacionGuardadaId,
       distribuidorData,
       items,
       itemsHerraje,
+      ...(itemsEspeciales ? { itemsEspeciales } : {}),
       pantallaActiva: 'carrito',
       moduloPendiente: null,
     }),
@@ -833,6 +877,7 @@ export const useCarrito = create<CarritoState>()(
       valoracionGuardadaId: state.valoracionGuardadaId,
       items: state.items,
       itemsHerraje: state.itemsHerraje,
+      itemsEspeciales: state.itemsEspeciales,
     }),
   },
 ))

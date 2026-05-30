@@ -25,9 +25,11 @@ import type {
   ItemHerraCotizacionSnapshot,
 } from '@/lib/firebase/tipos-firestore'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
+import { buildEspecialDesdeSnapshot } from '@/store/carrito'
 import type {
   ItemCarrito,
   ItemHerrajeCarrito,
+  ItemEspecial,
   CotizacionInfo,
   HerrajeAsociado,
 } from '@/store/carrito'
@@ -157,6 +159,7 @@ export type RecalculoResult = {
   distribuidorData: Distribuidor
   items: ItemCarrito[]
   itemsHerraje: ItemHerrajeCarrito[]
+  itemsEspeciales: ItemEspecial[]
 }
 
 export async function recalcularCotizacion(
@@ -326,5 +329,9 @@ export async function recalcularCotizacion(
     }),
   )
 
-  return { cotizacionInfo, distribuidorData: dist, items, itemsHerraje }
+  // Los muebles especiales tienen precio fijo ingresado a mano (el motor no los
+  // recalcula): se arrastran tal cual desde el snapshot guardado.
+  const itemsEspeciales: ItemEspecial[] = (cotizacion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot)
+
+  return { cotizacionInfo, distribuidorData: dist, items, itemsHerraje, itemsEspeciales }
 }

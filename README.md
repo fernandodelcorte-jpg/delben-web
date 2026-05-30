@@ -141,6 +141,13 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 > Registro cronológico inverso de cambios relevantes. Agregar una entrada cada vez que se implemente o corrija algo importante.
 
+### 2026-05-30 — Fix crítico: un único total consistente en carrito, lista, PDF cotización y orden de compra
+- **Causa raíz:** el total se calculaba con tres fórmulas distintas. El carrito sumaba muebles especiales pero no transporte/instalación fijos; `guardar()` sumaba los fijos pero descartaba los especiales (y no los persistía); el PDF de cotización no sumaba ni especiales ni fijos.
+- **Solución:** función única `calcularTotalesCotizacion()` en `store/carrito.ts` (fuente de verdad del total = módulos + herrajes asociados + herrajes sueltos + muebles especiales + transporte fijo + instalación fija). La usan la pantalla del carrito, `guardar()` y `guardarValoracion()`. Los PDFs derivan el mismo total.
+- **Muebles especiales** ahora se persisten en Firestore (`itemsEspeciales` en cotizaciones y valoraciones), sobreviven al refresco (`partialize`), se restauran al reabrir/copiar/recalcular, y aparecen en el PDF de cotización (precio cliente) y en la orden de compra (costo Delben). La orden de compra NO incluye transporte/instalación fijos (son costo propio del distribuidor).
+- **Pendiente operativo:** cotizaciones guardadas ANTES de este fix conservan su total viejo y no tienen especiales guardados; para corregirlas, abrir → "Actualizar precios" → guardar.
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `lib/firestore/cotizaciones.ts`, `lib/firestore/valoraciones.ts`, `lib/firestore/recalcular.ts`, `lib/pdf-helpers.ts`, `components/cotizador/cotizacion-pdf.tsx`, `orden-compra-pdf.tsx`, `cotizacion-pdf-button.tsx`, `orden-compra-pdf-button.tsx`, `cotizaciones/borrador/page.tsx`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
 ### 2026-05-29 — Polish pass: shimmer consistente, stagger cap, page title, DESIGN.md sincronizado
 - `SkeletonProyectoCard` migrado de `animate-pulse` a `.skeleton` en cada placeholder — igual que el resto del sistema.
 - Stagger cap a 5 ítems (`Math.min(i, 4) * 40ms`) en cotizaciones y valoraciones borrador. Carrito con 10+ ítems ya no espera 400ms.

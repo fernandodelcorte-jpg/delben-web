@@ -271,10 +271,37 @@ export interface ItemHerraCotizacionSnapshot {
   resultado: ResultadoSnapshot
 }
 
+export interface HerrajeEspecialSnapshot {
+  accesorioId: string
+  nombre: string
+  codigo: string
+  cantidad: number
+}
+
+export interface ItemEspecialSnapshot {
+  nombre: string
+  tipoEstructuraNombre: string
+  tipoFachadaNombre: string
+  acabadoNombre: string
+  acabadoEstructura: string | null
+  colorVidrio: string | null
+  ancho: number | null
+  alto: number
+  profundidad: number
+  cantidad: number
+  precioDelbenUnitario: number
+  precioClienteUnitario: number
+  observaciones: string
+  herrajes: HerrajeEspecialSnapshot[]
+  moduloReferenciaId?: string
+  moduloReferenciaNombre?: string
+}
+
 export interface TotalesCotizacion {
   totalModulos: number
   totalHerrajesAsociados: number
   totalHerrajes: number
+  totalEspeciales?: number
   transporteFijo?: number
   instalacionFija?: number
   total: number
@@ -290,6 +317,7 @@ export interface ValoracionDoc {
   modalidad: 'tradicional' | 'desarmado'
   items: ItemCotizacionSnapshot[]
   itemsHerraje: ItemHerraCotizacionSnapshot[]
+  itemsEspeciales?: ItemEspecialSnapshot[]
   totales: TotalesCotizacion
   estado: 'borrador' | 'facturada'
   createdBy: string
@@ -334,6 +362,7 @@ export interface CotizacionDoc {
   version_nombre?: string
   items: ItemCotizacionSnapshot[]
   itemsHerraje: ItemHerraCotizacionSnapshot[]
+  itemsEspeciales?: ItemEspecialSnapshot[]
   totales: TotalesCotizacion
   createdBy: string
   createdAt: number

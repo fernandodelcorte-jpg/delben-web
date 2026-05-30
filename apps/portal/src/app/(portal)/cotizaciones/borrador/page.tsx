@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { Plus, Minus, Trash, CaretDown, CaretUp, FloppyDisk, CircleNotch, PencilSimple, ArrowLeft, Sparkle } from '@phosphor-icons/react'
-import { useCarrito } from '@/store/carrito'
+import { useCarrito, calcularTotalesCotizacion } from '@/store/carrito'
 import type { ItemCarrito, ItemHerrajeCarrito, HerrajeAsociado, ItemEspecial } from '@/store/carrito'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
@@ -18,6 +18,7 @@ import { formatCOP } from '@/lib/datos-demo'
 import {
   itemCarritoToPDF,
   herrajeCarritoToPDF,
+  especialCarritoToPDF,
   cotizacionInfoToInfoPDF,
   urlADataUrl,
 } from '@/lib/pdf-helpers'
@@ -119,14 +120,15 @@ export default function BorradorPage() {
 
   if (!cotizacionInfo) return null
 
-  const totalModulos = items.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-  const totalHerrajesAsociados = items.reduce(
-    (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.subtotal_linea, 0),
-    0,
+  // Total canónico: misma función que usa guardar() y los PDFs. Incluye
+  // muebles especiales + transporte/instalación fijos.
+  const { total } = calcularTotalesCotizacion(
+    items,
+    itemsHerraje,
+    itemsEspeciales,
+    cotizacionInfo.transporteFijo,
+    cotizacionInfo.instalacionFija,
   )
-  const totalHerrajes = itemsHerraje.reduce((s, i) => s + i.resultado.subtotal_linea, 0)
-  const totalEspeciales = itemsEspeciales.reduce((s, i) => s + i.precioClienteUnitario * i.cantidad, 0)
-  const total = totalModulos + totalHerrajesAsociados + totalHerrajes + totalEspeciales
   const hayItems = items.length > 0 || itemsHerraje.length > 0 || itemsEspeciales.length > 0
 
   const totalCostoDelben = puedeVerCosto
@@ -382,6 +384,7 @@ export default function BorradorPage() {
                   })}
                   items={items.map(itemCarritoToPDF)}
                   herrajesSueltos={itemsHerraje.map(herrajeCarritoToPDF)}
+                  especiales={itemsEspeciales.map(especialCarritoToPDF)}
                 />
                 {puedeVerCosto && (
                   <OrdenCompraPDFButton
@@ -391,6 +394,7 @@ export default function BorradorPage() {
                     })}
                     items={items.map(itemCarritoToPDF)}
                     herrajesSueltos={itemsHerraje.map(herrajeCarritoToPDF)}
+                    especiales={itemsEspeciales.map(especialCarritoToPDF)}
                     distribuidorNombre={distribuidorData?.nombre}
                   />
                 )}
