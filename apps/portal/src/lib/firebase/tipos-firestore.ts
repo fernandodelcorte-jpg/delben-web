@@ -295,6 +295,9 @@ export interface ItemEspecialSnapshot {
   herrajes: HerrajeEspecialSnapshot[]
   moduloReferenciaId?: string
   moduloReferenciaNombre?: string
+  // Resultado del motor (unitario). Permite descomponer el especial por capas
+  // en el desglose, igual que un módulo. Opcional: especiales viejos no lo tienen.
+  resultado?: ResultadoSnapshot
 }
 
 export interface TotalesCotizacion {

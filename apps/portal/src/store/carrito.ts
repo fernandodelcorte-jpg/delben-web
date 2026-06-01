@@ -87,6 +87,8 @@ export type ItemEspecial = {
   herrajes: HerrajeEspecial[]
   moduloReferenciaId?: string
   moduloReferenciaNombre?: string
+  // Resultado unitario del motor (para descomponer el especial por capas).
+  resultado?: ResultadoCalculo
 }
 
 export type CotizacionInfo = {
@@ -251,6 +253,7 @@ export function buildEspecialDesdeSnapshot(snap: ItemEspecialSnapshot): ItemEspe
     herrajes: snap.herrajes.map((h) => ({ ...h })),
     moduloReferenciaId: snap.moduloReferenciaId,
     moduloReferenciaNombre: snap.moduloReferenciaNombre,
+    ...(snap.resultado ? { resultado: snap.resultado as ResultadoCalculo } : {}),
   }
 }
 

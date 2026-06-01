@@ -15,6 +15,7 @@ import {
 } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
 import type { ConfiguracionItem, ItemEspecial, HerrajeEspecial } from '@/store/carrito'
+import { calcularItem } from '@delben/core'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import { buscarModulos, buscarAccesorios, getPreciosModulo, getVariantesModulo } from '@/lib/firestore/modulos'
 import {
@@ -106,6 +107,7 @@ type ReferenciaEspecial = {
   moduloId: string
   moduloNombre: string
   varianteId: string
+  categoriaId: string
 }
 
 // ─── Panel para módulo especial (precio y medidas manuales) ───────────────────
@@ -120,12 +122,15 @@ function PanelEspecial({
   const agregarEspecial = useCarrito((s) => s.agregarEspecial)
   const distribuidorData = useCarrito((s) => s.distribuidorData)
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
+  const campanasDisponibles = useCarrito((s) => s.campanasDisponibles)
+  const tasaUsd = useCarrito((s) => s.tasaUsd)
 
   // Catálogo
   const [tiposEstructura, setTiposEstructura] = useState<TipoEstructura[]>([])
   const [tiposFachada, setTiposFachada] = useState<TipoFachada[]>([])
   const [subcategorias, setSubcategorias] = useState<Subcategoria[]>([])
   const [acabados, setAcabados] = useState<Acabado[]>([])
+  const [categorias, setCategorias] = useState<Categoria[]>([])
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true)
 
   // Form
@@ -161,10 +166,11 @@ function PanelEspecial({
   // Carga inicial catálogo
   useEffect(() => {
     setCargandoCatalogo(true)
-    Promise.all([getTiposEstructura(), getTiposFachada()])
-      .then(([estructuras, fachadas]) => {
+    Promise.all([getTiposEstructura(), getTiposFachada(), getCategorias()])
+      .then(([estructuras, fachadas, cats]) => {
         setTiposEstructura(estructuras)
         setTiposFachada(fachadas)
+        setCategorias(cats)
         if (estructuras[0]) setTipoEstructuraId(estructuras[0].id)
         if (fachadas[0]) setTipoFachadaId(fachadas[0].id)
       })
@@ -243,23 +249,68 @@ function PanelEspecial({
     : null
 
   const precioBase = parseFloat(precioDelbenStr) || 0
-  // El número ingresado es el precio de LISTA base. El costo real al distribuidor
-  // = lista − descuento de muebles del distribuidor.
-  const descuentoMuebles = distribuidorData?.descuento_muebles_pct ?? 0
-  const costoDelben = Math.round(precioBase * (1 - descuentoMuebles / 100))
 
-  // Cálculo automático precio cliente: capa distribuidor sobre el costo YA descontado.
-  const precioClienteCalculado = useMemo(() => {
-    if (costoDelben <= 0 || !distribuidorData || !cotizacionInfo) return 0
+  // El número ingresado es el precio de LISTA base (como el precio_cop del
+  // catálogo). El especial pasa por el MISMO motor que un módulo normal:
+  // descuento + ajuste de acabado + campaña + servicios Delben → costo_delben,
+  // y luego la capa distribuidor → precio al cliente. Así su costo queda
+  // consistente con un módulo del catálogo del mismo precio de lista.
+  const { costoDelben, precioClienteCalculado, resultadoMotor } = useMemo(() => {
+    if (precioBase <= 0 || !distribuidorData || !cotizacionInfo) {
+      return { costoDelben: 0, precioClienteCalculado: 0, resultadoMotor: null }
+    }
     const u = getUniversoParaModalidad(distribuidorData.universo, cotizacionInfo.modalidad)
-    const transporte = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
-    const instalacion = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
-    const subtotal2 = costoDelben * (1 + (transporte + instalacion + u.imprevistos_pct) / 100)
-    const precioSinIva = subtotal2 / (1 - u.utilidad_pct / 100)
-    const esColombia = distribuidorData.pais.trim().toLowerCase() === 'colombia'
-    const ivaAplicado = esColombia && u.iva_pct > 0
-    return Math.round(ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva)
-  }, [costoDelben, distribuidorData, cotizacionInfo])
+    const subcat = subcategorias.find((sx) => sx.id === subcategoriaId)
+    // Categoría para el descuento (desarmado) y la segmentación de campañas:
+    // la del módulo de referencia si lo hay; si no, la de la cotización.
+    const catId = referencia?.categoriaId || cotizacionInfo.categoriaId || ''
+    const cat = categorias.find((c) => c.id === catId)
+    const resultado = calcularItem({
+      precio_base_cop: precioBase,
+      cantidad: 1,
+      tipo_item: 'mueble',
+      modelo: cotizacionInfo.modalidad,
+      distribuidor: {
+        id: distribuidorData.id,
+        descuento_muebles_pct: distribuidorData.descuento_muebles_pct,
+        descuento_herrajes_pct: distribuidorData.descuento_herrajes_pct,
+      },
+      categoria: {
+        id: cat?.id ?? '',
+        desc_base_pct: cat?.desc_desarmado_base_pct ?? 0,
+        desc_premium_pct: cat?.desc_desarmado_premium_pct ?? 0,
+      },
+      linea_acabado: {
+        id: subcat?.id ?? '',
+        tipo_ajuste: subcat?.tipo_ajuste ?? 'ninguno',
+        ajuste_pct: subcat?.ajuste_pct ?? 0,
+        es_premium: subcat?.es_premium ?? false,
+      },
+      fecha_cotizacion: new Date(cotizacionInfo.fecha),
+      campanas_disponibles: campanasDisponibles,
+      servicios_delben: {
+        diseno: distribuidorData.servicios.diseno_pct,
+        cotizacion: distribuidorData.servicios.cotizacion_pct,
+        produccion: distribuidorData.servicios.produccion_pct,
+        logistica: distribuidorData.servicios.logistica_pct,
+        gestion_comercial: distribuidorData.servicios.gestion_comercial_pct,
+      },
+      universo: {
+        transporte: (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct,
+        instalacion: (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct,
+        imprevistos: u.imprevistos_pct,
+        utilidad: u.utilidad_pct,
+        iva: u.iva_pct,
+      },
+      pais_cliente_final: distribuidorData.pais,
+      tasa_usd: tasaUsd,
+    })
+    return {
+      costoDelben: resultado.costo_delben,
+      precioClienteCalculado: resultado.precio_final_unitario,
+      resultadoMotor: resultado,
+    }
+  }, [precioBase, distribuidorData, cotizacionInfo, subcategoriaId, subcategorias, categorias, referencia, campanasDisponibles, tasaUsd])
 
   function agregarHerrajeLocal(a: Accesorio) {
     setHerrajes((prev) => {
@@ -301,6 +352,7 @@ function PanelEspecial({
       herrajes,
       moduloReferenciaId: referencia?.moduloId,
       moduloReferenciaNombre: referencia?.moduloNombre,
+      ...(resultadoMotor ? { resultado: resultadoMotor } : {}),
     }
     agregarEspecial(item)
   }
@@ -442,15 +494,15 @@ function PanelEspecial({
           </Campo>
         )}
 
-        {/* Precio de lista Delben (el costo se obtiene tras el descuento del distribuidor) */}
-        <Campo label="Precio de lista Delben (COP)" nota="antes de descuento">
+        {/* Precio de lista base (pasa por el motor, igual que un módulo del catálogo) */}
+        <Campo label="Precio de lista Delben (COP)" nota="precio base de catálogo">
           <input type="number" value={precioDelbenStr}
             onChange={(e) => setPrecioDelbenStr(e.target.value)}
             placeholder="0" min={0} className={inputCls} />
           {errores.precioDelben && <p className={errorCls}>{errores.precioDelben}</p>}
           {costoDelben > 0 && (
             <p className="mt-1.5 text-xs text-stone-500">
-              Costo al distribuidor{descuentoMuebles > 0 ? ` (− ${descuentoMuebles}% desc.)` : ''}:{' '}
+              Costo Delben (con descuento + servicios):{' '}
               <span className="font-semibold">{formatCOP(costoDelben)}</span>
             </p>
           )}
@@ -1291,6 +1343,7 @@ function PanelConfigModulo({
                 moduloId: modulo.id,
                 moduloNombre: modulo.nombre,
                 varianteId: moduloActual.id,
+                categoriaId: moduloActual.categoria_id,
               })
             }
             className="tactil mt-2 w-full rounded-lg border border-stone-200 px-4 py-2.5 text-xs font-medium text-stone-500 hover:border-stone-300 hover:text-stone-700 transition-all flex items-center justify-center gap-1.5"

@@ -88,6 +88,7 @@ function serializarEspeciales(items: ItemEspecial[]): ItemEspecialSnapshot[] {
     })),
     ...(item.moduloReferenciaId ? { moduloReferenciaId: item.moduloReferenciaId } : {}),
     ...(item.moduloReferenciaNombre ? { moduloReferenciaNombre: item.moduloReferenciaNombre } : {}),
+    ...(item.resultado ? { resultado: { ...item.resultado } } : {}),
   }))
 }
 

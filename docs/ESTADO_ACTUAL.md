@@ -5,7 +5,7 @@
 > Actualízalo al cerrar cada rebanada. Es lo primero que Claude Code debe
 > leer al empezar una sesión, para saber dónde está parado.
 
-Última actualización: Design polish completo + resumen de proyecto PDF. 2026-05-22.
+Última actualización: Muebles especiales (motor completo) + totales canónicos. 2026-06-01.
 
 ---
 
@@ -575,6 +575,77 @@ apps/portal/src/
 ```
 
 Caso de uso: el distribuidor tiene "Apartamento 302" con Cocina v1/v2 y Closet v1. Abre el panel "Resumen", desmarca la versión que no quiere presentar, agrega descripciones ("Con isla grande", "Sin isla"), descarga el PDF consolidado para el cliente final.
+
+---
+
+## Muebles especiales + totales canónicos — qué se construyó ✅ (2026-06-01)
+
+Sesión de corrección a partir de cotizaciones reales. Cuatro arreglos
+encadenados sobre el cotizador y las cotizaciones guardadas:
+
+### 1. Total único y consistente (carrito = guardado = PDFs)
+Antes el total se calculaba con tres fórmulas distintas (el carrito sumaba
+especiales pero no costos fijos; `guardar()` sumaba fijos pero descartaba
+especiales; el PDF no sumaba ni uno ni otro). Ahora hay UNA función,
+`calcularTotalesCotizacion()` en `store/carrito.ts`, fuente de verdad del total:
+
+```
+total = módulos + herrajes asociados + herrajes sueltos
+      + muebles especiales + transporte fijo + instalación fija
+```
+
+La usan la pantalla del carrito, `guardar()`, `guardarValoracion()` y de ahí
+derivan los PDFs. Los cuatro números coinciden.
+
+### 2. Muebles especiales: persistencia
+Antes NO se guardaban en Firestore (solo vivían en memoria del carrito y se
+perdían al guardar/reabrir). Ahora se persisten (`itemsEspeciales` en
+cotizaciones y valoraciones), sobreviven al refresco (`partialize`), se
+restauran al reabrir/copiar/recalcular y se muestran como ítems en el detalle
+(distribuidor y admin) y en ambos PDFs (cotización = precio cliente; orden de
+compra = costo Delben; los fijos NO entran en la orden de compra).
+
+> Pérdida histórica: las cotizaciones guardadas ANTES de este cambio no tienen
+> especiales (nunca se escribieron). No recuperables; hay que rehacerlas.
+
+### 3. Muebles especiales: cálculo por el MOTOR completo
+Regla de negocio confirmada con el dueño. El campo que se ingresa es el
+**precio de lista base** (como el `precio_cop` del catálogo). El especial pasa
+por `calcularItem()` (el motor validado, sin tocarlo) con `tipo_item: 'mueble'`:
+descuento + ajuste de acabado + campaña + servicios Delben → costo Delben, y
+luego la capa distribuidor → precio al cliente. Así su costo queda idéntico al
+de un módulo del catálogo del mismo precio de lista. La categoría (para el
+descuento en desarmado y la segmentación de campañas) se resuelve del módulo de
+referencia, o de la categoría de la cotización.
+
+> Decisión previa descartada: "lista − descuento" (dejaba el costo demasiado
+> bajo porque omitía los servicios Delben).
+
+### 4. Desglose de la cotización guardada
+- Bug corregido en `calcularDesglose`: la utilidad daba ≈0 (`subtotal2 −
+  universo_aditivo`, valores idénticos). Ahora es `precio_sin_iva − subtotal2`.
+- Los especiales se **funden** en el desglose por capas (entran en Precio base,
+  Precio Delben, utilidad e IVA). Los nuevos guardan su `resultado` del motor;
+  los viejos se reconstruyen con `reconstruirResultadoEspecial()` desde su costo
+  Delben + parámetros del distribuidor. Desaparece la línea suelta "Muebles
+  especiales" del desglose por capas.
+
+### Archivos clave
+`store/carrito.ts`, `lib/firebase/tipos-firestore.ts`,
+`lib/firestore/{cotizaciones,valoraciones,recalcular}.ts`, `lib/pdf-helpers.ts`,
+`components/cotizador/{buscador-modulos,cotizacion-pdf,orden-compra-pdf,
+cotizacion-pdf-button,orden-compra-pdf-button}.tsx`,
+`cotizaciones/{borrador,[id]}/page.tsx`,
+`admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
+### Limitaciones conocidas
+- "Actualizar precios" recalcula los módulos pero NO los especiales (guardan su
+  costo/precio unitario, no el precio de lista base). Si cambian servicios o
+  descuentos, los especiales conservan su valor; habría que recrearlos o, a
+  futuro, guardar también el precio de lista base.
+- La reconstrucción del desglose de especiales viejos usa los parámetros
+  ACTUALES del distribuidor; si cambiaron desde el guardado, el reparto entre
+  capas puede variar (el costo Delben y el total se mantienen exactos).
 
 ---
 

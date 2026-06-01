@@ -415,7 +415,7 @@ function CotizacionDetalleContent() {
               const t = calcularResumenTotal(cotizacion, distribuidor)
               const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
               const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'
-              const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0 || t.totalEspeciales > 0
+              const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0
               return (
                 <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
 
@@ -463,7 +463,6 @@ function CotizacionDetalleContent() {
                       </p>
                       <div className="text-sm divide-y divide-stone-50">
                         {t.iva > 0 && <FilaCosto label={`IVA (${u.iva_pct}%)`} valor={t.iva} signo="+" />}
-                        {t.totalEspeciales > 0 && <FilaCosto label="Muebles especiales" valor={t.totalEspeciales} signo="+" />}
                         {t.transporteFijo > 0 && <FilaCosto label="Transporte fijo" valor={t.transporteFijo} signo="+" />}
                         {t.instalacionFija > 0 && <FilaCosto label="Instalación fija" valor={t.instalacionFija} signo="+" />}
                       </div>
@@ -663,7 +662,6 @@ function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: '
   const u = getUniversoParaModalidad(dist.universo, modalidad)
   const transp_pct = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
   const instal_pct = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
-  const universo_aditivo = r.costo_delben * (1 + (transp_pct + instal_pct + u.imprevistos_pct) / 100)
   return {
     diseno:           base * s.diseno_pct / 100,
     cotizacion:       base * s.cotizacion_pct / 100,
@@ -673,8 +671,47 @@ function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: '
     transporte:       r.costo_delben * transp_pct / 100,
     instalacion:      r.costo_delben * instal_pct / 100,
     imprevistos:      r.costo_delben * u.imprevistos_pct / 100,
-    utilidad:         r.distribuidor_subtotal2 - universo_aditivo,
+    // Utilidad (margin): la diferencia entre el precio sin IVA y el subtotal2.
+    utilidad:         r.precio_sin_iva - r.distribuidor_subtotal2,
     iva:              r.iva_monto,
+  }
+}
+
+// Reconstruye el resultado del motor de un mueble especial viejo (sin resultado
+// guardado) a partir de su costo Delben unitario + los parámetros del distribuidor.
+// Permite que también se descomponga por capas en el desglose. El costo Delben es
+// el dato autoritativo; la capa distribuidor se deriva igual que en el motor.
+function reconstruirResultadoEspecial(
+  e: ItemEspecialSnapshot,
+  dist: Distribuidor,
+  modalidad: 'desarmado' | 'tradicional',
+): ResultadoSnapshot {
+  const u = getUniversoParaModalidad(dist.universo, modalidad)
+  const s = dist.servicios
+  const costoDelben = e.precioDelbenUnitario
+  const grupo1 = (s.diseno_pct + s.cotizacion_pct + s.produccion_pct + s.logistica_pct) / 100
+  const subtotal1 = costoDelben * (1 - s.gestion_comercial_pct / 100)
+  const costoTras = subtotal1 / (1 + grupo1)
+  const transp = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
+  const instal = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
+  const grupo2 = (transp + instal + u.imprevistos_pct) / 100
+  const subtotal2 = costoDelben * (1 + grupo2)
+  const precioSinIva = u.utilidad_pct < 100 ? subtotal2 / (1 - u.utilidad_pct / 100) : subtotal2
+  const esColombia = dist.pais.trim().toLowerCase() === 'colombia'
+  const ivaAplicado = esColombia && u.iva_pct > 0
+  const precioFinal = ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva
+  return {
+    moneda: esColombia ? 'COP' : 'USD',
+    costo_tras_descuentos: costoTras,
+    servicios_subtotal1: subtotal1,
+    costo_delben: costoDelben,
+    distribuidor_subtotal2: subtotal2,
+    precio_sin_iva: precioSinIva,
+    iva_aplicado: ivaAplicado,
+    iva_monto: ivaAplicado ? precioFinal - precioSinIva : 0,
+    precio_final_unitario: precioFinal,
+    cantidad: 1,
+    subtotal_linea: precioFinal,
   }
 }
 
@@ -706,17 +743,17 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
   }
   for (const h of cotizacion.itemsHerraje) acumular(h.resultado, h.cantidad)
 
-  const totalEspeciales =
-    cotizacion.totales.totalEspeciales ??
-    (cotizacion.itemsEspeciales ?? []).reduce(
-      (s, e) => s + e.precioClienteUnitario * e.cantidad,
-      0,
-    )
+  // Muebles especiales: se funden en el desglose por capas igual que un módulo.
+  // Los nuevos usan su resultado guardado; los viejos se reconstruyen desde su
+  // costo Delben. Así entran en Precio Delben, utilidad e IVA.
+  for (const e of cotizacion.itemsEspeciales ?? []) {
+    const r = e.resultado ?? reconstruirResultadoEspecial(e, dist, cotizacion.modalidad)
+    acumular(r, e.cantidad)
+  }
 
   return {
     base, diseno, cotizacion: cotiz, produccion, logistica, gestion,
     transporte, instalacion, imprevistos, utilidad, iva, costoDelben, sinIva,
-    totalEspeciales,
     transporteFijo: cotizacion.totales.transporteFijo ?? 0,
     instalacionFija: cotizacion.totales.instalacionFija ?? 0,
   }

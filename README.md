@@ -141,6 +141,20 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 > Registro cronológico inverso de cambios relevantes. Agregar una entrada cada vez que se implemente o corrija algo importante.
 
+### 2026-06-01 — Desglose de cotización guardada: especiales fundidos + fix de utilidad
+- Síntomas en el detalle guardado (no en el carrito): "Utilidad (margin)" mostraba ~$5; el "Precio base" no incluía los muebles especiales; aparecía una línea suelta "Muebles especiales" confusa. El total final SÍ era correcto.
+- **Bug de utilidad:** en `calcularDesglose` la utilidad se calculaba como `distribuidor_subtotal2 − universo_aditivo`, pero `universo_aditivo` era idéntico a `distribuidor_subtotal2` → ≈0. Corregido a `precio_sin_iva − distribuidor_subtotal2`. (Era solo de visualización; el total nunca dependió de esto.)
+- **Especiales fundidos en el desglose (incl. costo Delben y utilidad):** cada mueble especial nuevo guarda su `resultado` del motor; `calcularResumenTotal` lo descompone por capas igual que un módulo (base, servicios, costo Delben, utilidad, IVA). Para los especiales **viejos** (sin `resultado`), `reconstruirResultadoEspecial()` reconstruye la descomposición desde su costo Delben unitario + parámetros del distribuidor, así también entran en Precio Delben, utilidad e IVA. Desaparece la línea suelta "Muebles especiales" del desglose por capas. No hace falta recrear los especiales viejos para el desglose.
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `components/cotizador/buscador-modulos.tsx`, `lib/firestore/cotizaciones.ts`, `valoraciones.ts`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
+### 2026-06-01 — Muebles especiales pasan por el motor completo (costo consistente con el catálogo)
+- Síntoma: el costo total a Delben salía **más bajo** en cotizaciones con muebles especiales. Causa: los especiales solo restaban el descuento, pero NO sumaban los servicios Delben (diseño, cotización, producción, logística, gestión comercial) que sí incluye un módulo normal en su `costo_delben`.
+- Fix: el panel de especiales ahora llama a `calcularItem()` (el motor validado) con el precio de lista como `precio_base_cop` y `tipo_item: 'mueble'`. El motor aplica descuento + ajuste de acabado (subcategoría) + campaña + servicios Delben → `costo_delben`, y la capa distribuidor → precio al cliente. El costo del especial queda **idéntico** al de un módulo del catálogo con el mismo precio de lista.
+- La categoría (necesaria para el descuento en desarmado y la segmentación de campañas) se resuelve desde el módulo de referencia (si el especial se creó desde uno) o, en su defecto, desde la categoría de la cotización.
+- Decisión confirmada con el dueño: "motor completo" (reemplaza la decisión previa de "lista − descuento").
+- **Limitación conocida:** el especial guarda su costo/precio unitario final, no el precio de lista base, así que "Actualizar precios" no recalcula los especiales (sí los módulos). Si cambian servicios/descuentos, los especiales conservan su valor; habría que recrearlos o, a futuro, guardar también el precio de lista base.
+- Archivo: `components/cotizador/buscador-modulos.tsx`.
+
 ### 2026-05-30 — Fix: el costo de muebles especiales ahora aplica el descuento del distribuidor
 - Antes, el número de "Precio Delben al distribuidor" se usaba tal cual como costo (sin descuento), inflando el costo y el precio al cliente. Al crear un especial desde un módulo de referencia se autocompletaba con el `precio_cop` de lista, que nunca recibía el descuento.
 - Ahora el campo es **"Precio de lista Delben (antes de descuento)"** y el costo real = lista × (1 − `descuento_muebles_pct` del distribuidor). El precio al cliente se reconstruye desde ese costo ya descontado (capa distribuidor: transporte/instalación/imprevistos + utilidad margin + IVA). El panel muestra el costo con descuento y el precio cliente.
