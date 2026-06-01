@@ -242,20 +242,24 @@ function PanelEspecial({
       ) ?? null)
     : null
 
-  const precioDelben = parseFloat(precioDelbenStr) || 0
+  const precioBase = parseFloat(precioDelbenStr) || 0
+  // El número ingresado es el precio de LISTA base. El costo real al distribuidor
+  // = lista − descuento de muebles del distribuidor.
+  const descuentoMuebles = distribuidorData?.descuento_muebles_pct ?? 0
+  const costoDelben = Math.round(precioBase * (1 - descuentoMuebles / 100))
 
-  // Cálculo automático precio cliente aplicando capa distribuidor
+  // Cálculo automático precio cliente: capa distribuidor sobre el costo YA descontado.
   const precioClienteCalculado = useMemo(() => {
-    if (precioDelben <= 0 || !distribuidorData || !cotizacionInfo) return 0
+    if (costoDelben <= 0 || !distribuidorData || !cotizacionInfo) return 0
     const u = getUniversoParaModalidad(distribuidorData.universo, cotizacionInfo.modalidad)
     const transporte = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
     const instalacion = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
-    const subtotal2 = precioDelben * (1 + (transporte + instalacion + u.imprevistos_pct) / 100)
+    const subtotal2 = costoDelben * (1 + (transporte + instalacion + u.imprevistos_pct) / 100)
     const precioSinIva = subtotal2 / (1 - u.utilidad_pct / 100)
     const esColombia = distribuidorData.pais.trim().toLowerCase() === 'colombia'
     const ivaAplicado = esColombia && u.iva_pct > 0
     return Math.round(ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva)
-  }, [precioDelben, distribuidorData, cotizacionInfo])
+  }, [costoDelben, distribuidorData, cotizacionInfo])
 
   function agregarHerrajeLocal(a: Accesorio) {
     setHerrajes((prev) => {
@@ -273,7 +277,7 @@ function PanelEspecial({
     if (!nombre.trim()) e.nombre = 'Requerido'
     if (!altoStr || Number(altoStr) <= 0) e.alto = 'Valor inválido'
     if (!profStr || Number(profStr) <= 0) e.prof = 'Valor inválido'
-    if (precioDelben <= 0) e.precioDelben = 'Ingresa un precio'
+    if (precioBase <= 0) e.precioDelben = 'Ingresa un precio'
     setErrores(e)
     return Object.keys(e).length === 0
   }
@@ -291,7 +295,7 @@ function PanelEspecial({
       alto: Number(altoStr),
       profundidad: Number(profStr),
       cantidad,
-      precioDelbenUnitario: precioDelben,
+      precioDelbenUnitario: costoDelben,
       precioClienteUnitario: precioClienteCalculado,
       observaciones: observaciones.trim(),
       herrajes,
@@ -438,14 +442,20 @@ function PanelEspecial({
           </Campo>
         )}
 
-        {/* Precio Delben */}
-        <Campo label="Precio Delben al distribuidor (COP)">
+        {/* Precio de lista Delben (el costo se obtiene tras el descuento del distribuidor) */}
+        <Campo label="Precio de lista Delben (COP)" nota="antes de descuento">
           <input type="number" value={precioDelbenStr}
             onChange={(e) => setPrecioDelbenStr(e.target.value)}
             placeholder="0" min={0} className={inputCls} />
           {errores.precioDelben && <p className={errorCls}>{errores.precioDelben}</p>}
-          {precioClienteCalculado > 0 && (
+          {costoDelben > 0 && (
             <p className="mt-1.5 text-xs text-stone-500">
+              Costo al distribuidor{descuentoMuebles > 0 ? ` (− ${descuentoMuebles}% desc.)` : ''}:{' '}
+              <span className="font-semibold">{formatCOP(costoDelben)}</span>
+            </p>
+          )}
+          {precioClienteCalculado > 0 && (
+            <p className="mt-0.5 text-xs text-stone-500">
               Precio al cliente calculado: <span className="font-semibold">{formatCOP(precioClienteCalculado)}</span>
             </p>
           )}

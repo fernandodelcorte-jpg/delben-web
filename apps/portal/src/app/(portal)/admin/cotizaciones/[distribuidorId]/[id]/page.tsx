@@ -13,6 +13,7 @@ import type {
   Distribuidor,
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
+  ItemEspecialSnapshot,
   ResultadoSnapshot,
 } from '@/lib/firebase/tipos-firestore'
 
@@ -251,6 +252,38 @@ function HerrajeSueltoRow({ item }: { item: ItemHerraCotizacionSnapshot }) {
   )
 }
 
+function EspecialRow({ item }: { item: ItemEspecialSnapshot }) {
+  const partes = [item.tipoEstructuraNombre, item.tipoFachadaNombre, item.acabadoNombre].filter(Boolean)
+  if (item.acabadoEstructura) partes.push(`Estr. ${item.acabadoEstructura}`)
+  if (item.colorVidrio) partes.push(`Vidrio: ${item.colorVidrio}`)
+  const dim = `${item.ancho ? `${item.ancho} × ` : ''}${item.alto} × ${item.profundidad} mm`
+  const config = [...partes, dim].join(' · ')
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white flex items-start gap-3 px-4 py-3.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-[10px] font-semibold uppercase text-amber-600">
+        Esp
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-stone-800 truncate">{item.nombre}</p>
+        <p className="text-xs text-stone-400 mt-0.5">{config} · ×{item.cantidad}</p>
+        {item.observaciones ? (
+          <p className="text-xs text-stone-400 mt-0.5 italic">{item.observaciones}</p>
+        ) : null}
+        {item.herrajes.length > 0 ? (
+          <p className="text-xs text-stone-400 mt-0.5">
+            {item.herrajes.map((h) => `${h.nombre} ×${h.cantidad}`).join(' · ')}
+          </p>
+        ) : null}
+      </div>
+      <div className="shrink-0 text-right ml-4">
+        <p className="text-sm font-bold text-stone-900 tabular-nums">{formatCOP(item.precioClienteUnitario * item.cantidad)}</p>
+        <p className="text-xs text-stone-400 tabular-nums">costo: {formatCOP(item.precioDelbenUnitario * item.cantidad)}</p>
+      </div>
+    </div>
+  )
+}
+
 // ─── Página ───────────────────────────────────────────────────────────────────
 
 export default function AdminCotizacionDetallePage() {
@@ -363,6 +396,20 @@ export default function AdminCotizacionDetallePage() {
           <div className="space-y-2">
             {cotizacion.itemsHerraje.map((item, i) => (
               <HerrajeSueltoRow key={i} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Muebles especiales */}
+      {(cotizacion.itemsEspeciales ?? []).length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
+            Muebles especiales ({cotizacion.itemsEspeciales!.length})
+          </h2>
+          <div className="space-y-2">
+            {cotizacion.itemsEspeciales!.map((item, i) => (
+              <EspecialRow key={i} item={item} />
             ))}
           </div>
         </div>

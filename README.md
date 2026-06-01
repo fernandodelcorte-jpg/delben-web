@@ -141,6 +141,13 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 > Registro cronológico inverso de cambios relevantes. Agregar una entrada cada vez que se implemente o corrija algo importante.
 
+### 2026-05-30 — Fix: el costo de muebles especiales ahora aplica el descuento del distribuidor
+- Antes, el número de "Precio Delben al distribuidor" se usaba tal cual como costo (sin descuento), inflando el costo y el precio al cliente. Al crear un especial desde un módulo de referencia se autocompletaba con el `precio_cop` de lista, que nunca recibía el descuento.
+- Ahora el campo es **"Precio de lista Delben (antes de descuento)"** y el costo real = lista × (1 − `descuento_muebles_pct` del distribuidor). El precio al cliente se reconstruye desde ese costo ya descontado (capa distribuidor: transporte/instalación/imprevistos + utilidad margin + IVA). El panel muestra el costo con descuento y el precio cliente.
+- Decisión confirmada con el dueño: "Lista − descuento" (no se aplican servicios Delben ni ajuste de acabado/campaña a los especiales).
+- **Pendiente operativo:** especiales creados antes de este cambio quedaron con el costo sin descuento; hay que recrearlos (no se guarda el precio de lista original para recalcular).
+- Archivo: `components/cotizador/buscador-modulos.tsx`.
+
 ### 2026-05-30 — Fix crítico: un único total consistente en carrito, lista, PDF cotización y orden de compra
 - **Causa raíz:** el total se calculaba con tres fórmulas distintas. El carrito sumaba muebles especiales pero no transporte/instalación fijos; `guardar()` sumaba los fijos pero descartaba los especiales (y no los persistía); el PDF de cotización no sumaba ni especiales ni fijos.
 - **Solución:** función única `calcularTotalesCotizacion()` en `store/carrito.ts` (fuente de verdad del total = módulos + herrajes asociados + herrajes sueltos + muebles especiales + transporte fijo + instalación fija). La usan la pantalla del carrito, `guardar()` y `guardarValoracion()`. Los PDFs derivan el mismo total.
