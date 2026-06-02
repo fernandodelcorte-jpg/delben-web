@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CircleNotch, ArrowLeft } from '@phosphor-icons/react'
+import { CircleNotch, ArrowLeft, MapPin, Warning } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
-import type { Distribuidor } from '@/lib/firebase/tipos-firestore'
+import { getSedes } from '@/lib/firestore/sedes'
+import type { Distribuidor, Sede } from '@/lib/firebase/tipos-firestore'
+import { sedeHabilitada } from '@/lib/firebase/tipos-firestore'
 
 const schema = z.object({
   distribuidorId: z.string().min(1, 'Selecciona un distribuidor'),
+  sedeId: z.string().min(1, 'Selecciona una sede'),
   clienteNombre: z.string().min(2, 'Mínimo 2 caracteres'),
   proyectoNombre: z.string().min(2, 'Mínimo 2 caracteres'),
   modalidad: z.enum(['tradicional', 'desarmado']),
@@ -24,6 +27,9 @@ export default function NuevaValoracionPage() {
   const iniciarCotizacion = useCarrito((s) => s.iniciarCotizacion)
   const [distribuidores, setDistribuidores] = useState<Distribuidor[]>([])
   const [cargando, setCargando] = useState(true)
+  // Sedes habilitadas del distribuidor seleccionado (misma regla que el cotizador).
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [cargandoSedes, setCargandoSedes] = useState(false)
 
   useEffect(() => {
     getDistribuidores()
@@ -31,27 +37,51 @@ export default function NuevaValoracionPage() {
       .finally(() => setCargando(false))
   }, [])
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { modalidad: 'desarmado' },
+    defaultValues: { modalidad: 'desarmado', sedeId: '' },
   })
 
   const modalidad = watch('modalidad')
   const distribuidorIdSel = watch('distribuidorId')
+  const sedeIdSel = watch('sedeId')
+
+  // Al elegir distribuidor, cargar sus sedes habilitadas. Autoselección si solo hay una.
+  useEffect(() => {
+    if (!distribuidorIdSel) {
+      setSedes([])
+      setValue('sedeId', '')
+      return
+    }
+    setCargandoSedes(true)
+    setValue('sedeId', '')
+    getSedes(distribuidorIdSel)
+      .then((todas) => {
+        const habilitadas = todas.filter(sedeHabilitada)
+        setSedes(habilitadas)
+        if (habilitadas.length === 1) setValue('sedeId', habilitadas[0]!.id)
+      })
+      .catch(() => setSedes([]))
+      .finally(() => setCargandoSedes(false))
+  }, [distribuidorIdSel, setValue])
 
   function onSubmit(data: FormData) {
     const dist = distribuidores.find((d) => d.id === data.distribuidorId)
+    const sede = sedes.find((s) => s.id === data.sedeId)
+    if (!sede) return
     iniciarCotizacion(
       {
         clienteNombre: data.clienteNombre,
         proyectoNombre: data.proyectoNombre,
         modalidad: data.modalidad,
+        sedeId: sede.id,
         categoriaId: '',
         categoriaNombre: '',
         transporteFijo: 0,
         instalacionFija: 0,
       },
       dist ?? null,
+      sede,
     )
     router.push('/admin/valoraciones/borrador')
   }
@@ -110,12 +140,6 @@ export default function NuevaValoracionPage() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold">{d.nombre}</p>
-                      <p className={[
-                        'text-xs mt-0.5',
-                        distribuidorIdSel === d.id ? 'text-stone-300' : 'text-stone-400',
-                      ].join(' ')}>
-                        {d.ciudad}, {d.pais}
-                      </p>
                     </div>
                   </label>
                 ))}
@@ -124,6 +148,55 @@ export default function NuevaValoracionPage() {
                 <p className="mt-1.5 text-xs text-red-600">{errors.distribuidorId.message}</p>
               )}
             </div>
+
+            {/* Sede (solo habilitadas del distribuidor elegido) */}
+            {distribuidorIdSel && (
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Sede
+                </label>
+                {cargandoSedes ? (
+                  <div className="flex items-center gap-2 text-sm text-stone-400 py-2">
+                    <CircleNotch size={14} className="animate-spin" />
+                    Cargando sedes…
+                  </div>
+                ) : sedes.length === 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
+                    <Warning size={16} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-stone-600">
+                      Este distribuidor no tiene sedes habilitadas. Configura el universo de
+                      alguna de sus sedes antes de valorar.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {sedes.map((s) => (
+                      <label
+                        key={s.id}
+                        className={[
+                          'flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-all',
+                          sedeIdSel === s.id
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300',
+                        ].join(' ')}
+                      >
+                        <input type="radio" value={s.id} {...register('sedeId')} className="sr-only" />
+                        <MapPin size={16} className={sedeIdSel === s.id ? 'text-white' : 'text-stone-400'} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold">{s.nombre}</p>
+                          <p className={['text-xs mt-0.5', sedeIdSel === s.id ? 'text-stone-300' : 'text-stone-400'].join(' ')}>
+                            {s.ciudad}, {s.pais}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {errors.sedeId && (
+                  <p className="mt-1.5 text-xs text-red-600">{errors.sedeId.message}</p>
+                )}
+              </div>
+            )}
 
             {/* Cliente */}
             <div>
@@ -189,7 +262,7 @@ export default function NuevaValoracionPage() {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !sedeIdSel}
                 className="tactil w-full rounded-lg bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-stone-800 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSubmitting && <CircleNotch size={14} className="animate-spin" />}

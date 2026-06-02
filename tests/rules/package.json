@@ -1,0 +1,12 @@
+{
+  "name": "delben-rules-tests",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Pruebas de las Firestore Security Rules (aislamiento por sede). Aislado del monorepo a propósito.",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.0.0",
+    "firebase-tools": "^13.0.0"
+  }
+}

@@ -121,6 +121,7 @@ function PanelEspecial({
 }) {
   const agregarEspecial = useCarrito((s) => s.agregarEspecial)
   const distribuidorData = useCarrito((s) => s.distribuidorData)
+  const sedeData = useCarrito((s) => s.sedeData)
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
   const campanasDisponibles = useCarrito((s) => s.campanasDisponibles)
   const tasaUsd = useCarrito((s) => s.tasaUsd)
@@ -256,10 +257,10 @@ function PanelEspecial({
   // y luego la capa distribuidor → precio al cliente. Así su costo queda
   // consistente con un módulo del catálogo del mismo precio de lista.
   const { costoDelben, precioClienteCalculado, resultadoMotor } = useMemo(() => {
-    if (precioBase <= 0 || !distribuidorData || !cotizacionInfo) {
+    if (precioBase <= 0 || !sedeData || !cotizacionInfo) {
       return { costoDelben: 0, precioClienteCalculado: 0, resultadoMotor: null }
     }
-    const u = getUniversoParaModalidad(distribuidorData.universo, cotizacionInfo.modalidad)
+    const u = getUniversoParaModalidad(sedeData.universo, cotizacionInfo.modalidad)
     const subcat = subcategorias.find((sx) => sx.id === subcategoriaId)
     // Categoría para el descuento (desarmado) y la segmentación de campañas:
     // la del módulo de referencia si lo hay; si no, la de la cotización.
@@ -271,9 +272,9 @@ function PanelEspecial({
       tipo_item: 'mueble',
       modelo: cotizacionInfo.modalidad,
       distribuidor: {
-        id: distribuidorData.id,
-        descuento_muebles_pct: distribuidorData.descuento_muebles_pct,
-        descuento_herrajes_pct: distribuidorData.descuento_herrajes_pct,
+        id: distribuidorData?.id ?? 'demo',
+        descuento_muebles_pct: sedeData.descuento_muebles_pct,
+        descuento_herrajes_pct: sedeData.descuento_herrajes_pct,
       },
       categoria: {
         id: cat?.id ?? '',
@@ -289,11 +290,11 @@ function PanelEspecial({
       fecha_cotizacion: new Date(cotizacionInfo.fecha),
       campanas_disponibles: campanasDisponibles,
       servicios_delben: {
-        diseno: distribuidorData.servicios.diseno_pct,
-        cotizacion: distribuidorData.servicios.cotizacion_pct,
-        produccion: distribuidorData.servicios.produccion_pct,
-        logistica: distribuidorData.servicios.logistica_pct,
-        gestion_comercial: distribuidorData.servicios.gestion_comercial_pct,
+        diseno: sedeData.servicios.diseno_pct,
+        cotizacion: sedeData.servicios.cotizacion_pct,
+        produccion: sedeData.servicios.produccion_pct,
+        logistica: sedeData.servicios.logistica_pct,
+        gestion_comercial: sedeData.servicios.gestion_comercial_pct,
       },
       universo: {
         transporte: (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct,
@@ -302,7 +303,7 @@ function PanelEspecial({
         utilidad: u.utilidad_pct,
         iva: u.iva_pct,
       },
-      pais_cliente_final: distribuidorData.pais,
+      pais_cliente_final: sedeData.pais,
       tasa_usd: tasaUsd,
     })
     return {
@@ -310,7 +311,7 @@ function PanelEspecial({
       precioClienteCalculado: resultado.precio_final_unitario,
       resultadoMotor: resultado,
     }
-  }, [precioBase, distribuidorData, cotizacionInfo, subcategoriaId, subcategorias, categorias, referencia, campanasDisponibles, tasaUsd])
+  }, [precioBase, distribuidorData, sedeData, cotizacionInfo, subcategoriaId, subcategorias, categorias, referencia, campanasDisponibles, tasaUsd])
 
   function agregarHerrajeLocal(a: Accesorio) {
     setHerrajes((prev) => {

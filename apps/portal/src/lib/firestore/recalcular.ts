@@ -10,11 +10,13 @@ import { calcularItem } from '@delben/core'
 import type { ResultadoCalculo } from '@delben/core'
 import { db } from '@/lib/firebase/client'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
+import { getSede } from '@/lib/firestore/sedes'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
 import { getTasaUsdActual } from '@/lib/firestore/config'
 import type {
   Cotizacion,
   Distribuidor,
+  Sede,
   ModuloDoc,
   CategoriaDoc,
   SubcategoriaDoc,
@@ -36,20 +38,26 @@ import type {
 
 // ─── Parámetros del motor ─────────────────────────────────────────────────────
 
-function buildMotorParams(dist: Distribuidor, modalidad: 'desarmado' | 'tradicional') {
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
+// Las condiciones salen de la SEDE; el id del distribuidor se conserva para la
+// segmentación de campañas en el motor.
+function buildMotorParams(
+  distribuidorId: string,
+  sede: Sede,
+  modalidad: 'desarmado' | 'tradicional',
+) {
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
   return {
     distribuidorMotor: {
-      id: dist.id,
-      descuento_muebles_pct: dist.descuento_muebles_pct,
-      descuento_herrajes_pct: dist.descuento_herrajes_pct,
+      id: distribuidorId,
+      descuento_muebles_pct: sede.descuento_muebles_pct,
+      descuento_herrajes_pct: sede.descuento_herrajes_pct,
     },
     serviciosMotor: {
-      diseno: dist.servicios.diseno_pct,
-      cotizacion: dist.servicios.cotizacion_pct,
-      produccion: dist.servicios.produccion_pct,
-      logistica: dist.servicios.logistica_pct,
-      gestion_comercial: dist.servicios.gestion_comercial_pct,
+      diseno: sede.servicios.diseno_pct,
+      cotizacion: sede.servicios.cotizacion_pct,
+      produccion: sede.servicios.produccion_pct,
+      logistica: sede.servicios.logistica_pct,
+      gestion_comercial: sede.servicios.gestion_comercial_pct,
     },
     universoMotor: {
       transporte: u.transporte_pct,
@@ -58,7 +66,7 @@ function buildMotorParams(dist: Distribuidor, modalidad: 'desarmado' | 'tradicio
       utilidad: u.utilidad_pct,
       iva: u.iva_pct,
     },
-    pais: dist.pais,
+    pais: sede.pais,
   }
 }
 
@@ -157,6 +165,7 @@ function buildHerrajeCarritoStub(snap: ItemHerraCotizacionSnapshot): ItemHerraje
 export type RecalculoResult = {
   cotizacionInfo: CotizacionInfo
   distribuidorData: Distribuidor
+  sedeData: Sede
   items: ItemCarrito[]
   itemsHerraje: ItemHerrajeCarrito[]
   itemsEspeciales: ItemEspecial[]
@@ -166,12 +175,14 @@ export async function recalcularCotizacion(
   cotizacion: Cotizacion,
   distribuidorId: string,
 ): Promise<RecalculoResult> {
-  const [dist, campanasActivas, tasaUsd] = await Promise.all([
+  const [dist, sede, campanasActivas, tasaUsd] = await Promise.all([
     getDistribuidor(distribuidorId),
+    getSede(distribuidorId, cotizacion.sede_id),
     getCampanasActivas(),
     getTasaUsdActual(),
   ])
   if (!dist) throw new Error('Distribuidor no encontrado')
+  if (!sede) throw new Error('Sede no encontrada')
 
   const cotizacionInfo: CotizacionInfo = {
     clienteNombre: cotizacion.clienteNombre,
@@ -179,6 +190,7 @@ export async function recalcularCotizacion(
     proyectoNombre: cotizacion.proyectoNombre,
     modalidad: cotizacion.modalidad,
     fecha: new Date(cotizacion.fecha),
+    sedeId: cotizacion.sede_id,
     categoriaId: cotizacion.categoriaId ?? '',
     categoriaNombre: cotizacion.categoriaNombre ?? '',
     transporteFijo: cotizacion.totales.transporteFijo ?? 0,
@@ -188,7 +200,7 @@ export async function recalcularCotizacion(
     version: cotizacion.version,
   }
 
-  const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacion.modalidad)
+  const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(distribuidorId, sede, cotizacion.modalidad)
   const motorBase = {
     modelo: cotizacionInfo.modalidad,
     distribuidor: distribuidorMotor,
@@ -333,5 +345,5 @@ export async function recalcularCotizacion(
   // recalcula): se arrastran tal cual desde el snapshot guardado.
   const itemsEspeciales: ItemEspecial[] = (cotizacion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot)
 
-  return { cotizacionInfo, distribuidorData: dist, items, itemsHerraje, itemsEspeciales }
+  return { cotizacionInfo, distribuidorData: dist, sedeData: sede, items, itemsHerraje, itemsEspeciales }
 }

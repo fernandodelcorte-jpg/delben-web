@@ -316,7 +316,9 @@ export async function parsearExcelModulos(
     }
   }
 
-  // Anotar flags requiere_fachada / requiere_estructura / precio_min en cada módulo
+  // Anotar flags requiere_fachada / requiere_estructura / precio_min en cada módulo.
+  // Nota: si tras un reimport algún módulo quedara sin precio_min, rehazlo con
+  // tests/catalogo/backfill-precio-min.mjs (lo lee el catálogo y el "Desde $X").
   for (const [key, item] of modulosMap) {
     item.doc.requiere_fachada = moduloTieneFachada.get(key) ?? false
     item.doc.requiere_estructura = moduloTieneEstructura.get(key) ?? false

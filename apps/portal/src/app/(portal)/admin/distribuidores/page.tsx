@@ -71,16 +71,8 @@ export default function DistribuidoresPage() {
           >
             <div>
               <p className="text-sm font-semibold text-stone-900">{d.nombre}</p>
-              <p className="mt-0.5 text-xs text-stone-500">
-                {d.ciudad}, {d.pais}
-              </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-right text-xs text-stone-400">
-                <span>{d.descuento_muebles_pct}% muebles</span>
-                <span className="mx-1.5">·</span>
-                <span>{d.descuento_herrajes_pct}% herrajes</span>
-              </div>
               <span
                 className={[
                   'rounded-full px-2.5 py-0.5 text-xs font-medium',

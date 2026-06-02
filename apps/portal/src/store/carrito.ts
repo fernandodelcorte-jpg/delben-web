@@ -9,7 +9,7 @@ import {
   SERVICIOS_DELBEN_DEMO,
   UNIVERSO_DEMO,
 } from '@/lib/datos-demo'
-import type { Accesorio, Cotizacion, Distribuidor, Modulo, Subcategoria, Valoracion, TotalesCotizacion, ItemEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
+import type { Accesorio, Cotizacion, Distribuidor, Sede, Modulo, Subcategoria, Valoracion, TotalesCotizacion, ItemEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import {
   guardarCotizacion as _guardarCotizacion,
@@ -97,6 +97,9 @@ export type CotizacionInfo = {
   proyectoNombre: string
   modalidad: 'tradicional' | 'desarmado'
   fecha: Date
+  // Sede a la que pertenece la cotización (snapshot inmutable). De aquí salen
+  // las condiciones de cálculo (capa Delben + universo) y país/moneda/IVA.
+  sedeId: string
   categoriaId: string
   categoriaNombre: string
   transporteFijo: number
@@ -118,6 +121,7 @@ type CategoriaCalculo = {
 type CarritoState = {
   cotizacionInfo: CotizacionInfo | null
   distribuidorData: Distribuidor | null
+  sedeData: Sede | null
   cotizacionGuardadaId: string | null
   valoracionGuardadaId: string | null
   items: ItemCarrito[]
@@ -131,7 +135,7 @@ type CarritoState = {
 
   setCampanas: (campanas: CampanaMotor[]) => void
   setTasaUsd: (tasa: number) => void
-  iniciarCotizacion: (info: Omit<CotizacionInfo, 'fecha'>, distribuidor: Distribuidor | null) => void
+  iniciarCotizacion: (info: Omit<CotizacionInfo, 'fecha'>, distribuidor: Distribuidor | null, sede: Sede | null) => void
   actualizarCostosProyecto: (transporteFijo: number, instalacionFija: number) => void
   abrirBuscador: () => void
   cerrarBuscador: () => void
@@ -157,13 +161,14 @@ type CarritoState = {
   cambiarCantidadEspecial: (id: string, delta: number) => void
   guardar: (distribuidorId: string, userId: string) => Promise<string>
   guardarValoracion: (distribuidorId: string, distribuidorNombre: string, userId: string) => Promise<string>
-  reabrirBorrador: (cotizacion: Cotizacion) => void
-  reabrirValoracion: (valoracion: Valoracion) => void
-  copiarBorrador: (cotizacion: Cotizacion) => void
+  reabrirBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
+  reabrirValoracion: (valoracion: Valoracion, sede: Sede | null) => void
+  copiarBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
   cargarBorrador: (payload: {
     cotizacionInfo: CotizacionInfo
     cotizacionGuardadaId: string | null
     distribuidorData: Distribuidor | null
+    sedeData: Sede | null
     items: ItemCarrito[]
     itemsHerraje: ItemHerrajeCarrito[]
     itemsEspeciales?: ItemEspecial[]
@@ -173,8 +178,14 @@ type CarritoState = {
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
-function buildMotorParams(dist: Distribuidor | null, modalidad: 'desarmado' | 'tradicional') {
-  if (!dist) {
+// Las condiciones de cálculo salen de la SEDE; el id del DISTRIBUIDOR se conserva
+// porque el motor lo usa para segmentar campañas (no el id de la sede).
+function buildMotorParams(
+  dist: Distribuidor | null,
+  sede: Sede | null,
+  modalidad: 'desarmado' | 'tradicional',
+) {
+  if (!sede) {
     return {
       distribuidorMotor: DISTRIBUIDOR_DEMO,
       serviciosMotor: SERVICIOS_DELBEN_DEMO,
@@ -182,10 +193,10 @@ function buildMotorParams(dist: Distribuidor | null, modalidad: 'desarmado' | 't
       pais: 'Colombia',
     }
   }
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
   return {
-    distribuidorMotor: { id: dist.id, descuento_muebles_pct: dist.descuento_muebles_pct, descuento_herrajes_pct: dist.descuento_herrajes_pct },
-    serviciosMotor: { diseno: dist.servicios.diseno_pct, cotizacion: dist.servicios.cotizacion_pct, produccion: dist.servicios.produccion_pct, logistica: dist.servicios.logistica_pct, gestion_comercial: dist.servicios.gestion_comercial_pct },
+    distribuidorMotor: { id: dist?.id ?? 'demo', descuento_muebles_pct: sede.descuento_muebles_pct, descuento_herrajes_pct: sede.descuento_herrajes_pct },
+    serviciosMotor: { diseno: sede.servicios.diseno_pct, cotizacion: sede.servicios.cotizacion_pct, produccion: sede.servicios.produccion_pct, logistica: sede.servicios.logistica_pct, gestion_comercial: sede.servicios.gestion_comercial_pct },
     universoMotor: {
       transporte: (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct,
       instalacion: (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct,
@@ -193,7 +204,7 @@ function buildMotorParams(dist: Distribuidor | null, modalidad: 'desarmado' | 't
       utilidad: u.utilidad_pct,
       iva: u.iva_pct,
     },
-    pais: dist.pais,
+    pais: sede.pais,
   }
 }
 
@@ -264,6 +275,7 @@ export const useCarrito = create<CarritoState>()(
     (set, get) => ({
   cotizacionInfo: null,
   distribuidorData: null,
+  sedeData: null,
   cotizacionGuardadaId: null,
   valoracionGuardadaId: null,
   items: [],
@@ -278,10 +290,11 @@ export const useCarrito = create<CarritoState>()(
   setCampanas: (campanas) => set({ campanasDisponibles: campanas }),
   setTasaUsd: (tasa) => set({ tasaUsd: tasa }),
 
-  iniciarCotizacion: (info, distribuidor) =>
+  iniciarCotizacion: (info, distribuidor, sede) =>
     set({
       cotizacionInfo: { ...info, fecha: new Date() },
       distribuidorData: distribuidor,
+      sedeData: sede,
       cotizacionGuardadaId: null,
       valoracionGuardadaId: null,
       items: [],
@@ -344,10 +357,10 @@ export const useCarrito = create<CarritoState>()(
     })),
 
   agregarItem: (modulo, config, subcategoria, precioCop, categoriaCalculo, herrajesBorrador) => {
-    const { cotizacionInfo, distribuidorData: dist, campanasDisponibles, tasaUsd, itemEditando } = get()
+    const { cotizacionInfo, distribuidorData: dist, sedeData: sede, campanasDisponibles, tasaUsd, itemEditando } = get()
     if (!cotizacionInfo) return
 
-    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacionInfo.modalidad)
+    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, sede, cotizacionInfo.modalidad)
 
     const motorBase = {
       modelo: cotizacionInfo.modalidad,
@@ -419,7 +432,7 @@ export const useCarrito = create<CarritoState>()(
     set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
 
   agregarHerraje: (accesorio, cantidad) => {
-    const { cotizacionInfo, distribuidorData: dist, campanasDisponibles, tasaUsd } = get()
+    const { cotizacionInfo, distribuidorData: dist, sedeData: sede, campanasDisponibles, tasaUsd } = get()
     if (!cotizacionInfo) return
 
     const precioCop =
@@ -429,7 +442,7 @@ export const useCarrito = create<CarritoState>()(
 
     if (!precioCop) return
 
-    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, cotizacionInfo.modalidad)
+    const { distribuidorMotor, serviciosMotor, universoMotor, pais } = buildMotorParams(dist, sede, cotizacionInfo.modalidad)
 
     const resultado = calcularItem({
       precio_base_cop: precioCop,
@@ -524,12 +537,13 @@ export const useCarrito = create<CarritoState>()(
     return id
   },
 
-  reabrirValoracion: (valoracion) => {
+  reabrirValoracion: (valoracion, sede) => {
     const cotizacionInfo: CotizacionInfo = {
       clienteNombre: valoracion.clienteNombre,
       proyectoNombre: valoracion.proyectoNombre,
       modalidad: valoracion.modalidad,
       fecha: new Date(valoracion.createdAt),
+      sedeId: valoracion.sede_id,
       categoriaId: '',
       categoriaNombre: '',
       transporteFijo: valoracion.totales.transporteFijo ?? 0,
@@ -618,6 +632,7 @@ export const useCarrito = create<CarritoState>()(
 
     set({
       cotizacionInfo,
+      sedeData: sede,
       cotizacionGuardadaId: null,
       valoracionGuardadaId: valoracion.id,
       items,
@@ -629,13 +644,14 @@ export const useCarrito = create<CarritoState>()(
     })
   },
 
-  reabrirBorrador: (cotizacion) => {
+  reabrirBorrador: (cotizacion, sede) => {
     const cotizacionInfo: CotizacionInfo = {
       clienteNombre: cotizacion.clienteNombre,
       clienteDireccion: cotizacion.clienteDireccion,
       proyectoNombre: cotizacion.proyectoNombre,
       modalidad: cotizacion.modalidad,
       fecha: new Date(cotizacion.fecha),
+      sedeId: cotizacion.sede_id,
       categoriaId: cotizacion.categoriaId ?? '',
       categoriaNombre: cotizacion.categoriaNombre ?? '',
       transporteFijo: cotizacion.totales.transporteFijo ?? 0,
@@ -727,6 +743,7 @@ export const useCarrito = create<CarritoState>()(
 
     set({
       cotizacionInfo,
+      sedeData: sede,
       cotizacionGuardadaId: cotizacion.id,
       items,
       itemsHerraje,
@@ -737,13 +754,14 @@ export const useCarrito = create<CarritoState>()(
     })
   },
 
-  copiarBorrador: (cotizacion) => {
+  copiarBorrador: (cotizacion, sede) => {
     const cotizacionInfo: CotizacionInfo = {
       clienteNombre: cotizacion.clienteNombre,
       clienteDireccion: cotizacion.clienteDireccion,
       proyectoNombre: cotizacion.proyectoNombre,
       modalidad: cotizacion.modalidad,
       fecha: new Date(),
+      sedeId: cotizacion.sede_id,
       categoriaId: cotizacion.categoriaId ?? '',
       categoriaNombre: cotizacion.categoriaNombre ?? '',
       transporteFijo: cotizacion.totales.transporteFijo ?? 0,
@@ -834,6 +852,7 @@ export const useCarrito = create<CarritoState>()(
 
     set({
       cotizacionInfo,
+      sedeData: sede,
       cotizacionGuardadaId: null,
       items,
       itemsHerraje,
@@ -844,11 +863,12 @@ export const useCarrito = create<CarritoState>()(
     })
   },
 
-  cargarBorrador: ({ cotizacionInfo, cotizacionGuardadaId, distribuidorData, items, itemsHerraje, itemsEspeciales }) =>
+  cargarBorrador: ({ cotizacionInfo, cotizacionGuardadaId, distribuidorData, sedeData, items, itemsHerraje, itemsEspeciales }) =>
     set({
       cotizacionInfo,
       cotizacionGuardadaId,
       distribuidorData,
+      sedeData,
       items,
       itemsHerraje,
       ...(itemsEspeciales ? { itemsEspeciales } : {}),
@@ -859,6 +879,7 @@ export const useCarrito = create<CarritoState>()(
   limpiar: () =>
     set({
       cotizacionInfo: null,
+      sedeData: null,
       cotizacionGuardadaId: null,
       valoracionGuardadaId: null,
       items: [],
@@ -876,6 +897,7 @@ export const useCarrito = create<CarritoState>()(
     partialize: (state) => ({
       cotizacionInfo: state.cotizacionInfo,
       distribuidorData: state.distribuidorData,
+      sedeData: state.sedeData,
       cotizacionGuardadaId: state.cotizacionGuardadaId,
       valoracionGuardadaId: state.valoracionGuardadaId,
       items: state.items,

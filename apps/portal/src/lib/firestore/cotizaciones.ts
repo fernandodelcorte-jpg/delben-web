@@ -116,6 +116,7 @@ export async function guardarCotizacion(
   const ahora = Date.now()
   const data: CotizacionDoc = {
     distribuidor_id: distribuidorId,
+    sede_id: info.sedeId,
     clienteNombre: info.clienteNombre,
     ...(info.clienteDireccion ? { clienteDireccion: info.clienteDireccion } : {}),
     proyectoNombre: info.proyectoNombre,
@@ -173,9 +174,27 @@ export async function actualizarCotizacion(
 // Busca en: (1) path legacy /distribuidores/{id}/cotizaciones y
 //           (2) /distribuidores/{id}/proyectos/{id}/cotizaciones
 // Evita collectionGroup para no depender de índices de Firestore.
-export async function getCotizaciones(distribuidorId: string): Promise<Cotizacion[]> {
+//
+// sedesFiltro: aislamiento por sede para la query `list` (las reglas no son filtros).
+//   • null     → sin filtro (super_admin, distribuidor_admin o todas_las_sedes).
+//   • []        → el usuario no tiene sedes asignadas → no ve cotizaciones.
+//   • [ids...]  → solo cotizaciones cuyo sede_id ∈ ids (where('sede_id','in', …)).
+export async function getCotizaciones(
+  distribuidorId: string,
+  sedesFiltro?: string[] | null,
+): Promise<Cotizacion[]> {
+  // Sin sedes asignadas: nada que listar (evita un `in` con array vacío, que falla).
+  if (sedesFiltro && sedesFiltro.length === 0) return []
+
+  const colCot = (path: string) => {
+    const col = collection(db, path)
+    return sedesFiltro && sedesFiltro.length > 0
+      ? query(col, where('sede_id', 'in', sedesFiltro))
+      : col
+  }
+
   const [legacySnap, proyectosSnap] = await Promise.all([
-    getDocs(collection(db, `distribuidores/${distribuidorId}/cotizaciones`)),
+    getDocs(colCot(`distribuidores/${distribuidorId}/cotizaciones`)),
     getDocs(collection(db, `distribuidores/${distribuidorId}/proyectos`)),
   ])
 
@@ -183,7 +202,7 @@ export async function getCotizaciones(distribuidorId: string): Promise<Cotizacio
 
   const cotPorProyecto = await Promise.all(
     proyectosSnap.docs.map((p) =>
-      getDocs(collection(db, `distribuidores/${distribuidorId}/proyectos/${p.id}/cotizaciones`)),
+      getDocs(colCot(`distribuidores/${distribuidorId}/proyectos/${p.id}/cotizaciones`)),
     ),
   )
   const nested = cotPorProyecto.flatMap((snap) =>

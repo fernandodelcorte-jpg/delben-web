@@ -659,8 +659,10 @@ cotizacion-pdf-button,orden-compra-pdf-button}.tsx`,
 - **Web institucional** (`apps/web/`): la ruta existe en el monorepo pero está vacía.
   Pendiente construirla (siguiente sesión).
 
-- **Conectar a GitHub**: el repositorio local no tiene remote configurado.
-  Pendiente crear repo en GitHub y hacer push (siguiente sesión).
+- ✅ **Conectar a GitHub**: hecho. El repo tiene remoto `origin/main` y el trabajo
+  está pusheado.
 
 - **Tipo MELAMINA PREMIUM en tipos_estructura**: el usuario la eliminará manualmente
   desde Firebase Console (no tiene datos de precios asociados).
+  
+

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CircleNotch, PencilSimple, Check, X, UploadSimple, Image } from '@phosphor-icons/react'
+import { CircleNotch, PencilSimple, Check, X, UploadSimple, Image, MapPin, CaretDown, CaretUp } from '@phosphor-icons/react'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase/client'
 import { useAuth } from '@/components/providers/auth-provider'
@@ -14,10 +14,16 @@ import {
   getUsuariosDistribuidor,
   actualizarDistribuidor,
   crearUsuarioFirestore,
+  actualizarSedesUsuario,
 } from '@/lib/firestore/distribuidores'
+import { getSedes, actualizarSede } from '@/lib/firestore/sedes'
 import { crearUsuarioAuth } from '@/lib/firebase/client'
-import type { Distribuidor, Usuario } from '@/lib/firebase/tipos-firestore'
-import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
+import type { Distribuidor, Sede, Usuario } from '@/lib/firebase/tipos-firestore'
+import {
+  getUniversoParaModalidad,
+  universoCompletoParaModalidad,
+  sedeHabilitada,
+} from '@/lib/firebase/tipos-firestore'
 
 // ─── Schema universo ──────────────────────────────────────────────────────────
 
@@ -60,6 +66,8 @@ export default function ConfiguracionPage() {
   const { distribuidorId, rol, cargando: cargandoAuth } = useAuth()
   const router = useRouter()
   const [distribuidor, setDistribuidor] = useState<Distribuidor | null>(null)
+  const [sedes, setSedes] = useState<Sede[]>([])
+  const [sedeSelId, setSedeSelId] = useState<string | null>(null)
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [cargando, setCargando] = useState(true)
   const [editandoUniverso, setEditandoUniverso] = useState(false)
@@ -67,9 +75,19 @@ export default function ConfiguracionPage() {
   const [mostrarFormUsuario, setMostrarFormUsuario] = useState(false)
   const [creandoUsuario, setCreandoUsuario] = useState(false)
   const [errorUsuario, setErrorUsuario] = useState<string | null>(null)
+  // Sedes del nuevo usuario
+  const [nuevoTodasSedes, setNuevoTodasSedes] = useState(false)
+  const [nuevoSedes, setNuevoSedes] = useState<string[]>([])
+  // Edición de sedes de un usuario existente
+  const [editSedesUid, setEditSedesUid] = useState<string | null>(null)
+  const [editTodasSedes, setEditTodasSedes] = useState(false)
+  const [editSedes, setEditSedes] = useState<string[]>([])
+  const [guardandoSedes, setGuardandoSedes] = useState(false)
   const [subiendoLogo, setSubiendoLogo] = useState(false)
   const [errorLogo, setErrorLogo] = useState<string | null>(null)
   const inputLogoRef = useRef<HTMLInputElement>(null)
+
+  const sedeSel = sedes.find((s) => s.id === sedeSelId) ?? null
 
   useEffect(() => {
     if (cargandoAuth) return
@@ -80,9 +98,13 @@ export default function ConfiguracionPage() {
     if (!distribuidorId) return
     Promise.all([
       getDistribuidor(distribuidorId),
+      getSedes(distribuidorId).catch(() => [] as Sede[]),
       getUsuariosDistribuidor(distribuidorId),
-    ]).then(([dist, usrs]) => {
+    ]).then(([dist, seds, usrs]) => {
       setDistribuidor(dist)
+      setSedes(seds)
+      // Una sola sede → tarjeta abierta por defecto; varias → todas colapsadas.
+      setSedeSelId(seds.length === 1 ? seds[0]!.id : null)
       setUsuarios(usrs)
     }).finally(() => setCargando(false))
   }, [distribuidorId, rol, cargandoAuth, router])
@@ -97,10 +119,10 @@ export default function ConfiguracionPage() {
   })
 
   function abrirEditarUniverso() {
-    if (!distribuidor) return
-    const resetData: FormUniverso = { iva_pct: distribuidor.universo.iva_pct }
+    if (!sedeSel) return
+    const resetData: FormUniverso = { iva_pct: sedeSel.universo.iva_pct }
     const toForm = (m: ModalidadPrefijo) => {
-      const u = getUniversoParaModalidad(distribuidor.universo, m)
+      const u = getUniversoParaModalidad(sedeSel.universo, m)
       return {
         transporte_tipo:  u.transporte_tipo ?? 'porcentual' as const,
         transporte_pct:   u.transporte_pct,
@@ -110,18 +132,25 @@ export default function ConfiguracionPage() {
         utilidad_pct:     u.utilidad_pct,
       }
     }
-    if (distribuidor.acceso_desarmado)   resetData.desarmado   = toForm('desarmado')
-    if (distribuidor.acceso_tradicional) resetData.tradicional = toForm('tradicional')
+    if (sedeSel.acceso_desarmado)   resetData.desarmado   = toForm('desarmado')
+    if (sedeSel.acceso_tradicional) resetData.tradicional = toForm('tradicional')
     universoForm.reset(resetData)
     setEditandoUniverso(true)
   }
 
+  function toggleSedeCard(id: string) {
+    setEditandoUniverso(false)
+    setSedeSelId((prev) => (prev === id ? null : id))
+  }
+
   async function onGuardarUniverso(data: FormUniverso) {
-    if (!distribuidor || !distribuidorId) return
+    if (!sedeSel || !distribuidorId) return
     setGuardandoUniverso(true)
     try {
-      await actualizarDistribuidor(distribuidorId, { universo: data })
-      setDistribuidor({ ...distribuidor, universo: data })
+      await actualizarSede(distribuidorId, sedeSel.id, { universo: data })
+      setSedes((prev) =>
+        prev.map((s) => (s.id === sedeSel.id ? { ...s, universo: data } : s)),
+      )
       setEditandoUniverso(false)
     } finally {
       setGuardandoUniverso(false)
@@ -139,11 +168,15 @@ export default function ConfiguracionPage() {
         email: data.email,
         rol: data.rol,
         distribuidor_id: distribuidorId,
+        sedes_asignadas: nuevoTodasSedes ? [] : nuevoSedes,
+        todas_las_sedes: nuevoTodasSedes,
         activo: true,
       })
       const nuevos = await getUsuariosDistribuidor(distribuidorId)
       setUsuarios(nuevos)
       setMostrarFormUsuario(false)
+      setNuevoTodasSedes(false)
+      setNuevoSedes([])
       usuarioForm.reset()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error desconocido'
@@ -155,6 +188,41 @@ export default function ConfiguracionPage() {
     } finally {
       setCreandoUsuario(false)
     }
+  }
+
+  function abrirEditorSedes(u: Usuario) {
+    setEditSedesUid(u.id)
+    setEditTodasSedes(u.todas_las_sedes ?? false)
+    setEditSedes(u.sedes_asignadas ?? [])
+  }
+
+  async function onGuardarSedesUsuario() {
+    if (!editSedesUid) return
+    setGuardandoSedes(true)
+    try {
+      const sedesFinal = editTodasSedes ? [] : editSedes
+      await actualizarSedesUsuario(editSedesUid, sedesFinal, editTodasSedes)
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === editSedesUid
+            ? { ...u, sedes_asignadas: sedesFinal, todas_las_sedes: editTodasSedes }
+            : u,
+        ),
+      )
+      setEditSedesUid(null)
+    } finally {
+      setGuardandoSedes(false)
+    }
+  }
+
+  function descripcionSedes(u: Usuario): string {
+    if (u.todas_las_sedes) return 'Todas las sedes'
+    const ids = u.sedes_asignadas ?? []
+    if (ids.length === 0) return 'Sin sede asignada'
+    return sedes
+      .filter((s) => ids.includes(s.id))
+      .map((s) => s.nombre)
+      .join(' · ')
   }
 
   async function handleSubirLogo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -199,25 +267,6 @@ export default function ConfiguracionPage() {
           <h1 className="text-xl font-semibold text-stone-900 tracking-tight">Configuración</h1>
           <p className="mt-0.5 text-sm text-stone-400">{distribuidor.nombre}</p>
         </div>
-
-        {/* Mi empresa (solo lectura) */}
-        <section className="rounded-xl border border-stone-200 bg-white p-6">
-          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-5">
-            Mi empresa
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
-            <Dato label="Nombre" valor={distribuidor.nombre} />
-            <Dato label="País" valor={distribuidor.pais} />
-            <Dato label="Ciudad" valor={distribuidor.ciudad} />
-            <Dato
-              label="Modalidades habilitadas"
-              valor={[
-                distribuidor.acceso_desarmado && 'Desarmado',
-                distribuidor.acceso_tradicional && 'Tradicional',
-              ].filter(Boolean).join(' · ') || '—'}
-            />
-          </div>
-        </section>
 
         {/* Logo de la empresa */}
         <section className="rounded-xl border border-stone-200 bg-white p-6 space-y-4">
@@ -267,116 +316,166 @@ export default function ConfiguracionPage() {
           </div>
         </section>
 
-        {/* Condiciones Delben (solo lectura) */}
-        <section className="rounded-xl border border-stone-200 bg-white p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-              Condiciones Delben
-            </h2>
-            <span className="text-xs text-stone-400">Configurado por Delben</span>
+        {/* Sin sedes */}
+        {sedes.length === 0 && (
+          <div className="rounded-xl border border-stone-200 bg-white px-6 py-10 text-center">
+            <MapPin size={22} className="mx-auto text-stone-300 mb-2" />
+            <p className="text-sm text-stone-500">
+              Aún no hay sedes. Delben crea las sedes de tu empresa; cuando exista una,
+              podrás configurar su universo aquí.
+            </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
-            <Dato label="Desc. muebles"      valor={`${distribuidor.descuento_muebles_pct}%`} />
-            <Dato label="Desc. herrajes"     valor={`${distribuidor.descuento_herrajes_pct}%`} />
-            <Dato label="Diseño"             valor={`${distribuidor.servicios.diseno_pct}%`} />
-            <Dato label="Cotización"         valor={`${distribuidor.servicios.cotizacion_pct}%`} />
-            <Dato label="Producción"         valor={`${distribuidor.servicios.produccion_pct}%`} />
-            <Dato label="Logística"          valor={`${distribuidor.servicios.logistica_pct}%`} />
-            <Dato label="Gestión comercial"  valor={`${distribuidor.servicios.gestion_comercial_pct}% (margin)`} />
-          </div>
-        </section>
+        )}
 
-        {/* Mi universo (editable) */}
-        <section className="rounded-xl border border-stone-200 bg-white p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-              Mi universo
+        {/* Sedes (tarjetas-acordeón) */}
+        {sedes.length > 0 && (
+          <section className="rounded-xl border border-stone-200 bg-white p-6">
+            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
+              {sedes.length === 1 ? 'Sede' : 'Sedes'}
             </h2>
-            {!editandoUniverso && (
-              <button
-                onClick={abrirEditarUniverso}
-                className="tactil flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-stone-800"
-              >
-                <PencilSimple size={13} weight="bold" />
-                Editar
-              </button>
-            )}
-          </div>
+            <div className="space-y-3">
+              {sedes.map((sede) => {
+                const abierta = sede.id === sedeSelId
+                return (
+                  <div key={sede.id} className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+                    {/* Cabecera colapsada */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSedeCard(sede.id)}
+                      aria-expanded={abierta}
+                      className="tactil w-full flex items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <MapPin size={16} className="text-stone-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-stone-900 truncate">{sede.nombre}</p>
+                        <p className="text-xs text-stone-400 truncate">{sede.ciudad}, {sede.pais}</p>
+                      </div>
+                      <BadgeEstadoSede sede={sede} />
+                      {abierta ? (
+                        <CaretUp size={14} weight="bold" className="text-stone-400 shrink-0" />
+                      ) : (
+                        <CaretDown size={14} weight="bold" className="text-stone-400 shrink-0" />
+                      )}
+                    </button>
 
-          {editandoUniverso ? (
-            <form onSubmit={universoForm.handleSubmit(onGuardarUniverso)} className="space-y-6">
-              {distribuidor.acceso_desarmado && (
-                <SeccionModalidadForm
-                  titulo="Desarmado"
-                  prefijo="desarmado"
-                  form={universoForm}
-                />
-              )}
-              {distribuidor.acceso_tradicional && (
-                <SeccionModalidadForm
-                  titulo="Tradicional"
-                  prefijo="tradicional"
-                  form={universoForm}
-                  conSeparador={distribuidor.acceso_desarmado}
-                />
-              )}
-              <div className={distribuidor.acceso_desarmado || distribuidor.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
-                <label className="block text-xs text-stone-500 mb-1">IVA % (compartido)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min={0}
-                  max={100}
-                  {...universoForm.register('iva_pct')}
-                  className="w-28 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
-                />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={guardandoUniverso}
-                  className="tactil flex items-center gap-1.5 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50 transition-colors"
-                >
-                  {guardandoUniverso ? (
-                    <CircleNotch size={14} className="animate-spin" />
-                  ) : (
-                    <Check size={14} weight="bold" />
-                  )}
-                  {guardandoUniverso ? 'Guardando…' : 'Guardar'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditandoUniverso(false)}
-                  className="tactil flex items-center gap-1 rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
-                >
-                  <X size={14} weight="bold" />
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-5">
-              {distribuidor.acceso_desarmado && (
-                <SeccionModalidadVista
-                  titulo="Desarmado"
-                  universo={distribuidor.universo}
-                  modalidad="desarmado"
-                />
-              )}
-              {distribuidor.acceso_tradicional && (
-                <SeccionModalidadVista
-                  titulo="Tradicional"
-                  universo={distribuidor.universo}
-                  modalidad="tradicional"
-                  conSeparador={distribuidor.acceso_desarmado}
-                />
-              )}
-              <div className={distribuidor.acceso_desarmado || distribuidor.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
-                <Dato label="IVA" valor={`${distribuidor.universo.iva_pct}%`} />
-              </div>
+                    {/* Contenido expandido */}
+                    {abierta && (
+                      <div className="border-t border-stone-100 px-4 py-4 space-y-6 animate-desplegarse origin-top">
+                        {/* Datos de la sede (solo lectura) */}
+                        <div>
+                          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
+                            Datos de la sede
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
+                            <Dato label="Sede" valor={sede.nombre} />
+                            <Dato label="País" valor={sede.pais} />
+                            <Dato label="Ciudad" valor={sede.ciudad} />
+                            <Dato
+                              label="Modalidades habilitadas"
+                              valor={[
+                                sede.acceso_desarmado && 'Desarmado',
+                                sede.acceso_tradicional && 'Tradicional',
+                              ].filter(Boolean).join(' · ') || '—'}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Condiciones Delben (solo lectura) */}
+                        <div className="pt-4 border-t border-stone-100">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                              Condiciones Delben
+                            </p>
+                            <span className="text-xs text-stone-400">Configurado por Delben</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
+                            <Dato label="Desc. muebles"      valor={`${sede.descuento_muebles_pct}%`} />
+                            <Dato label="Desc. herrajes"     valor={`${sede.descuento_herrajes_pct}%`} />
+                            <Dato label="Diseño"             valor={`${sede.servicios.diseno_pct}%`} />
+                            <Dato label="Cotización"         valor={`${sede.servicios.cotizacion_pct}%`} />
+                            <Dato label="Producción"         valor={`${sede.servicios.produccion_pct}%`} />
+                            <Dato label="Logística"          valor={`${sede.servicios.logistica_pct}%`} />
+                            <Dato label="Gestión comercial"  valor={`${sede.servicios.gestion_comercial_pct}% (margin)`} />
+                          </div>
+                        </div>
+
+                        {/* Universo de la sede (editable) */}
+                        <div className="pt-4 border-t border-stone-100">
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                              Universo de la sede
+                            </p>
+                            {!editandoUniverso && (
+                              <button
+                                onClick={abrirEditarUniverso}
+                                className="tactil flex items-center gap-1.5 text-xs font-medium text-caoba-600 hover:text-caoba-700"
+                              >
+                                <PencilSimple size={13} weight="bold" />
+                                Editar
+                              </button>
+                            )}
+                          </div>
+
+                          {editandoUniverso ? (
+                            <form onSubmit={universoForm.handleSubmit(onGuardarUniverso)} className="space-y-6">
+                              {sede.acceso_desarmado && (
+                                <SeccionModalidadForm titulo="Desarmado" prefijo="desarmado" form={universoForm} />
+                              )}
+                              {sede.acceso_tradicional && (
+                                <SeccionModalidadForm titulo="Tradicional" prefijo="tradicional" form={universoForm} conSeparador={sede.acceso_desarmado} />
+                              )}
+                              <div className={sede.acceso_desarmado || sede.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
+                                <label className="block text-xs text-stone-500 mb-1">IVA % (compartido)</label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min={0}
+                                  max={100}
+                                  {...universoForm.register('iva_pct')}
+                                  className="w-28 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500"
+                                />
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="submit"
+                                  disabled={guardandoUniverso}
+                                  className="tactil flex items-center gap-1.5 rounded-lg bg-caoba-600 px-4 py-2 text-sm font-semibold text-white hover:bg-caoba-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {guardandoUniverso ? <CircleNotch size={14} className="animate-spin" /> : <Check size={14} weight="bold" />}
+                                  {guardandoUniverso ? 'Guardando…' : 'Guardar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditandoUniverso(false)}
+                                  className="tactil flex items-center gap-1 rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50"
+                                >
+                                  <X size={14} weight="bold" />
+                                  Cancelar
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <div className="space-y-5">
+                              {sede.acceso_desarmado && (
+                                <SeccionModalidadVista titulo="Desarmado" universo={sede.universo} modalidad="desarmado" />
+                              )}
+                              {sede.acceso_tradicional && (
+                                <SeccionModalidadVista titulo="Tradicional" universo={sede.universo} modalidad="tradicional" conSeparador={sede.acceso_desarmado} />
+                              )}
+                              <div className={sede.acceso_desarmado || sede.acceso_tradicional ? 'pt-4 border-t border-stone-100' : ''}>
+                                <Dato label="IVA" valor={`${sede.universo.iva_pct}%`} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Mi equipo */}
         <section className="rounded-xl border border-stone-200 bg-white p-6">
@@ -401,29 +500,88 @@ export default function ConfiguracionPage() {
           )}
 
           <div className="divide-y divide-stone-100">
-            {usuarios.map((u) => (
-              <div key={u.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium text-stone-900">{u.nombre}</p>
-                  <p className="text-xs text-stone-400">{u.email}</p>
+            {usuarios.map((u) => {
+              const esAdmin = u.rol === 'distribuidor_admin'
+              return (
+                <div key={u.id} className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-stone-900">{u.nombre}</p>
+                      <p className="text-xs text-stone-400">{u.email}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600">
+                        {ETIQUETA_ROL[u.rol] ?? u.rol}
+                      </span>
+                      <span
+                        className={[
+                          'rounded-full px-2.5 py-0.5 text-xs font-medium',
+                          u.activo
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-stone-100 text-stone-400',
+                        ].join(' ')}
+                      >
+                        {u.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Sedes asignadas (no aplica al admin: ve todas) */}
+                  {sedes.length > 0 && !esAdmin && (
+                    <div className="mt-2 pl-0.5">
+                      {editSedesUid === u.id ? (
+                        <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-3">
+                          <SelectorSedes
+                            sedes={sedes}
+                            todas={editTodasSedes}
+                            seleccionadas={editSedes}
+                            onToggleTodas={(v) => setEditTodasSedes(v)}
+                            onToggleSede={(id) =>
+                              setEditSedes((prev) =>
+                                prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                              )
+                            }
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={onGuardarSedesUsuario}
+                              disabled={guardandoSedes}
+                              className="tactil flex items-center gap-1.5 rounded-md bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-700 disabled:opacity-50 transition-colors"
+                            >
+                              {guardandoSedes ? (
+                                <CircleNotch size={12} className="animate-spin" />
+                              ) : (
+                                <Check size={12} weight="bold" />
+                              )}
+                              Guardar sedes
+                            </button>
+                            <button
+                              onClick={() => setEditSedesUid(null)}
+                              className="text-xs text-stone-500 hover:text-stone-700"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-stone-500">
+                            <span className="text-stone-400">Sedes: </span>
+                            {descripcionSedes(u)}
+                          </span>
+                          <button
+                            onClick={() => abrirEditorSedes(u)}
+                            className="font-medium text-stone-500 hover:text-stone-800 underline underline-offset-2"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600">
-                    {ETIQUETA_ROL[u.rol] ?? u.rol}
-                  </span>
-                  <span
-                    className={[
-                      'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                      u.activo
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-stone-100 text-stone-400',
-                    ].join(' ')}
-                  >
-                    {u.activo ? 'Activo' : 'Inactivo'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {mostrarFormUsuario && (
@@ -488,6 +646,23 @@ export default function ConfiguracionPage() {
                 </div>
               </div>
 
+              {sedes.length > 0 && (
+                <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <p className="text-xs font-medium text-stone-600 mb-2">Sedes en las que puede cotizar</p>
+                  <SelectorSedes
+                    sedes={sedes}
+                    todas={nuevoTodasSedes}
+                    seleccionadas={nuevoSedes}
+                    onToggleTodas={(v) => setNuevoTodasSedes(v)}
+                    onToggleSede={(id) =>
+                      setNuevoSedes((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                      )
+                    }
+                  />
+                </div>
+              )}
+
               {errorUsuario && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {errorUsuario}
@@ -522,11 +697,83 @@ export default function ConfiguracionPage() {
   )
 }
 
+function modalidadesPendientes(sede: Sede): string[] {
+  const faltan: string[] = []
+  if (sede.acceso_desarmado && !universoCompletoParaModalidad(sede, 'desarmado'))
+    faltan.push('Desarmado')
+  if (sede.acceso_tradicional && !universoCompletoParaModalidad(sede, 'tradicional'))
+    faltan.push('Tradicional')
+  return faltan
+}
+
+// Estado calculado (no guardado): verde si la sede es cotizable, ámbar si falta
+// configurar el universo de alguna modalidad. Colores semánticos de DESIGN.md.
+function BadgeEstadoSede({ sede }: { sede: Sede }) {
+  if (sedeHabilitada(sede)) {
+    return (
+      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+        Lista para cotizar
+      </span>
+    )
+  }
+  const faltan = modalidadesPendientes(sede)
+  const detalle =
+    faltan.length > 0 ? `el universo de ${faltan.join(' y ')}` : 'el universo'
+  return (
+    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+      Falta configurar {detalle}
+    </span>
+  )
+}
+
 function Dato({ label, valor }: { label: string; valor: string }) {
   return (
     <div>
       <p className="text-xs text-stone-400 mb-0.5">{label}</p>
       <p className="text-sm font-medium text-stone-800">{valor}</p>
+    </div>
+  )
+}
+
+function SelectorSedes({
+  sedes,
+  todas,
+  seleccionadas,
+  onToggleTodas,
+  onToggleSede,
+}: {
+  sedes: Sede[]
+  todas: boolean
+  seleccionadas: string[]
+  onToggleTodas: (v: boolean) => void
+  onToggleSede: (id: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-sm text-stone-700">
+        <input
+          type="checkbox"
+          checked={todas}
+          onChange={(e) => onToggleTodas(e.target.checked)}
+          className="accent-stone-800"
+        />
+        Todas las sedes
+      </label>
+      {!todas && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-1">
+          {sedes.map((s) => (
+            <label key={s.id} className="flex items-center gap-1.5 text-sm text-stone-600">
+              <input
+                type="checkbox"
+                checked={seleccionadas.includes(s.id)}
+                onChange={() => onToggleSede(s.id)}
+                className="accent-stone-800"
+              />
+              {s.nombre}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -631,7 +878,7 @@ function SeccionModalidadVista({
   conSeparador = false,
 }: {
   titulo: string
-  universo: Distribuidor['universo']
+  universo: Sede['universo']
   modalidad: ModalidadPrefijo
   conSeparador?: boolean
 }) {

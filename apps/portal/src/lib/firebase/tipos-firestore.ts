@@ -99,13 +99,25 @@ export interface UniversoModalidad {
   utilidad_pct: number
 }
 
+// El distribuidor queda identitario: las condiciones de cálculo viven en la sede.
 export interface DistribuidorDoc {
   nombre: string
+  logo_url?: string | null
+  activo: boolean
+  created_at: number
+}
+
+// Una sede de un distribuidor (subcolección distribuidores/{id}/sedes/{sedeId}).
+// Concentra TODA la configuración de cálculo: la capa Delben la define el
+// super_admin; el universo lo configura el distribuidor_admin. País, moneda e
+// IVA se derivan de la sede.
+export interface SedeDoc {
+  nombre: string // ej. "Bogotá", "Miami", "Caracas"
   pais: string
   ciudad: string
-  logo_url?: string | null
   acceso_tradicional: boolean
   acceso_desarmado: boolean
+  // Capa Delben (la define el super_admin)
   descuento_muebles_pct: number
   descuento_herrajes_pct: number
   servicios: {
@@ -115,6 +127,7 @@ export interface DistribuidorDoc {
     logistica_pct: number
     gestion_comercial_pct: number
   }
+  // Capa Distribuidor (la configura el distribuidor_admin)
   universo: {
     iva_pct: number
     desarmado?: UniversoModalidad
@@ -124,31 +137,54 @@ export interface DistribuidorDoc {
   created_at: number
 }
 
-// Lee el universo de la modalidad correcta con fallback al esquema plano antiguo.
+// Lee el universo de la modalidad correcta. Si la sede aún no tiene configurada
+// esa modalidad (universo a medio configurar), devuelve ceros.
 export function getUniversoParaModalidad(
-  universo: DistribuidorDoc['universo'],
+  universo: SedeDoc['universo'],
   modalidad: 'desarmado' | 'tradicional',
 ): UniversoModalidad & { iva_pct: number } {
   const data = universo[modalidad]
   if (data) return { ...data, iva_pct: universo.iva_pct }
-  // Compatibilidad con docs Firestore creados antes de la separación por modalidad
-  const flat = universo as unknown as {
-    transporte_tipo?: 'porcentual' | 'fijo'
-    transporte_pct?: number
-    instalacion_tipo?: 'porcentual' | 'fijo'
-    instalacion_pct?: number
-    imprevistos_pct?: number
-    utilidad_pct?: number
-  }
   return {
-    transporte_tipo: flat.transporte_tipo,
-    transporte_pct: flat.transporte_pct ?? 0,
-    instalacion_tipo: flat.instalacion_tipo,
-    instalacion_pct: flat.instalacion_pct ?? 0,
-    imprevistos_pct: flat.imprevistos_pct ?? 0,
-    utilidad_pct: flat.utilidad_pct ?? 0,
+    transporte_pct: 0,
+    instalacion_pct: 0,
+    imprevistos_pct: 0,
+    utilidad_pct: 0,
     iva_pct: universo.iva_pct,
   }
+}
+
+// ─── Habilitación de sede (valor calculado, no se guarda) ──────────────────────
+// Una sede recién creada por el super_admin nace SIN universo de modalidad (solo
+// el IVA derivado del país). Hasta que el distribuidor_admin lo configure, no es
+// cotizable. "Sin configurar" se representa por la AUSENCIA del sub-objeto de la
+// modalidad (universo.desarmado / universo.tradicional), NO por un 0: un 0% que
+// el distribuidor_admin eligió a propósito es válido y no bloquea.
+
+// true si el universo de esa modalidad tiene presentes (no ausentes) los campos
+// que el distribuidor_admin debe configurar. Única regla: presente vs. ausente.
+export function universoCompletoParaModalidad(
+  sede: SedeDoc,
+  modalidad: 'desarmado' | 'tradicional',
+): boolean {
+  const u = sede.universo[modalidad]
+  if (!u) return false
+  return (
+    typeof u.transporte_pct === 'number' &&
+    typeof u.instalacion_pct === 'number' &&
+    typeof u.imprevistos_pct === 'number' &&
+    typeof u.utilidad_pct === 'number'
+  )
+}
+
+// true solo si el universo está completo para CADA modalidad a la que la sede
+// tiene acceso. Acceso a las dos → exige las dos; a una → solo esa.
+export function sedeHabilitada(sede: SedeDoc): boolean {
+  const modalidades: ('desarmado' | 'tradicional')[] = []
+  if (sede.acceso_desarmado) modalidades.push('desarmado')
+  if (sede.acceso_tradicional) modalidades.push('tradicional')
+  if (modalidades.length === 0) return false
+  return modalidades.every((m) => universoCompletoParaModalidad(sede, m))
 }
 
 export interface HistorialCondicionesDoc {
@@ -195,6 +231,10 @@ export interface UsuarioDoc {
   email: string
   rol: string
   distribuidor_id: string | null
+  // Sedes en las que puede operar. Si todas_las_sedes es true se ignora
+  // sedes_asignadas y el usuario opera en todas las sedes del distribuidor.
+  sedes_asignadas?: string[]
+  todas_las_sedes?: boolean
   activo: boolean
   created_at: number
 }
@@ -211,6 +251,7 @@ export type Modulo = ModuloDoc & { id: string }
 export type Precio = PrecioDoc & { id: string }
 export type Accesorio = AccesorioDoc & { id: string }
 export type Distribuidor = DistribuidorDoc & { id: string }
+export type Sede = SedeDoc & { id: string }
 export type Usuario = UsuarioDoc & { id: string }
 export type CampanaFirestore = CampanaDoc & { id: string }
 
@@ -314,6 +355,7 @@ export interface TotalesCotizacion {
 
 export interface ValoracionDoc {
   distribuidor_id: string
+  sede_id: string
   distribuidor_nombre: string
   clienteNombre: string
   proyectoNombre: string
@@ -350,6 +392,7 @@ export type Proyecto = ProyectoDoc & { id: string }
 
 export interface CotizacionDoc {
   distribuidor_id: string
+  sede_id: string
   clienteNombre: string
   clienteDireccion?: string
   proyectoNombre: string

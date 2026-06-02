@@ -20,7 +20,7 @@ import {
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCotizaciones, renombrarVersionCotizacion } from '@/lib/firestore/cotizaciones'
 import { getProyectos, actualizarProyecto } from '@/lib/firestore/proyectos'
-import { getDistribuidor } from '@/lib/firestore/distribuidores'
+import { getDistribuidor, getFiltroSedesUsuario } from '@/lib/firestore/distribuidores'
 import { getLogoDelben } from '@/lib/firestore/config'
 import { urlADataUrl } from '@/lib/pdf-helpers'
 import { formatCOP } from '@/lib/datos-demo'
@@ -74,7 +74,7 @@ function fmtFecha(ts: number) {
 // ─── Página ───────────────────────────────────────────────────────────────────
 
 export default function CotizacionesPage() {
-  const { distribuidorId, cargando: cargandoAuth } = useAuth()
+  const { usuario, rol, distribuidorId, cargando: cargandoAuth } = useAuth()
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [cargando, setCargando] = useState(true)
@@ -83,16 +83,24 @@ export default function CotizacionesPage() {
 
   useEffect(() => {
     if (cargandoAuth) return
-    if (!distribuidorId) { setCargando(false); return }
+    if (!distribuidorId || !usuario) { setCargando(false); return }
 
-    Promise.all([
-      getProyectos(distribuidorId),
-      getCotizaciones(distribuidorId),
-    ])
-      .then(([ps, cs]) => { setProyectos(ps); setCotizaciones(cs) })
-      .catch(() => setError('No se pudieron cargar los proyectos.'))
-      .finally(() => setCargando(false))
-  }, [distribuidorId, cargandoAuth])
+    ;(async () => {
+      try {
+        const filtroSedes = await getFiltroSedesUsuario(usuario.uid, rol)
+        const [ps, cs] = await Promise.all([
+          getProyectos(distribuidorId),
+          getCotizaciones(distribuidorId, filtroSedes),
+        ])
+        setProyectos(ps)
+        setCotizaciones(cs)
+      } catch {
+        setError('No se pudieron cargar los proyectos.')
+      } finally {
+        setCargando(false)
+      }
+    })()
+  }, [distribuidorId, usuario, rol, cargandoAuth])
 
   const cotPorProyecto = new Map<string, Cotizacion[]>()
   const cotSinProyecto: Cotizacion[] = []

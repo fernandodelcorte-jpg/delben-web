@@ -52,6 +52,9 @@ export function NavPortal() {
             <NavLink href="/cotizaciones" label="Cotizaciones" />
           )}
 
+          {/* Catálogo de precios — distribuidor y Delben (Delben elige distribuidor) */}
+          {rol && <NavLink href="/catalogo" label="Catálogo" />}
+
           {/* Configuración — solo distribuidor_admin */}
           {rol === 'distribuidor_admin' && (
             <NavLink href="/configuracion" label="Configuración" />

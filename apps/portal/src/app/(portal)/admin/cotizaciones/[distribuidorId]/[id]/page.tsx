@@ -6,11 +6,13 @@ import Link from 'next/link'
 import { CaretDown, CaretUp, CircleNotch } from '@phosphor-icons/react'
 import { getCotizacion } from '@/lib/firestore/cotizaciones'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
+import { getSede } from '@/lib/firestore/sedes'
 import { formatCOP } from '@/lib/datos-demo'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import type {
   Cotizacion,
   Distribuidor,
+  Sede,
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
   ItemEspecialSnapshot,
@@ -31,10 +33,10 @@ function formatFecha(ts: number) {
 
 // ─── Cálculo de resumen total del proyecto ────────────────────────────────────
 
-function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: 'desarmado' | 'tradicional') {
+function calcularDesglose(r: ResultadoSnapshot, sede: Sede, modalidad: 'desarmado' | 'tradicional') {
   const base = r.costo_tras_descuentos
-  const s = dist.servicios
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
+  const s = sede.servicios
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
   const transp_pct = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
   const instal_pct = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
   return {
@@ -56,11 +58,11 @@ function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: '
 // su costo Delben unitario, para descomponerlo por capas en el desglose.
 function reconstruirResultadoEspecial(
   e: ItemEspecialSnapshot,
-  dist: Distribuidor,
+  sede: Sede,
   modalidad: 'desarmado' | 'tradicional',
 ): ResultadoSnapshot {
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
-  const s = dist.servicios
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
+  const s = sede.servicios
   const costoDelben = e.precioDelbenUnitario
   const grupo1 = (s.diseno_pct + s.cotizacion_pct + s.produccion_pct + s.logistica_pct) / 100
   const subtotal1 = costoDelben * (1 - s.gestion_comercial_pct / 100)
@@ -70,7 +72,7 @@ function reconstruirResultadoEspecial(
   const grupo2 = (transp + instal + u.imprevistos_pct) / 100
   const subtotal2 = costoDelben * (1 + grupo2)
   const precioSinIva = u.utilidad_pct < 100 ? subtotal2 / (1 - u.utilidad_pct / 100) : subtotal2
-  const esColombia = dist.pais.trim().toLowerCase() === 'colombia'
+  const esColombia = sede.pais.trim().toLowerCase() === 'colombia'
   const ivaAplicado = esColombia && u.iva_pct > 0
   const precioFinal = ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva
   return {
@@ -88,13 +90,13 @@ function reconstruirResultadoEspecial(
   }
 }
 
-function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
+function calcularResumenTotal(cotizacion: Cotizacion, sede: Sede) {
   let base = 0, diseno = 0, cotiz = 0, produccion = 0, logistica = 0,
     gestion = 0, transporte = 0, instalacion = 0, imprevistos = 0,
     utilidad = 0, iva = 0, costoDelben = 0, sinIva = 0
 
   function acumular(r: ResultadoSnapshot, cantidad: number) {
-    const d = calcularDesglose(r, dist, cotizacion.modalidad)
+    const d = calcularDesglose(r, sede, cotizacion.modalidad)
     base        += r.costo_tras_descuentos * cantidad
     diseno      += d.diseno * cantidad
     cotiz       += d.cotizacion * cantidad
@@ -119,7 +121,7 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
   // Especiales: se funden en el desglose por capas. Los nuevos usan su resultado
   // guardado; los viejos se reconstruyen desde su costo Delben.
   for (const e of cotizacion.itemsEspeciales ?? []) {
-    const r = e.resultado ?? reconstruirResultadoEspecial(e, dist, cotizacion.modalidad)
+    const r = e.resultado ?? reconstruirResultadoEspecial(e, sede, cotizacion.modalidad)
     acumular(r, e.cantidad)
   }
 
@@ -154,10 +156,10 @@ function FilaCosto({
   )
 }
 
-function ResumenCostos({ cotizacion, distribuidor }: { cotizacion: Cotizacion; distribuidor: Distribuidor }) {
-  const s = distribuidor.servicios
-  const u = getUniversoParaModalidad(distribuidor.universo, cotizacion.modalidad)
-  const t = calcularResumenTotal(cotizacion, distribuidor)
+function ResumenCostos({ cotizacion, sede }: { cotizacion: Cotizacion; sede: Sede }) {
+  const s = sede.servicios
+  const u = getUniversoParaModalidad(sede.universo, cotizacion.modalidad)
+  const t = calcularResumenTotal(cotizacion, sede)
   const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
   const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'
 
@@ -324,16 +326,23 @@ export default function AdminCotizacionDetallePage() {
   const { distribuidorId, id } = useParams<{ distribuidorId: string; id: string }>()
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
   const [distribuidor, setDistribuidor] = useState<Distribuidor | null>(null)
+  const [sede, setSede] = useState<Sede | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandidos, setExpandidos] = useState<Set<number>>(new Set())
 
   useEffect(() => {
-    Promise.all([getCotizacion(distribuidorId, id), getDistribuidor(distribuidorId)])
-      .then(([cot, dist]) => {
+    getCotizacion(distribuidorId, id)
+      .then(async (cot) => {
         if (!cot) { setError('Cotización no encontrada.'); return }
         setCotizacion(cot)
+        // Distribuidor para el nombre; sede para las condiciones del desglose.
+        const [dist, sed] = await Promise.all([
+          getDistribuidor(distribuidorId),
+          getSede(distribuidorId, cot.sede_id),
+        ])
         setDistribuidor(dist)
+        setSede(sed)
       })
       .catch(() => setError('No se pudo cargar la cotización.'))
       .finally(() => setCargando(false))
@@ -355,7 +364,7 @@ export default function AdminCotizacionDetallePage() {
     )
   }
 
-  if (error || !cotizacion || !distribuidor) {
+  if (error || !cotizacion || !distribuidor || !sede) {
     return (
       <div className="text-center py-16">
         <p className="text-sm text-stone-500 mb-4">{error ?? 'Cotización no encontrada.'}</p>
@@ -378,7 +387,7 @@ export default function AdminCotizacionDetallePage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs text-stone-400 mb-0.5">
-              {distribuidor.nombre} · {distribuidor.ciudad}, {distribuidor.pais}
+              {distribuidor.nombre} · {sede.nombre} · {sede.ciudad}, {sede.pais}
             </p>
             <h1 className="text-xl font-semibold text-stone-900">{cotizacion.proyectoNombre}</h1>
             <p className="text-sm text-stone-500 mt-0.5">
@@ -400,7 +409,7 @@ export default function AdminCotizacionDetallePage() {
       </div>
 
       {/* Desglose de costos del proyecto */}
-      <ResumenCostos cotizacion={cotizacion} distribuidor={distribuidor} />
+      <ResumenCostos cotizacion={cotizacion} sede={sede} />
 
       {/* Módulos */}
       {cotizacion.items.length > 0 && (

@@ -7,6 +7,7 @@ import { Plus, FolderOpen, ArrowUpRight, ArrowRight } from '@phosphor-icons/reac
 import { useAuth } from '@/components/providers/auth-provider'
 import { getProyectos } from '@/lib/firestore/proyectos'
 import { getCotizaciones } from '@/lib/firestore/cotizaciones'
+import { getFiltroSedesUsuario } from '@/lib/firestore/distribuidores'
 import { formatCOP } from '@/lib/datos-demo'
 import type { Proyecto, Cotizacion } from '@/lib/firebase/tipos-firestore'
 
@@ -34,15 +35,22 @@ export default function PortalHomePage() {
   // Cargar datos del distribuidor
   useEffect(() => {
     if (cargandoAuth) return
-    if (!distribuidorId) { setCargando(false); return }
+    if (!distribuidorId || !usuario) { setCargando(false); return }
 
-    Promise.all([
-      getProyectos(distribuidorId),
-      getCotizaciones(distribuidorId),
-    ])
-      .then(([ps, cs]) => { setProyectos(ps); setCotizaciones(cs) })
-      .finally(() => setCargando(false))
-  }, [distribuidorId, cargandoAuth])
+    ;(async () => {
+      try {
+        const filtroSedes = await getFiltroSedesUsuario(usuario.uid, rol)
+        const [ps, cs] = await Promise.all([
+          getProyectos(distribuidorId),
+          getCotizaciones(distribuidorId, filtroSedes),
+        ])
+        setProyectos(ps)
+        setCotizaciones(cs)
+      } finally {
+        setCargando(false)
+      }
+    })()
+  }, [distribuidorId, usuario, rol, cargandoAuth])
 
   // No renderizar mientras redirige
   if (!cargandoAuth && rol && ROLES_ADMIN.includes(rol)) return null

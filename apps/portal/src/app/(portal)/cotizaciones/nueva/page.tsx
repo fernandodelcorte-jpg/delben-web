@@ -5,13 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { CircleNotch, ArrowLeft, ArrowRight } from '@phosphor-icons/react'
+import { CircleNotch, ArrowLeft, ArrowRight, MapPin, Warning } from '@phosphor-icons/react'
 import { useCarrito } from '@/store/carrito'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getCategoriasMacro } from '@/lib/firestore/catalogo'
 import { getProyectos, crearProyecto } from '@/lib/firestore/proyectos'
 import { getSiguienteVersion } from '@/lib/firestore/cotizaciones'
-import type { CategoriaMacro, Proyecto } from '@/lib/firebase/tipos-firestore'
+import { getSedes } from '@/lib/firestore/sedes'
+import { getFiltroSedesUsuario } from '@/lib/firestore/distribuidores'
+import type { CategoriaMacro, Proyecto, Sede } from '@/lib/firebase/tipos-firestore'
+import { sedeHabilitada } from '@/lib/firebase/tipos-firestore'
 
 // ─── Indicador de pasos ───────────────────────────────────────────────────────
 
@@ -80,7 +83,44 @@ function NuevaCotizacionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const iniciarCotizacion = useCarrito((s) => s.iniciarCotizacion)
-  const { usuario, distribuidorId, distribuidor } = useAuth()
+  const { usuario, rol, distribuidorId, distribuidor, cargando: cargandoAuth } = useAuth()
+
+  // ─── Sede (primer paso: determina moneda e IVA) ─────────────────────────────
+  // Quién ve qué sede vive en getFiltroSedesUsuario (mismo criterio que las reglas
+  // y la lista): admin/super_admin → todas; costos/comercial → sedes_asignadas.
+  // Sobre eso, solo las habilitadas (universo completo) son cotizables, para todos.
+  const [sedesDisponibles, setSedesDisponibles] = useState<Sede[]>([])
+  const [sedeSelId, setSedeSelId] = useState<string | null>(null)
+  const [cargandoSedes, setCargandoSedes] = useState(true)
+  const [hayAsignadasSinConfig, setHayAsignadasSinConfig] = useState(false)
+
+  useEffect(() => {
+    if (cargandoAuth) return
+    if (!distribuidorId || !usuario) {
+      setCargandoSedes(false)
+      return
+    }
+    ;(async () => {
+      try {
+        const [todasSedes, filtroSedes] = await Promise.all([
+          getSedes(distribuidorId),
+          getFiltroSedesUsuario(usuario.uid, rol),
+        ])
+        // filtroSedes null → todas (admin/super_admin/todas_las_sedes).
+        const visibles = filtroSedes === null
+          ? todasSedes
+          : todasSedes.filter((s) => filtroSedes.includes(s.id))
+        const habilitadas = visibles.filter(sedeHabilitada)
+        setSedesDisponibles(habilitadas)
+        setHayAsignadasSinConfig(visibles.length > 0 && habilitadas.length === 0)
+        if (habilitadas.length === 1) setSedeSelId(habilitadas[0]!.id)
+      } finally {
+        setCargandoSedes(false)
+      }
+    })()
+  }, [distribuidorId, usuario, rol, cargandoAuth])
+
+  const sedeSel = sedesDisponibles.find((s) => s.id === sedeSelId) ?? null
 
   // Si llega ?proyecto=ID (y opcionalmente ?espacio=nombre), saltar al paso 2
   const proyectoParamId = searchParams.get('proyecto') ?? ''
@@ -143,7 +183,7 @@ function NuevaCotizacionContent() {
   const categoriaIdSeleccionada = formEspacio.watch('categoriaId')
 
   async function onSubmitEspacio(data: FormEspacio) {
-    if (!distribuidorId || !usuario) return
+    if (!distribuidorId || !usuario || !sedeSel) return
     setGuardando(true)
     try {
       let proyectoId: string
@@ -178,6 +218,7 @@ function NuevaCotizacionContent() {
           clienteDireccion,
           proyectoNombre,
           modalidad: data.modalidad,
+          sedeId: sedeSel.id,
           categoriaId: data.categoriaId,
           categoriaNombre: data.categoriaNombre,
           transporteFijo: 0,
@@ -187,6 +228,7 @@ function NuevaCotizacionContent() {
           version,
         },
         distribuidor,
+        sedeSel,
       )
       router.push('/cotizaciones/borrador')
     } finally {
@@ -200,6 +242,61 @@ function NuevaCotizacionContent() {
     <div className="flex justify-center pt-4 pb-12">
       <div className="w-full max-w-md">
 
+        {cargandoSedes ? (
+          <div className="flex h-40 items-center justify-center">
+            <CircleNotch size={20} className="animate-spin text-stone-400" />
+          </div>
+        ) : sedesDisponibles.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+            <Warning size={24} weight="fill" className="mx-auto text-amber-600 mb-2" />
+            <h1 className="text-base font-semibold text-stone-900">No puedes cotizar todavía</h1>
+            <p className="mt-2 text-sm text-stone-600">
+              {hayAsignadasSinConfig
+                ? 'Tus sedes aún no tienen el universo configurado. Pídele a tu administrador que complete la configuración antes de cotizar.'
+                : 'No tienes ninguna sede habilitada asignada. Contacta a tu administrador para que te asigne una sede lista para cotizar.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push('/cotizaciones')}
+              className="mt-4 text-sm text-stone-500 hover:text-stone-700"
+            >
+              Volver
+            </button>
+          </div>
+        ) : !sedeSel ? (
+          <>
+            <div className="mb-8">
+              <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">Sede</h1>
+              <p className="mt-2 text-sm text-stone-500">
+                Elige la sede de esta cotización. Determina la moneda y el IVA.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {sedesDisponibles.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSedeSelId(s.id)}
+                  className="tactil w-full text-left rounded-lg border border-stone-200 bg-white px-4 py-3 hover:border-stone-300 transition-all flex items-center gap-3"
+                >
+                  <MapPin size={18} className="text-stone-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-stone-900">{s.nombre}</p>
+                    <p className="text-xs text-stone-400">{s.ciudad}, {s.pais}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/cotizaciones')}
+              className="mt-4 w-full text-center text-sm text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <>
         {/* Indicador de pasos */}
         <PasosIndicador paso={paso} />
 
@@ -490,6 +587,8 @@ function NuevaCotizacionContent() {
                 </button>
               </div>
             </form>
+          </>
+        )}
           </>
         )}
       </div>

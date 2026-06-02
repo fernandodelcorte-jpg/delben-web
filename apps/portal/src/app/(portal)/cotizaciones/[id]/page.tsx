@@ -10,6 +10,7 @@ import { useCarrito } from '@/store/carrito'
 import { getCotizacion, renombrarCotizacion } from '@/lib/firestore/cotizaciones'
 import { recalcularCotizacion } from '@/lib/firestore/recalcular'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
+import { getSede } from '@/lib/firestore/sedes'
 import { getLogoDelben } from '@/lib/firestore/config'
 import { formatCOP } from '@/lib/datos-demo'
 import { itemSnapshotToPDF, herrajeSnapshotToPDF, especialSnapshotToPDF, urlADataUrl } from '@/lib/pdf-helpers'
@@ -17,6 +18,7 @@ import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import type {
   Cotizacion,
   Distribuidor,
+  Sede,
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
   ItemEspecialSnapshot,
@@ -77,6 +79,7 @@ function CotizacionDetalleContent() {
   const [guardandoNombre, setGuardandoNombre] = useState(false)
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
   const [distribuidor, setDistribuidor] = useState<Distribuidor | null>(null)
+  const [sede, setSede] = useState<Sede | null>(null)
   const [logoDistribuidorData, setLogoDistribuidorData] = useState<string | null>(null)
   const [logoDelbenData, setLogoDelbenData] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -98,6 +101,8 @@ function CotizacionDetalleContent() {
             setDistribuidor(dist)
             if (dist?.logo_url) urlADataUrl(dist.logo_url).then(setLogoDistribuidorData).catch(() => {})
           }).catch(() => {})
+          // Las condiciones del desglose salen de la sede de la cotización.
+          getSede(c.distribuidor_id, c.sede_id).then(setSede).catch(() => {})
           getLogoDelben().then((url) => {
             if (url) urlADataUrl(url).then(setLogoDelbenData).catch(() => {})
           }).catch(() => {})
@@ -132,6 +137,7 @@ function CotizacionDetalleContent() {
         cotizacionInfo: result.cotizacionInfo,
         cotizacionGuardadaId: cotizacion.id,
         distribuidorData: result.distribuidorData,
+        sedeData: result.sedeData,
         items: result.items,
         itemsHerraje: result.itemsHerraje,
         itemsEspeciales: result.itemsEspeciales,
@@ -314,7 +320,7 @@ function CotizacionDetalleContent() {
             {/* Duplicar — disponible para cualquier estado */}
             <button
               onClick={() => {
-                copiarBorrador(cotizacion)
+                copiarBorrador(cotizacion, sede)
                 router.push('/cotizaciones/borrador')
               }}
               className="tactil flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700 hover:border-stone-300 hover:bg-stone-50 transition-colors"
@@ -327,7 +333,7 @@ function CotizacionDetalleContent() {
             {cotizacion.estado === 'borrador' && (
               <button
                 onClick={() => {
-                  if (cotizacionGuardadaId !== id) reabrirBorrador(cotizacion)
+                  if (cotizacionGuardadaId !== id) reabrirBorrador(cotizacion, sede)
                   router.push('/cotizaciones/borrador')
                 }}
                 className="tactil rounded-lg border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700 hover:border-stone-300 hover:bg-stone-50 transition-colors"
@@ -409,10 +415,10 @@ function CotizacionDetalleContent() {
         {/* Totales + PDF */}
         {hayItems && (
           <div className="mt-10 space-y-4">
-            {puedeVerCosto && distribuidor && (() => {
-              const s = distribuidor.servicios
-              const u = getUniversoParaModalidad(distribuidor.universo, cotizacion.modalidad)
-              const t = calcularResumenTotal(cotizacion, distribuidor)
+            {puedeVerCosto && sede && (() => {
+              const s = sede.servicios
+              const u = getUniversoParaModalidad(sede.universo, cotizacion.modalidad)
+              const t = calcularResumenTotal(cotizacion, sede)
               const transp_fijo = (u.transporte_tipo ?? 'porcentual') === 'fijo'
               const instal_fija = (u.instalacion_tipo ?? 'porcentual') === 'fijo'
               const hayIvaOFijos = t.iva > 0 || t.transporteFijo > 0 || t.instalacionFija > 0
@@ -656,10 +662,10 @@ function EspecialGuardadoRow({
   )
 }
 
-function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: 'desarmado' | 'tradicional') {
+function calcularDesglose(r: ResultadoSnapshot, sede: Sede, modalidad: 'desarmado' | 'tradicional') {
   const base = r.costo_tras_descuentos
-  const s = dist.servicios
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
+  const s = sede.servicios
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
   const transp_pct = (u.transporte_tipo ?? 'porcentual') === 'fijo' ? 0 : u.transporte_pct
   const instal_pct = (u.instalacion_tipo ?? 'porcentual') === 'fijo' ? 0 : u.instalacion_pct
   return {
@@ -683,11 +689,11 @@ function calcularDesglose(r: ResultadoSnapshot, dist: Distribuidor, modalidad: '
 // el dato autoritativo; la capa distribuidor se deriva igual que en el motor.
 function reconstruirResultadoEspecial(
   e: ItemEspecialSnapshot,
-  dist: Distribuidor,
+  sede: Sede,
   modalidad: 'desarmado' | 'tradicional',
 ): ResultadoSnapshot {
-  const u = getUniversoParaModalidad(dist.universo, modalidad)
-  const s = dist.servicios
+  const u = getUniversoParaModalidad(sede.universo, modalidad)
+  const s = sede.servicios
   const costoDelben = e.precioDelbenUnitario
   const grupo1 = (s.diseno_pct + s.cotizacion_pct + s.produccion_pct + s.logistica_pct) / 100
   const subtotal1 = costoDelben * (1 - s.gestion_comercial_pct / 100)
@@ -697,7 +703,7 @@ function reconstruirResultadoEspecial(
   const grupo2 = (transp + instal + u.imprevistos_pct) / 100
   const subtotal2 = costoDelben * (1 + grupo2)
   const precioSinIva = u.utilidad_pct < 100 ? subtotal2 / (1 - u.utilidad_pct / 100) : subtotal2
-  const esColombia = dist.pais.trim().toLowerCase() === 'colombia'
+  const esColombia = sede.pais.trim().toLowerCase() === 'colombia'
   const ivaAplicado = esColombia && u.iva_pct > 0
   const precioFinal = ivaAplicado ? precioSinIva * (1 + u.iva_pct / 100) : precioSinIva
   return {
@@ -715,13 +721,13 @@ function reconstruirResultadoEspecial(
   }
 }
 
-function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
+function calcularResumenTotal(cotizacion: Cotizacion, sede: Sede) {
   let base = 0, diseno = 0, cotiz = 0, produccion = 0, logistica = 0,
     gestion = 0, transporte = 0, instalacion = 0, imprevistos = 0,
     utilidad = 0, iva = 0, costoDelben = 0, sinIva = 0
 
   function acumular(r: ResultadoSnapshot, cantidad: number) {
-    const d = calcularDesglose(r, dist, cotizacion.modalidad)
+    const d = calcularDesglose(r, sede, cotizacion.modalidad)
     base        += r.costo_tras_descuentos * cantidad
     diseno      += d.diseno * cantidad
     cotiz       += d.cotizacion * cantidad
@@ -747,7 +753,7 @@ function calcularResumenTotal(cotizacion: Cotizacion, dist: Distribuidor) {
   // Los nuevos usan su resultado guardado; los viejos se reconstruyen desde su
   // costo Delben. Así entran en Precio Delben, utilidad e IVA.
   for (const e of cotizacion.itemsEspeciales ?? []) {
-    const r = e.resultado ?? reconstruirResultadoEspecial(e, dist, cotizacion.modalidad)
+    const r = e.resultado ?? reconstruirResultadoEspecial(e, sede, cotizacion.modalidad)
     acumular(r, e.cantidad)
   }
 

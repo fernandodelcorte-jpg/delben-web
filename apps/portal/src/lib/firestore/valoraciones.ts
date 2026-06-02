@@ -107,6 +107,7 @@ export async function guardarValoracion(
   const ahora = Date.now()
   const data: ValoracionDoc = {
     distribuidor_id: distribuidorId,
+    sede_id: info.sedeId,
     distribuidor_nombre: distribuidorNombre,
     clienteNombre: info.clienteNombre,
     proyectoNombre: info.proyectoNombre,

@@ -67,6 +67,7 @@ export default function BorradorPage() {
   const setTasaUsd = useCarrito((s) => s.setTasaUsd)
   const actualizarCostosProyecto = useCarrito((s) => s.actualizarCostosProyecto)
   const distribuidorData = useCarrito((s) => s.distribuidorData)
+  const sedeData = useCarrito((s) => s.sedeData)
 
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
   const [guardando, setGuardando] = useState(false)
@@ -76,7 +77,7 @@ export default function BorradorPage() {
   const [logoDelbenData, setLogoDelbenData] = useState<string | null>(null)
 
   const modalidadBorrador = cotizacionInfo?.modalidad ?? 'desarmado'
-  const universoModal = distribuidorData ? getUniversoParaModalidad(distribuidorData.universo, modalidadBorrador) : null
+  const universoModal = sedeData ? getUniversoParaModalidad(sedeData.universo, modalidadBorrador) : null
   const usaTransporteFijo = (universoModal?.transporte_tipo ?? 'porcentual') === 'fijo'
   const usaInstalacionFija = (universoModal?.instalacion_tipo ?? 'porcentual') === 'fijo'
   const [transporteInput, setTransporteInput] = useState(
@@ -317,7 +318,7 @@ export default function BorradorPage() {
               {usaTransporteFijo && (
                 <div>
                   <label className="block text-xs text-stone-500 mb-1.5">
-                    Transporte ({distribuidorData?.pais === 'Venezuela' || distribuidorData?.pais === 'USA' ? 'USD' : 'COP'})
+                    Transporte ({sedeData?.pais === 'Venezuela' || sedeData?.pais === 'USA' ? 'USD' : 'COP'})
                   </label>
                   <input
                     type="number"
@@ -336,7 +337,7 @@ export default function BorradorPage() {
               {usaInstalacionFija && (
                 <div>
                   <label className="block text-xs text-stone-500 mb-1.5">
-                    Instalación ({distribuidorData?.pais === 'Venezuela' || distribuidorData?.pais === 'USA' ? 'USD' : 'COP'})
+                    Instalación ({sedeData?.pais === 'Venezuela' || sedeData?.pais === 'USA' ? 'USD' : 'COP'})
                   </label>
                   <input
                     type="number"

@@ -12,8 +12,23 @@ rules_version = '2';
 //     de otro. El filtro de campo por rol sigue siendo responsabilidad
 //     del cliente (filtrarPorRol en el motor).
 //
-// Para desplegar:
+// Para desplegar (requiere .firebaserc con el project ID real — hoy: delben---web):
 //   firebase deploy --only firestore:rules
+//
+// Cómo verificar el aislamiento por sede (sin desplegar a prod):
+//   Emulador:  firebase emulators:start --only firestore
+//   Casos mínimos (con @firebase/rules-unit-testing o manualmente en la app):
+//   1. super_admin crea/edita sede  → permitido (antes daba permission-denied).
+//   2. distribuidor_admin actualiza SOLO universo de una sede → permitido;
+//      si intenta cambiar nombre/país/capa Delben → denegado.
+//   3. Comercial con sedes_asignadas=[A]:
+//        • get cotización con sede_id=A → permitido.
+//        • get cotización con sede_id=B (mismo distribuidor) → DENEGADO.
+//        • list cotizaciones SIN where('sede_id','in',[A]) → DENEGADO
+//          (las reglas no son filtros; el cliente debe filtrar — ver getCotizaciones).
+//        • list con where('sede_id','in',[A]) → permitido, solo sede A.
+//   4. distribuidor_admin lista cotizaciones de todas las sedes → permitido.
+//   5. Comercial de otro distribuidor → no ve ninguna (aislamiento de tenant).
 // ============================================================
 
 service cloud.firestore {
@@ -56,6 +71,25 @@ service cloud.firestore {
 
     function esFacturacionDelben() {
       return autenticado() && miRol() == 'delben_facturacion';
+    }
+
+    // ── Sedes asignadas al usuario ────────────────────────────────────────────
+    // sedes_asignadas / todas_las_sedes son opcionales en /usuarios/{uid}; se leen
+    // con .get(campo, default) para no fallar si el doc no los trae.
+    function tieneTodasLasSedes() {
+      return perfilUsuario().get('todas_las_sedes', false) == true;
+    }
+
+    function sedeAsignada(sedeId) {
+      return tieneTodasLasSedes()
+             || (sedeId in perfilUsuario().get('sedes_asignadas', []));
+    }
+
+    // Acceso a una cotización según su sede: el distribuidor_admin ve todas las
+    // sedes de su tenant; costos/comercial solo las sedes que tienen asignadas.
+    function puedeCotizacionPorSede(distribuidorId, sedeId) {
+      return esDeDistribuidor(distribuidorId)
+             && (miRol() == 'distribuidor_admin' || sedeAsignada(sedeId));
     }
 
     // ── Catálogo (lectura: todos autenticados; escritura: solo super_admin) ───
@@ -138,8 +172,11 @@ service cloud.firestore {
 
     match /{path=**}/cotizaciones/{cotizacionId} {
       allow read: if esSuperAdmin()
-                  || (autenticado() && esRolDistribuidor()
-                      && resource.data.distribuidor_id == miDistribuidorId());
+                  || esFacturacionDelben()
+                  || (esRolDistribuidor()
+                      && resource.data.distribuidor_id == miDistribuidorId()
+                      && (miRol() == 'distribuidor_admin'
+                          || sedeAsignada(resource.data.get('sede_id', ''))));
     }
 
     // ── Distribuidores: aislamiento estricto por tenant ───────────────────────
@@ -150,25 +187,60 @@ service cloud.firestore {
       allow read: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
       allow write: if esSuperAdmin() || esAdminDeDistribuidor(distribuidorId);
 
-      // Cotizaciones: aislamiento total entre tenants
-      match /cotizaciones/{cotizacionId} {
-        allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
-      }
+      // ── Sedes: las condiciones de cálculo viven aquí ───────────────────────
+      // Lectura: super_admin, delben_facturacion (elige sede al valorar) y el tenant.
+      // País + accesos + capa Delben: solo super_admin (create/delete y todo update).
+      // El distribuidor_admin puede actualizar SOLO el universo: se acota fijando
+      // (== resource.data) todos los demás campos, de modo que únicamente `universo`
+      // puede cambiar. Es robusto (no depende de inferir qué tocó el cliente).
+      match /sedes/{sedeId} {
+        allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
+        allow create, delete: if esSuperAdmin();
+        allow update: if esSuperAdmin()
+                      || (esAdminDeDistribuidor(distribuidorId)
+                          && request.resource.data.nombre == resource.data.nombre
+                          && request.resource.data.pais == resource.data.pais
+                          && request.resource.data.ciudad == resource.data.ciudad
+                          && request.resource.data.acceso_tradicional == resource.data.acceso_tradicional
+                          && request.resource.data.acceso_desarmado == resource.data.acceso_desarmado
+                          && request.resource.data.descuento_muebles_pct == resource.data.descuento_muebles_pct
+                          && request.resource.data.descuento_herrajes_pct == resource.data.descuento_herrajes_pct
+                          && request.resource.data.servicios == resource.data.servicios
+                          && request.resource.data.activo == resource.data.activo
+                          && request.resource.data.created_at == resource.data.created_at);
 
-      // Proyectos: aislamiento total entre tenants
-      match /proyectos/{proyectoId} {
-        allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
-
-        // Cotizaciones anidadas dentro de proyectos
-        match /cotizaciones/{cotizacionId} {
-          allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+        // Historial de condiciones por sede: escritura solo super_admin.
+        match /historial_condiciones/{histId} {
+          allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
+          allow write: if esSuperAdmin();
         }
       }
 
-      // Historial de condiciones: escritura solo super_admin; lectura super_admin + tenant
-      match /historial_condiciones/{entradaId} {
-        allow read: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
-        allow write: if esSuperAdmin();
+      // Cotizaciones (path legacy): aislamiento por tenant + por sede.
+      // create usa request.resource (aún no existe el doc); el resto usa resource.
+      match /cotizaciones/{cotizacionId} {
+        allow read: if esSuperAdmin() || esFacturacionDelben()
+                    || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
+        allow create: if esSuperAdmin()
+                      || puedeCotizacionPorSede(distribuidorId, request.resource.data.get('sede_id', ''));
+        allow update, delete: if esSuperAdmin()
+                      || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
+      }
+
+      // Proyectos: aislamiento por tenant (el proyecto no tiene sede; la sede vive
+      // en cada cotización anidada).
+      match /proyectos/{proyectoId} {
+        allow read, write: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+
+        // Cotizaciones anidadas dentro de proyectos: aislamiento por sede.
+        match /cotizaciones/{cotizacionId} {
+          allow read: if esSuperAdmin() || esFacturacionDelben()
+                      || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
+          allow create: if esSuperAdmin()
+                        || puedeCotizacionPorSede(distribuidorId, request.resource.data.get('sede_id', ''));
+          allow update, delete: if esSuperAdmin()
+                        || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
+        }
       }
     }
 

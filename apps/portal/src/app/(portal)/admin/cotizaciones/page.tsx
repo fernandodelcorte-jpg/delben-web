@@ -160,11 +160,6 @@ export default function AdminCotizacionesPage() {
                   <p className="text-xs font-semibold text-stone-700 truncate">
                     {dist?.nombre ?? c.distribuidor_id}
                   </p>
-                  {dist && (
-                    <p className="text-xs text-stone-400 truncate">
-                      {dist.ciudad}, {dist.pais}
-                    </p>
-                  )}
                 </div>
 
                 {/* Cliente / Proyecto */}

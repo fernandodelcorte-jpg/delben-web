@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { CircleNotch, PencilSimple, CheckCircle } from '@phosphor-icons/react'
 import { getValoracion, marcarComoFacturada } from '@/lib/firestore/valoraciones'
+import { getSede } from '@/lib/firestore/sedes'
 import { formatCOP } from '@/lib/datos-demo'
 import { useCarrito } from '@/store/carrito'
 import type { Valoracion } from '@/lib/firebase/tipos-firestore'
@@ -43,9 +44,11 @@ export default function ValoracionDetallePage() {
     }
   }
 
-  function handleEditar() {
+  async function handleEditar() {
     if (!valoracion) return
-    reabrirValoracion(valoracion)
+    // La sede viaja con la valoración para que el motor use sus condiciones al editar.
+    const sede = await getSede(valoracion.distribuidor_id, valoracion.sede_id).catch(() => null)
+    reabrirValoracion(valoracion, sede)
     router.push('/admin/valoraciones/borrador')
   }
 
