@@ -7,6 +7,8 @@ import { z } from 'zod'
 import { CircleNotch, Plus, X } from '@phosphor-icons/react'
 import { getUsuariosDelben, crearUsuarioFirestore, toggleUsuarioActivo } from '@/lib/firestore/distribuidores'
 import { crearUsuarioAuth } from '@/lib/firebase/client'
+import { useAuth } from '@/components/providers/auth-provider'
+import { BotonResetPassword } from '@/components/admin/boton-reset-password'
 import type { Usuario } from '@/lib/firebase/tipos-firestore'
 
 const schemaUsuario = z.object({
@@ -31,6 +33,8 @@ function formatFecha(ts: number) {
 }
 
 export default function EquipoDelbenPage() {
+  const { rol } = useAuth()
+  const esSuperAdmin = rol === 'super_admin'
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -147,6 +151,12 @@ export default function EquipoDelbenPage() {
                     </div>
                     <span className="hidden sm:block h-4 w-px bg-stone-200" />
                     <p className="text-xs text-stone-400 hidden sm:block">{formatFecha(u.created_at)}</p>
+                    {esSuperAdmin && (
+                      <>
+                        <span className="hidden sm:block h-4 w-px bg-stone-200" />
+                        <BotonResetPassword email={u.email} />
+                      </>
+                    )}
                     <button
                       onClick={() => handleToggleActivo(u)}
                       disabled={toggling === u.id}

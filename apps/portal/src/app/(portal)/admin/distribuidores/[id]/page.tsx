@@ -21,6 +21,7 @@ import {
   getHistorialCondiciones,
 } from '@/lib/firestore/sedes'
 import { crearUsuarioAuth } from '@/lib/firebase/client'
+import { BotonResetPassword } from '@/components/admin/boton-reset-password'
 import type {
   Distribuidor,
   Sede,
@@ -101,7 +102,8 @@ function esColombia(pais: string) {
 export default function DetalleDistribuidorPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { usuario } = useAuth()
+  const { usuario, rol } = useAuth()
+  const esSuperAdmin = rol === 'super_admin'
 
   const [distribuidor, setDistribuidor] = useState<Distribuidor | null>(null)
   const [sedes, setSedes] = useState<Sede[]>([])
@@ -617,6 +619,12 @@ export default function DetalleDistribuidorPage() {
                 >
                   {u.activo ? 'Activo' : 'Inactivo'}
                 </span>
+                {esSuperAdmin && (
+                  <>
+                    <span className="h-4 w-px bg-stone-200" />
+                    <BotonResetPassword email={u.email} />
+                  </>
+                )}
               </div>
             </div>
           ))}

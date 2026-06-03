@@ -53,6 +53,39 @@ export async function recuperarContrasena(correo: string) {
   return sendPasswordResetEmail(auth, correo)
 }
 
+/**
+ * Reset de contraseña de OTRO usuario por un super_admin (vía endpoint server-side).
+ * Adjunta el ID token del llamante; la autorización real (solo super_admin) la
+ * decide el servidor en /api/admin/reset-password, no este cliente.
+ */
+export async function restablecerContrasenaUsuario(
+  email: string,
+  contrasena: string,
+): Promise<{ ok: true; email: string }> {
+  const usuario = auth.currentUser
+  if (!usuario) throw new Error('No hay una sesión activa.')
+  const token = await usuario.getIdToken()
+
+  const res = await fetch('/api/admin/reset-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ email, contrasena }),
+  })
+
+  const data: unknown = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const mensaje =
+      data && typeof data === 'object' && 'error' in data
+        ? String((data as { error: unknown }).error)
+        : 'No se pudo restablecer la contraseña.'
+    throw new Error(mensaje)
+  }
+  return data as { ok: true; email: string }
+}
+
 export function extraerRol(token: IdTokenResult): Rol | null {
   const rol = token.claims['rol']
   return typeof rol === 'string' ? (rol as Rol) : null
