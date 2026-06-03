@@ -12,7 +12,6 @@ import {
 import { db } from '@/lib/firebase/client'
 import type { ResultadoParserModulos, ItemConId } from './parser-modulos'
 import type { ResultadoParserHerrajes } from './parser-herrajes'
-import type { ModuloDoc } from '@/lib/firebase/tipos-firestore'
 
 const BATCH_SIZE = 400
 
@@ -58,6 +57,17 @@ async function escribirLotes<T extends object>(
   }
 }
 
+// Field mask por-documento: de la lista PERMITIDA, incluye solo los campos que el doc
+// realmente trae (valor !== undefined). Así un campo OPCIONAL ausente en algún
+// documento (precio_min, colores_metal, requiere_*, …) NO entra al mask y Firestore no
+// lo rechaza ("specified in your field mask but missing from your input data"); los
+// campos OBLIGATORIOS, que siempre vienen, entran siempre. Los campos fuera de la lista
+// (ej. imagen_url) nunca se tocan. Evita descubrir este error campo por campo en cada
+// reimport: cualquier campo opcional futuro queda cubierto sin tocar el writer.
+function maskPresente(campos: string[]): (doc: object) => string[] {
+  return (doc) => campos.filter((c) => (doc as Record<string, unknown>)[c] !== undefined)
+}
+
 // ─── Módulos ─────────────────────────────────────────────────────────────────
 
 export async function escribirModulos(
@@ -67,24 +77,15 @@ export async function escribirModulos(
   // categorias_macro_ids y mostrar_en_todas son gestionados por el admin, no por el import.
   const CAMPOS_CATEGORIA = ['nombre', 'desc_desarmado_base_pct', 'desc_desarmado_premium_pct', 'orden', 'activo']
 
-  // imagen_url la gestiona subirImagenes; reimportar el Excel nunca debe pisarla.
+  // Lista PERMITIDA de campos que el import puede escribir. imagen_url NO está (la
+  // gestiona subirImagenes). Campos OPCIONALES (pueden faltar en algún módulo):
+  // precio_min (módulos sin precio) y colores_metal (solo planos con metal, ej. tubo
+  // de colgar). maskPresente los incluye por-documento solo cuando están presentes.
   const CAMPOS_MODULO = [
     'codigo_excel', 'categoria_id', 'tipologia', 'nombre',
     'altura', 'profundidad', 'imagen_nombre', 'search_keywords', 'activo',
-    'requiere_fachada', 'requiere_estructura', 'precio_min',
+    'requiere_fachada', 'requiere_estructura', 'precio_min', 'colores_metal',
   ]
-
-  // colores_metal es OPCIONAL: solo lo traen los módulos planos con color de metal
-  // (ej. tubo de colgar). Incluirlo en el field mask de un módulo que NO lo trae hace
-  // que Firestore rechace el set ("specified in your field mask but missing from your
-  // input data"). Por eso el mask de módulos se arma por-documento: se agrega
-  // 'colores_metal' SOLO cuando el módulo realmente lo trae con valores.
-  const camposModulo = (doc: object): string[] => {
-    const m = doc as ModuloDoc
-    return Array.isArray(m.colores_metal) && m.colores_metal.length > 0
-      ? [...CAMPOS_MODULO, 'colores_metal']
-      : CAMPOS_MODULO
-  }
 
   const pasos: Array<{
     items: ItemConId<object>[]
@@ -95,10 +96,10 @@ export async function escribirModulos(
   }> = [
     { items: datos.tiposEstructura, path: 'tipos_estructura', label: 'Tipos estructura', peso: 2 },
     { items: datos.tiposFachada, path: 'tipos_fachada', label: 'Tipos fachada', peso: 2 },
-    { items: datos.categorias as ItemConId<object>[], path: 'categorias', label: 'Categorías', peso: 2, campos: CAMPOS_CATEGORIA },
+    { items: datos.categorias as ItemConId<object>[], path: 'categorias', label: 'Categorías', peso: 2, campos: maskPresente(CAMPOS_CATEGORIA) },
     { items: datos.subcategorias, path: 'subcategorias', label: 'Subcategorías', peso: 2 },
     { items: datos.acabados, path: 'acabados', label: 'Acabados', peso: 4 },
-    { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: camposModulo },
+    { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: maskPresente(CAMPOS_MODULO) },
   ]
 
   // Calcular offset de progreso por paso
@@ -148,6 +149,7 @@ export async function escribirHerrajes(
   onProgress: Progreso,
 ): Promise<void> {
   // imagen_url la gestiona subirImagenes; reimportar el Excel nunca debe pisarla.
+  // maskPresente: cualquier campo opcional ausente en un herraje se omite del mask.
   const CAMPOS_ACCESORIO = [
     'codigo', 'nombre', 'nombre_normalizado',
     'precio_tradicional_cop', 'precio_desarmado_cop',
@@ -160,7 +162,7 @@ export async function escribirHerrajes(
     0,
     98,
     'Herrajes',
-    CAMPOS_ACCESORIO,
+    maskPresente(CAMPOS_ACCESORIO),
   )
   onProgress(100, 'Importación de herrajes completada.')
 }
