@@ -26,6 +26,7 @@ import { puedeVerCostoDelben } from '@delben/firebase'
 import { sedeHabilitada } from '@/lib/firebase/tipos-firestore'
 import type { Sede, Categoria, Distribuidor } from '@/lib/firebase/tipos-firestore'
 import type { ItemCatalogo } from '@/lib/catalogo-tipos'
+import { TablaPreciosModulo } from '@/components/catalogo/tabla-precios-modulo'
 
 type Modalidad = 'tradicional' | 'desarmado'
 
@@ -35,6 +36,7 @@ type Modalidad = 'tradicional' | 'desarmado'
 // de-render que el resto del portal — ver tests/catalogo/SEGURIDAD.md).
 interface CatalogoData {
   moneda: 'COP' | 'USD'
+  tasaUsd: number
   puedeVerCosto: boolean
   items: ItemCatalogo[]
 }
@@ -81,6 +83,10 @@ export default function CatalogoPage() {
   const [busqueda, setBusqueda] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'modulo' | 'herraje'>('todos')
   const [catFiltro, setCatFiltro] = useState<string>('')
+
+  // Tabla de precios por variante (detalle al clic en una tarjeta de módulo).
+  // Solo para roles con costo; guarda el `nombre` del producto elegido.
+  const [productoTabla, setProductoTabla] = useState<string | null>(null)
 
   const sedeSel = sedesDisponibles.find((s) => s.id === sedeSelId) ?? null
 
@@ -217,7 +223,7 @@ export default function CatalogoPage() {
           items.push(item)
         }
 
-        setData({ moneda, puedeVerCosto: verCosto, items })
+        setData({ moneda, tasaUsd, puedeVerCosto: verCosto, items })
       } catch (e) {
         setErrorCatalogo(e instanceof Error ? e.message : 'No se pudo cargar el catálogo')
         setData(null)
@@ -475,11 +481,27 @@ export default function CatalogoPage() {
                 moneda={data.moneda}
                 puedeVerCosto={data.puedeVerCosto}
                 categoriaNombre={it.categoria_id ? nombreCategoria.get(it.categoria_id) ?? null : null}
+                onVerTabla={
+                  data.puedeVerCosto && it.tipo === 'modulo' ? () => setProductoTabla(it.nombre) : undefined
+                }
               />
             ))}
           </div>
         </>
       ) : null}
+
+      {/* Tabla de precios por variante (solo roles con costo) */}
+      {productoTabla && sedeSel && modalidad && data && (
+        <TablaPreciosModulo
+          nombre={productoTabla}
+          sede={sedeSel}
+          modalidad={modalidad}
+          moneda={data.moneda}
+          tasaUsd={data.tasaUsd}
+          categorias={categorias}
+          onClose={() => setProductoTabla(null)}
+        />
+      )}
     </div>
   )
 }
@@ -504,11 +526,13 @@ function TarjetaItem({
   moneda,
   puedeVerCosto,
   categoriaNombre,
+  onVerTabla,
 }: {
   item: ItemCatalogo
   moneda: 'COP' | 'USD'
   puedeVerCosto: boolean
   categoriaNombre: string | null
+  onVerTabla?: () => void
 }) {
   const esModulo = item.tipo === 'modulo'
   return (
@@ -551,6 +575,14 @@ function TarjetaItem({
             <span className="text-xs text-stone-300">Sin precio</span>
           )}
         </div>
+        {onVerTabla && (
+          <button
+            onClick={onVerTabla}
+            className="tactil mt-2 text-xs font-medium text-caoba-600 hover:text-caoba-700 underline underline-offset-2"
+          >
+            Ver precios →
+          </button>
+        )}
       </div>
     </div>
   )
