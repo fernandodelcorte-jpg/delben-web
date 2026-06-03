@@ -151,6 +151,37 @@ Se derivan del país, NO se eligen al cotizar:
 Colombia: COP con IVA (configurable, hoy 19%). Exportación: USD sin IVA, con
 tasa configurada por el super_admin (con histórico).
 
+## Sedes (multi-sede por distribuidor)
+
+Un distribuidor puede operar en varios países con condiciones distintas (ej. Del
+Corte Angarita: Colombia, USA, Venezuela). Por eso **toda la configuración de
+cálculo vive en la SEDE, no en el distribuidor**. El distribuidor queda como
+entidad identitaria (nombre, logo); la sede tiene país, moneda/IVA, accesos a
+modalidad y las dos capas de condiciones.
+
+Decisiones cerradas:
+
+1. **Una cotización pertenece a UNA sede**, elegida al iniciar la cotización
+   (mismo patrón que el selector de modalidad: si el usuario tiene una sola sede
+   disponible, se autoselecciona y no se muestra el selector).
+2. **Un usuario puede pertenecer a una, varias o todas las sedes** de su
+   distribuidor (`sedes_asignadas[]` + `todas_las_sedes`).
+3. **País, moneda e IVA se derivan de la SEDE** (no del distribuidor): Colombia →
+   COP con IVA; USA/Venezuela → USD exportación sin IVA.
+4. **Reparto de configuración por sede:**
+   - **Capa Delben** (descuentos muebles/herrajes, servicios, gestión comercial):
+     la define el **super_admin** al crear/editar la sede.
+   - **Capa Distribuidor** (universo: transporte, instalación, imprevistos,
+     utilidad, IVA): la configura el **distribuidor_admin**, una vez por sede.
+     Una sede queda "lista para cotizar" cuando su universo está completo.
+5. **El catálogo es global de Delben**: NO cambia por sede (mismos precios base).
+6. **Aislamiento por sede**: un `distribuidor_comercial` de la sede A no puede leer
+   cotizaciones de la sede B aunque sean del mismo distribuidor (Security Rules).
+
+El motor de cálculo NO cambió: solo cambia el ORIGEN de sus parámetros (antes
+`distribuidores/{id}`, ahora `distribuidores/{id}/sedes/{sedeId}`). El caso
+validado (1.562.495) sigue idéntico.
+
 ## Servicios y costos (las dos capas)
 
 - **Servicios Delben** (Capa Delben, configurables, pueden variar por
@@ -324,19 +355,29 @@ para quedar congeladas ante cambios futuros.
   { nombre, pct_default }                     # diseño, cotización, producción,
                                               # logística, gestión_comercial
 
-/distribuidores/{id}
-  { nombre, pais, ciudad, moneda_derivada,
+/distribuidores/{id}                          # entidad IDENTITARIA (ver Sedes en §1)
+  { nombre, logo_url, activo, created_at }
+  # La configuración de cálculo NO vive aquí: vive en cada sede.
+
+/distribuidores/{id}/sedes/{sedeId}           # toda la config de cálculo, por sede
+  { nombre,                       # ej "Bogotá", "Miami", "Caracas"
+    pais, ciudad,                 # derivan moneda/IVA (Colombia→COP+IVA; resto→USD export)
     acceso_tradicional: bool,     # el super_admin define a qué
-    acceso_desarmado: bool,       # modalidad(es) accede este distribuidor
+    acceso_desarmado: bool,       # modalidad(es) accede esta sede
+    # --- Capa Delben (la define el super_admin) ---
     descuento_muebles_pct, descuento_herrajes_pct,     # modelo tradicional
-    servicios_override: { diseno_pct, cotizacion_pct,
-                          produccion_pct, logistica_pct,
-                          gestion_comercial_pct },
-    universo: { transporte_pct, instalacion_pct,
-                imprevistos_pct, utilidad_pct, iva_pct },
+    servicios: { diseno_pct, cotizacion_pct,
+                 produccion_pct, logistica_pct,
+                 gestion_comercial_pct },
+    # --- Capa Distribuidor / universo (lo configura el distribuidor_admin) ---
+    universo: { iva_pct,
+                tradicional: { transporte_tipo, transporte_pct,
+                               instalacion_tipo, instalacion_pct,
+                               imprevistos_pct, utilidad_pct },
+                desarmado:   { ...igual forma... } },
     activo, created_at }
-/distribuidores/{id}/historial_condiciones/{id}
-  { ...snapshot, vigente_desde, creado_por }
+/distribuidores/{id}/sedes/{sedeId}/historial_condiciones/{id}
+  { ...snapshot, vigente_desde, creado_por }    # auditoría, por sede
 
 /campanas/{id}
   { nombre, descuento_pct, fecha_desde, fecha_hasta,
@@ -348,6 +389,8 @@ para quedar congeladas ante cambios futuros.
 
 /usuarios/{uid}
   { nombre, email, rol, distribuidor_id (null si es Delben),
+    sedes_asignadas: [sedeId],    # sedes a las que accede (ver §1 Sedes)
+    todas_las_sedes: bool,        # si true, opera en todas las sedes del distribuidor
     activo, created_at, last_login }
 
 /distribuidores/{id}/clientes/{id}
@@ -361,6 +404,7 @@ para quedar congeladas ante cambios futuros.
 
 /distribuidores/{id}/proyectos/{id}/cotizaciones/{id}
   { version, fecha, validez_dias, moneda, tasa_usd_aplicada, modalidad,
+    sede_id,                                  # sede a la que pertenece (ver §1 Sedes)
     modulos: [ {
        modulo_codigo, nombre, tipo_estructura, tipo_fachada,
        subcategoria, ajuste_subcategoria_pct, acabado_color,
@@ -396,6 +440,8 @@ para quedar congeladas ante cambios futuros.
 
 - Catálogos: lectura autenticada, escritura solo super_admin.
 - Distribuidores aislados: cada uno solo ve sus clientes/proyectos/cotizaciones.
+- Aislamiento por sede: un usuario solo lee cotizaciones cuya `sede_id` esté en sus
+  `sedes_asignadas` (o con `todas_las_sedes`). Comercial de sede A no ve la sede B.
 - `distribuidor_comercial`: las reglas + el backend nunca le entregan campos de
   `capa_delben`. Separación real, no visual.
 - `delben_facturacion`: ve `capa_delben` y órdenes de compra, no precios de venta.

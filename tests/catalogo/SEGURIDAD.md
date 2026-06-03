@@ -1,76 +1,60 @@
-# Catálogo de precios — verificación de seguridad (C2)
+# Catálogo de precios — nota de seguridad
 
-El catálogo cumple la **regla de oro #2** (separación real en backend): el precio con
-descuento se calcula en el servidor (`/api/catalogo`) y **solo se adjunta a la respuesta
-para roles con acceso a costo**. Para `distribuidor_comercial` el campo no existe en el
-JSON — no viaja al navegador. "No se ve en pantalla" NO es la prueba; la prueba es
-inspeccionar la respuesta de red.
+> **Actualización (catálogo client-side).** El catálogo dejó de usar el endpoint
+> server-side (`/api/catalogo`) y el Admin SDK. Ahora lee Firestore directamente
+> desde el cliente, igual que el cotizador, y el control de acceso lo dan las
+> Firestore Security Rules. Esto elimina la dependencia de credenciales ADC que
+> expiraban a diario. Este documento describe **honestamente** qué protección
+> queda y cuál no — sin simular una separación que ya no existe.
 
-## Cómo se garantiza (no en el render)
+## Qué muestra el catálogo
 
-- El cliente solo manda su **ID token** de Firebase (`Authorization: Bearer …`).
-- El route handler [`/api/catalogo`](../../apps/portal/src/app/api/catalogo/route.ts):
-  1. `adminAuth().verifyIdToken(token)` → uid (no se confía en ningún `rol` del cliente).
-  2. Lee `rol` y `distribuidor_id` de `usuarios/{uid}` con el Admin SDK (fuente de verdad).
-  3. `verCosto = puedeVerCostoDelben(rol)`.
-  4. Adjunta `precioConDescuento`/`descuentoPct` **solo si `verCosto`**. Para el comercial
-     esos campos nunca se asignan al objeto → no están en el JSON.
-- No es falsificable: no hay parámetro de rol; el rol sale del token verificado.
-- **Quién entra:** roles de distribuidor (sobre su propio tenant) y roles de Delben
-  (eligen distribuidor vía `?distribuidorId=`). Aislamiento intacto: para un rol de
-  distribuidor el servidor **ignora** el `distribuidorId` del cliente y usa el suyo;
-  solo los roles de Delben pueden consultar otro distribuidor. `verCosto` no cambió
-  (Delben y distribuidor_admin/costos ven costo; comercial no).
+Por sede y modalidad: **precio de lista** (todos los roles con acceso) y, para roles
+con costo, **precio de lista − descuento principal** (`lista × (1 − %)`). NO incluye
+ajuste de acabado, campañas, servicios ni gestión comercial — es decir, **el catálogo
+nunca expone el costo Delben completo** (el margen confidencial de la regla de oro #2).
+El cálculo es la lógica pura de [`catalogo-precios.ts`](../../apps/portal/src/lib/catalogo-precios.ts).
 
-## Verificación manual (DevTools)
+## Qué protección es REAL (a nivel de reglas) y cuál es DE-RENDER
 
-1. Inicia sesión como un **distribuidor_comercial** con una sede habilitada asignada.
-2. Abre `/catalogo`, elige sede + modalidad.
-3. DevTools → **Network** → request `GET /api/catalogo?sedeId=…&modalidad=…`.
-4. Pestaña **Response/Preview**, revisa el JSON:
-   - `puedeVerCosto: false`.
-   - cada objeto de `items` tiene **solo** `precioLista` (y datos de producto). **No** debe
-     aparecer `precioConDescuento` ni `descuentoPct`.
-5. Contraste: inicia sesión como **distribuidor_costos** o **distribuidor_admin** y repite:
-   `puedeVerCosto: true` y los ítems sí traen `precioConDescuento`.
+Hay que ser claros, porque antes el endpoint daba una impresión de "separación real"
+que para este dato no era cierta (ya estaba documentado como límite conocido):
 
-## Verificación con script
+- **DE-RENDER (no es separación real):** para `distribuidor_comercial`, el cliente
+  simplemente **no calcula ni muestra** `precioConDescuento`/`descuentoPct`. Pero el
+  comercial **puede leer los insumos** (precio de lista en `modulos/precios` y
+  `accesorios`; porcentajes de descuento en `sede.descuento_*` y
+  `categoria.desc_desarmado_base_pct`), porque las reglas se los permiten — el
+  **cotizador los necesita**. Con esos insumos podría recalcular `lista − descuento`
+  por su cuenta. Por tanto, ocultar el descuento al comercial es **cosmético**, igual
+  en la versión client-side de hoy que en la versión server-side anterior.
+- **REAL (lo garantizan las reglas):** el **aislamiento por tenant y por sede**. Un
+  comercial solo lee la(s) sede(s) y cotizaciones de su distribuidor y de su(s) sede(s)
+  asignada(s); nunca las de otro distribuidor ni de otra sede. Esto sí está enforced en
+  `firestore.rules` y se prueba en [`tests/rules/`](../rules/README.md) (casos:
+  "comercial(sede A) LEE cotización de sede B → DENEGADO", "comercial de OTRO
+  distribuidor → denegado", etc.).
 
-Con el dev server corriendo (`npm run dev` en `apps/portal`):
+## El hueco real (regla de oro #2) — deuda técnica, no de este catálogo
 
-```bash
-BASE_URL=http://localhost:3000 \
-ID_TOKEN_COMERCIAL=<token del comercial> \
-SEDE_ID=<sede habilitada del comercial> \
-MODALIDAD=desarmado \
-node tests/catalogo/check-comercial.mjs
-```
+El número genuinamente confidencial es el **costo Delben completo** (descuento +
+servicios + gestión comercial). El catálogo nunca lo expone. Pero el **cotizador sí**:
+hoy carga el documento completo de la sede client-side (incluido `servicios` y
+`gestion_comercial_pct`) y corre el motor en el navegador del comercial, produciendo
+`costo_delben`; la UI solo lo oculta con `puedeVerCosto`. Es decir, la regla de oro #2,
+en su sentido estricto ("el dato no sale del servidor hacia ese rol"), **ya se incumple
+en el cotizador**, independientemente del catálogo.
 
-El token se copia del header `Authorization` de la petición `/api/catalogo` en DevTools
-(o `await firebase.auth().currentUser.getIdToken()` en la consola). El script falla
-(exit ≠0) si algún ítem trae `precioConDescuento`/`descuentoPct` para el comercial.
-Opcional: `ID_TOKEN_COSTOS=<token>` para confirmar el contraste.
+Cerrar esto de verdad (restringir en reglas la lectura de `sede.servicios` /
+`sede.descuento_*` para el comercial, y/o calcular el costo server-side donde haga
+falta) es una rebanada aparte. Está registrado como **deuda técnica §1** en
+[`docs/ESTADO_ACTUAL.md`](../../docs/ESTADO_ACTUAL.md). Mover el catálogo a client-side
+**no empeora** ese hueco: expone exactamente lo mismo que ya expone el cotizador.
 
-## Requisito de entorno
+## Cómo verificar
 
-`/api/catalogo` necesita el **Firebase Admin SDK** con un service account en
-`apps/portal/.env.local`:
-
-```
-FIREBASE_PROJECT_ID=delben---web
-FIREBASE_CLIENT_EMAIL=<…>@<…>.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n"
-```
-
-(Las llaves ya existen vacías en `.env.local`; pega el service account de Firebase
-Console → Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada.)
-Sin estas credenciales el endpoint responde 500 y el catálogo no carga.
-
-## Límite conocido (no empeora §10.1)
-
-El catálogo aplica **solo lista − descuento principal**; NO expone servicios ni gestión
-comercial (los márgenes Delben confidenciales de §10.1). El número con descuento no se
-envía al comercial. Matiz: los porcentajes de descuento (`sede.descuento_*`,
-`categoria.desc_desarmado_base_pct`) hoy son legibles por el comercial vía las reglas de
-Firestore (el cotizador los usa), así que en teoría podría recalcular lista − descuento.
-Cerrar eso exigiría tocar reglas/datos; se deja como deuda de §10.1, sin empeorarla.
+- **Aislamiento (lo que importa):** `tests/rules/` contra el emulador de Firestore.
+  No se despliegan reglas sin esas pruebas en verde.
+- **De-render del descuento:** es comportamiento de UI. Inicia sesión como
+  `distribuidor_comercial` y confirma en `/catalogo` que solo se ve "Lista/Desde {precio}",
+  sin precio con descuento ni `−%`. (No es una garantía de datos: ver arriba.)

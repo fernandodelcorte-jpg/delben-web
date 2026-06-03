@@ -4,11 +4,14 @@ SaaS B2B de cotización para distribuidores de Delben, fábrica colombiana de ca
 
 ---
 
-> **Para Claude Code — protocolo de sesión**
->
-> 1. **Al iniciar una sesión nueva:** leer este README completo para entender el estado actual del proyecto antes de tocar cualquier código.
-> 2. **Al terminar trabajo importante:** agregar una entrada en la sección **Actualizaciones** al final de este archivo con fecha, descripción del cambio y archivos modificados.
-> 3. Este documento es la fuente de verdad de qué está construido y qué no. Mantenerlo al día es tan importante como el código mismo.
+## Documentación
+
+Este README es la entrada al repo (stack, estructura, cómo correrlo). El detalle vive en:
+
+- **[CLAUDE.md](CLAUDE.md)** — reglas permanentes del proyecto (las lee Claude Code en cada sesión).
+- **[docs/DISENO_SISTEMA.md](docs/DISENO_SISTEMA.md)** — el diseño completo (negocio, motor, datos, interfaz, plan, herrajes).
+- **[docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md)** — qué existe HOY, deuda técnica y la **bitácora** cronológica. Léelo primero al empezar una sesión y agrega una entrada al cerrar trabajo importante.
+- **[docs/PRODUCT.md](docs/PRODUCT.md)** · **[docs/DESIGN.md](docs/DESIGN.md)** — referencia de producto y sistema de diseño.
 
 ---
 
@@ -89,11 +92,17 @@ Motor validado en 5 caminos (caso base = $1.562.495 ✓).
 - Logo Delben configurable
 - Valoraciones internas (precios de fábrica) con flujo borrador → guardada
 
-### Configuración por distribuidor
-- Condiciones Delben (descuentos + servicios) con historial de cambios
-- Universo propio: transporte, instalación, imprevistos, utilidad, IVA
+### Sedes y configuración por sede
+- Un distribuidor puede tener varias **sedes** (ej. Bogotá, Miami, Caracas), cada una con su país, moneda/IVA y condiciones de cálculo
+- Capa Delben (descuentos + servicios) por sede, con historial de cambios — la define el super_admin
+- Universo por sede: transporte, instalación, imprevistos, utilidad, IVA — lo configura el distribuidor_admin
 - Transporte e instalación con modo porcentual o fijo por proyecto
+- Aislamiento por sede: un comercial no ve cotizaciones de otra sede
 - Logo propio del distribuidor
+
+### Catálogo de consulta de precios (`/catalogo`)
+- Módulos y herrajes con precio lista − descuento por modalidad
+- El costo se calcula y filtra **server-side** (`/api/catalogo`): el `distribuidor_comercial` nunca lo recibe
 
 ### Seguridad
 - Firestore Security Rules: aislamiento completo por tenant
@@ -131,125 +140,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 ## Pendientes
 
-- Firestore Security Rules: desplegar con `firebase deploy --only firestore:rules` (requiere configurar `.firebaserc` con el project ID real)
-- Web institucional (`apps/web/`) pendiente de construir
-- Conectar repositorio a GitHub
+- **Firestore Security Rules**: desplegar con `firebase deploy --only firestore:rules` (requiere `.firebaserc` con el project ID real).
+- **Web institucional** (`apps/web/`): pendiente de construir.
 
----
-
-## Actualizaciones
-
-> Registro cronológico inverso de cambios relevantes. Agregar una entrada cada vez que se implemente o corrija algo importante.
-
-### 2026-06-01 — Desglose de cotización guardada: especiales fundidos + fix de utilidad
-- Síntomas en el detalle guardado (no en el carrito): "Utilidad (margin)" mostraba ~$5; el "Precio base" no incluía los muebles especiales; aparecía una línea suelta "Muebles especiales" confusa. El total final SÍ era correcto.
-- **Bug de utilidad:** en `calcularDesglose` la utilidad se calculaba como `distribuidor_subtotal2 − universo_aditivo`, pero `universo_aditivo` era idéntico a `distribuidor_subtotal2` → ≈0. Corregido a `precio_sin_iva − distribuidor_subtotal2`. (Era solo de visualización; el total nunca dependió de esto.)
-- **Especiales fundidos en el desglose (incl. costo Delben y utilidad):** cada mueble especial nuevo guarda su `resultado` del motor; `calcularResumenTotal` lo descompone por capas igual que un módulo (base, servicios, costo Delben, utilidad, IVA). Para los especiales **viejos** (sin `resultado`), `reconstruirResultadoEspecial()` reconstruye la descomposición desde su costo Delben unitario + parámetros del distribuidor, así también entran en Precio Delben, utilidad e IVA. Desaparece la línea suelta "Muebles especiales" del desglose por capas. No hace falta recrear los especiales viejos para el desglose.
-- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `components/cotizador/buscador-modulos.tsx`, `lib/firestore/cotizaciones.ts`, `valoraciones.ts`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
-
-### 2026-06-01 — Muebles especiales pasan por el motor completo (costo consistente con el catálogo)
-- Síntoma: el costo total a Delben salía **más bajo** en cotizaciones con muebles especiales. Causa: los especiales solo restaban el descuento, pero NO sumaban los servicios Delben (diseño, cotización, producción, logística, gestión comercial) que sí incluye un módulo normal en su `costo_delben`.
-- Fix: el panel de especiales ahora llama a `calcularItem()` (el motor validado) con el precio de lista como `precio_base_cop` y `tipo_item: 'mueble'`. El motor aplica descuento + ajuste de acabado (subcategoría) + campaña + servicios Delben → `costo_delben`, y la capa distribuidor → precio al cliente. El costo del especial queda **idéntico** al de un módulo del catálogo con el mismo precio de lista.
-- La categoría (necesaria para el descuento en desarmado y la segmentación de campañas) se resuelve desde el módulo de referencia (si el especial se creó desde uno) o, en su defecto, desde la categoría de la cotización.
-- Decisión confirmada con el dueño: "motor completo" (reemplaza la decisión previa de "lista − descuento").
-- **Limitación conocida:** el especial guarda su costo/precio unitario final, no el precio de lista base, así que "Actualizar precios" no recalcula los especiales (sí los módulos). Si cambian servicios/descuentos, los especiales conservan su valor; habría que recrearlos o, a futuro, guardar también el precio de lista base.
-- Archivo: `components/cotizador/buscador-modulos.tsx`.
-
-### 2026-05-30 — Fix: el costo de muebles especiales ahora aplica el descuento del distribuidor
-- Antes, el número de "Precio Delben al distribuidor" se usaba tal cual como costo (sin descuento), inflando el costo y el precio al cliente. Al crear un especial desde un módulo de referencia se autocompletaba con el `precio_cop` de lista, que nunca recibía el descuento.
-- Ahora el campo es **"Precio de lista Delben (antes de descuento)"** y el costo real = lista × (1 − `descuento_muebles_pct` del distribuidor). El precio al cliente se reconstruye desde ese costo ya descontado (capa distribuidor: transporte/instalación/imprevistos + utilidad margin + IVA). El panel muestra el costo con descuento y el precio cliente.
-- Decisión confirmada con el dueño: "Lista − descuento" (no se aplican servicios Delben ni ajuste de acabado/campaña a los especiales).
-- **Pendiente operativo:** especiales creados antes de este cambio quedaron con el costo sin descuento; hay que recrearlos (no se guarda el precio de lista original para recalcular).
-- Archivo: `components/cotizador/buscador-modulos.tsx`.
-
-### 2026-05-30 — Fix crítico: un único total consistente en carrito, lista, PDF cotización y orden de compra
-- **Causa raíz:** el total se calculaba con tres fórmulas distintas. El carrito sumaba muebles especiales pero no transporte/instalación fijos; `guardar()` sumaba los fijos pero descartaba los especiales (y no los persistía); el PDF de cotización no sumaba ni especiales ni fijos.
-- **Solución:** función única `calcularTotalesCotizacion()` en `store/carrito.ts` (fuente de verdad del total = módulos + herrajes asociados + herrajes sueltos + muebles especiales + transporte fijo + instalación fija). La usan la pantalla del carrito, `guardar()` y `guardarValoracion()`. Los PDFs derivan el mismo total.
-- **Muebles especiales** ahora se persisten en Firestore (`itemsEspeciales` en cotizaciones y valoraciones), sobreviven al refresco (`partialize`), se restauran al reabrir/copiar/recalcular, y aparecen en el PDF de cotización (precio cliente) y en la orden de compra (costo Delben). La orden de compra NO incluye transporte/instalación fijos (son costo propio del distribuidor).
-- **Pendiente operativo:** cotizaciones guardadas ANTES de este fix conservan su total viejo y no tienen especiales guardados; para corregirlas, abrir → "Actualizar precios" → guardar.
-- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `lib/firestore/cotizaciones.ts`, `lib/firestore/valoraciones.ts`, `lib/firestore/recalcular.ts`, `lib/pdf-helpers.ts`, `components/cotizador/cotizacion-pdf.tsx`, `orden-compra-pdf.tsx`, `cotizacion-pdf-button.tsx`, `orden-compra-pdf-button.tsx`, `cotizaciones/borrador/page.tsx`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
-
-### 2026-05-29 — Polish pass: shimmer consistente, stagger cap, page title, DESIGN.md sincronizado
-- `SkeletonProyectoCard` migrado de `animate-pulse` a `.skeleton` en cada placeholder — igual que el resto del sistema.
-- Stagger cap a 5 ítems (`Math.min(i, 4) * 40ms`) en cotizaciones y valoraciones borrador. Carrito con 10+ ítems ya no espera 400ms.
-- `h1 "Proyectos"` corregido a `text-2xl` (design system compliance).
-- DESIGN.md sincronizado: animation values actuales, `.skeleton` pattern, caoba como botón primario, `transition-colors` en inputs, `deslizarse-derecha` documentado.
-- Archivos: `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `DESIGN.md`.
-
-### 2026-05-29 — Design engineering: correcciones de animación (Emil Kowalski)
-- `aparecer` 500ms → 200ms, `translateY(10px)` → `translateY(5px)`: bajo 300ms, offset más sutil.
-- `aparecer-lento` eliminado: 700ms nunca es correcto en una app de trabajo diario.
-- `shimmer` `ease-in-out` → `linear`: los loops infinitos deben ser constantes, sin pulso irregular.
-- `FichaModulo` panel lateral: `animate-aparecer` (sube) → `animate-deslizarse-derecha` (entra desde derecha). Coherencia espacial.
-- `transition-all` → `transition-colors` en todos los inputs y selects: no animar layout, solo color/borde.
-- `prefers-reduced-motion` añadido a globals.css: accesibilidad para usuarios con sensibilidad al movimiento.
-- Nuevo keyframe `deslizarse-derecha` en tailwind.config.ts.
-- Archivos: `tailwind.config.ts`, `globals.css`, `ficha-modulo.tsx`, `buscador-modulos.tsx`.
-
-### 2026-05-29 — Design polish: 7 mejoras de UI (caoba, divide-y, shimmer, stagger, nav, empty states)
-- **P1 — Color caoba en CTAs primarios**: todos los botones de acción principal (Guardar, Agregar al carrito, Nuevo proyecto) usan ahora `bg-caoba-600` en vez de `bg-stone-900`. Diferenciación clara de jerarquía.
-- **P2 — Cards → divide-y en borrador**: las listas de módulos, herrajes y especiales en borrador (cotizaciones y valoraciones) usan ahora un único contenedor con `divide-y` en lugar de cards individuales. Menos ruido visual.
-- **P3 — Shimmer en skeletons**: reemplazado `animate-pulse` por clase `.skeleton` con gradiente barrido de izquierda a derecha. Nuevo keyframe `shimmer` en tailwind.config.ts y clase en globals.css.
-- **P4 — Stagger en listas**: ítems del carrito aparecen con `animationDelay` escalonado de 40ms por ítem usando `animate-aparecer`.
-- **P5 — Nav: indicador de ruta activa**: cambio de pill `bg-stone-100` a `border-b-2 border-caoba-500` de altura completa. Más refinado.
-- **P6 — Avatar de usuario**: `h-7 w-7` con `ring-2 ring-stone-200`. Legible en retina.
-- **P7 — Empty states**: ícono en contenedor `bg-caoba-50` + jerarquía tipográfica en 2 niveles. Cotizaciones, borrador (módulos, herrajes, especiales) y valoraciones.
-- Archivos: `tailwind.config.ts`, `globals.css`, `nav-portal.tsx`, `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `buscador-modulos.tsx`, `ficha-modulo.tsx`.
-
-### 2026-05-29 — UX: mejoras al cotizador (observaciones, staging herrajes, costos unitarios)
-- **Observaciones visibles en carrito**: el texto de observaciones de cada módulo aparece ahora directamente en la fila del carrito (cursiva, debajo del subtítulo), sin necesidad de expandir el ítem. Aplica en cotizaciones y valoraciones.
-- **Staging de herrajes en buscador**: en la pestaña Herrajes del buscador, el botón ya no agrega directamente al carrito. Se acumulan en una lista "Seleccionados" donde se puede ajustar la cantidad o quitar antes de confirmar. Botón "Agregar N al carrito" en el footer cierra el buscador y agrega todos de una vez.
-- **Costos unitarios por producto**: para roles con acceso a costos (`super_admin`, `delben_facturacion`, `distribuidor_admin`, `distribuidor_costos`), se muestra ahora el costo unitario por ítem (módulo y herraje) además del total de línea, cuando la cantidad es mayor a 1.
-- Archivos: `buscador-modulos.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`.
-
-### 2026-05-29 — Fix: guardar cotización duplicada fallaba (fecha.getTime)
-- `guardarCotizacion` en `cotizaciones.ts` llamaba `info.fecha.getTime()`. Al duplicar desde localStorage, `fecha` era string → error en runtime.
-- Solución: `new Date(info.fecha).getTime()`.
-- Archivo: `apps/portal/src/lib/firestore/cotizaciones.ts`.
-
-### 2026-05-28 — Fix: fecha_cotizacion.getTime is not a function
-- Al rehidratar el store desde `localStorage`, `cotizacionInfo.fecha` quedaba como string ISO en vez de `Date`. El motor de cálculo llamaba `.getTime()` y fallaba al agregar herrajes o módulos.
-- Solución: `new Date(cotizacionInfo.fecha)` en los dos puntos donde se construye `motorBase` y el payload de `agregarHerraje`.
-- Archivo modificado: `apps/portal/src/store/carrito.ts`.
-
-### 2026-05-28 — Cantidades decimales en todos los campos
-- Extendido soporte decimal a **todos** los controles de cantidad: buscador de herrajes (`PanelHerrajes`), módulos especiales en borrador de cotización (`EspecialItemRow`) y acción `cambiarCantidadEspecial` del store.
-- Todos los controles tienen ahora: botones ±0.5, input editable (`type="number" min=0.1 step=0.5`), mínimo 0.1.
-- Archivos modificados: `carrito.ts`, `buscador-modulos.tsx`, `cotizaciones/borrador/page.tsx`.
-
-### 2026-05-27 — Arreglos solicitados por Cindy
-- Correcciones varias en UI/UX del cotizador según revisión interna.
-
-### 2026-05 — Resumen de proyecto PDF
-- Botón en `ProyectoCard`: selecciona versiones, agrega descripciones individuales, genera PDF consolidado con totales por versión y gran total.
-
-### 2026-05 — Design polish pass
-- `PRODUCT.md` y `DESIGN.md` creados como documentos de referencia visual.
-- Skeleton loaders y animaciones stagger en listas.
-- Nav con estado activo por ruta.
-- Página de inicio para distribuidores.
-
-### 2026-05 — Valoraciones internas (delben_facturacion)
-- Colección `valoraciones/` en Firestore con flujo borrador → guardada.
-- 4 páginas `/admin/valoraciones/*`: nueva, borrador, lista, detalle.
-- Navegación condicionada al rol `delben_facturacion` / `super_admin`.
-- Security Rules actualizadas para la nueva colección.
-
-### 2026-05 — Mejoras transversales (R6)
-- Firestore Security Rules completas con aislamiento por tenant.
-- Tasa USD configurable con historial de valores.
-- Historial de condiciones del distribuidor (descuentos y servicios).
-- Categoría registrada en cada cotización guardada.
-- Costos fijos de transporte e instalación por proyecto (modo fijo).
-- Desglose completo de precios por ítem en el borrador.
-
-### 2026-04 — Multi-tenant y cotizador conectado (Rebanada 3)
-- Panel de distribuidores y gestión de usuarios por tenant.
-- Cotizador conectado a datos reales de Firestore (módulos, precios, herrajes).
-- Deduplicación de módulos por variantes de dimensión.
-- Herrajes asociados visibles en la ficha del módulo.
-
-### 2026-04 — Catálogo en Firestore (Rebanada 2)
-- Panel admin de importación desde Excel (idempotente).
-- ~2.076 módulos + ~447 herrajes en Firestore.
-- Imágenes en Firebase Storage con matching automático por nombre.
+> El detalle de pendientes y deuda técnica está en [docs/ESTADO_ACTUAL.md](docs/ESTADO_ACTUAL.md) (sección "Deuda técnica y riesgos"). El historial de cambios vive en la **bitácora** del mismo documento.

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   MapPin,
   MagnifyingGlass,
@@ -12,15 +11,33 @@ import {
   Buildings,
 } from '@phosphor-icons/react'
 import { useAuth } from '@/components/providers/auth-provider'
-import { auth } from '@/lib/firebase/client'
 import { getSedes } from '@/lib/firestore/sedes'
 import { getFiltroSedesUsuario, getDistribuidores } from '@/lib/firestore/distribuidores'
 import { getCategorias } from '@/lib/firestore/catalogo'
+import { getModulosTodos, buscarAccesorios } from '@/lib/firestore/modulos'
+import { getTasaUsdActual } from '@/lib/firestore/config'
+import {
+  aplicarDescuento,
+  descuentoModuloPct,
+  descuentoHerrajePct,
+  convertirMoneda,
+} from '@/lib/catalogo-precios'
+import { puedeVerCostoDelben } from '@delben/firebase'
 import { sedeHabilitada } from '@/lib/firebase/tipos-firestore'
 import type { Sede, Categoria, Distribuidor } from '@/lib/firebase/tipos-firestore'
-import type { RespuestaCatalogo, ItemCatalogo } from '@/lib/catalogo-tipos'
+import type { ItemCatalogo } from '@/lib/catalogo-tipos'
 
 type Modalidad = 'tradicional' | 'desarmado'
+
+// Catálogo construido en el cliente (antes era la respuesta de /api/catalogo).
+// El precio con descuento se calcula aquí y solo se incluye para roles con acceso
+// a costo; para distribuidor_comercial el campo no se calcula (misma protección de
+// de-render que el resto del portal — ver tests/catalogo/SEGURIDAD.md).
+interface CatalogoData {
+  moneda: 'COP' | 'USD'
+  puedeVerCosto: boolean
+  items: ItemCatalogo[]
+}
 
 function normalizar(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -34,7 +51,6 @@ function formatPrecio(n: number, moneda: 'COP' | 'USD'): string {
 }
 
 export default function CatalogoPage() {
-  const router = useRouter()
   const { usuario, rol, distribuidorId, cargando: cargandoAuth } = useAuth()
 
   // Delben (super_admin / delben_facturacion) no tiene sede propia: elige distribuidor.
@@ -57,7 +73,7 @@ export default function CatalogoPage() {
 
   // ── Catálogo ──────────────────────────────────────────────────────────────────
   const [categorias, setCategorias] = useState<Categoria[]>([])
-  const [data, setData] = useState<RespuestaCatalogo | null>(null)
+  const [data, setData] = useState<CatalogoData | null>(null)
   const [cargandoCatalogo, setCargandoCatalogo] = useState(false)
   const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null)
 
@@ -122,30 +138,86 @@ export default function CatalogoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sedeSelId])
 
-  // Cargar catálogo cuando hay sede + modalidad. El precio con descuento lo calcula
-  // y filtra el servidor (/api/catalogo); aquí solo se pinta lo que llega.
+  // Cargar catálogo cuando hay sede + modalidad. Lectura client-side directa de
+  // Firestore (mismas colecciones y reglas que el cotizador). El precio con descuento
+  // se calcula aquí con la lógica pura de catalogo-precios y SOLO se incluye para roles
+  // con acceso a costo; para distribuidor_comercial el campo no se calcula.
   useEffect(() => {
-    if (!sedeSel || !modalidad || !distribuidorIdEfectivo) {
+    if (!sedeSel || !modalidad) {
       setData(null)
       return
     }
-    const sedeId = sedeSel.id
-    const distId = distribuidorIdEfectivo
+    const sede = sedeSel
+    const mod = modalidad
     ;(async () => {
       setCargandoCatalogo(true)
       setErrorCatalogo(null)
       try {
-        const token = await auth.currentUser?.getIdToken()
-        if (!token) throw new Error('Sesión no disponible. Vuelve a iniciar sesión.')
-        const res = await fetch(
-          `/api/catalogo?distribuidorId=${distId}&sedeId=${sedeId}&modalidad=${modalidad}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        if (!res.ok) {
-          const e = (await res.json().catch(() => ({}))) as { error?: string }
-          throw new Error(e.error ?? `Error ${res.status}`)
+        const verCosto = rol ? puedeVerCostoDelben(rol) : false
+        const esColombia = sede.pais.trim().toLowerCase() === 'colombia'
+        const moneda: 'COP' | 'USD' = esColombia ? 'COP' : 'USD'
+        const tasaUsd = esColombia ? 4000 : await getTasaUsdActual()
+
+        // Descuento de desarmado por categoría del módulo.
+        const descBaseDesarmado = new Map<string, number>()
+        for (const c of categorias) descBaseDesarmado.set(c.id, c.desc_desarmado_base_pct)
+
+        const [modulos, accesorios] = await Promise.all([
+          getModulosTodos(),
+          buscarAccesorios('', mod),
+        ])
+
+        const items: ItemCatalogo[] = []
+
+        // Módulos: dedup por nombre (igual que el buscador y el endpoint anterior).
+        const vistosMod = new Set<string>()
+        for (const m of modulos) {
+          if (vistosMod.has(m.nombre)) continue
+          vistosMod.add(m.nombre)
+          const precioMin = typeof m.precio_min === 'number' ? m.precio_min : null
+          const item: ItemCatalogo = {
+            tipo: 'modulo',
+            id: m.id,
+            nombre: m.nombre,
+            subtitulo: m.tipologia ?? '',
+            categoria_id: m.categoria_id ?? null,
+            imagen_url: m.imagen_url ?? null,
+            precioLista: precioMin === null ? null : convertirMoneda(precioMin, moneda, tasaUsd),
+          }
+          // Solo se calcula el precio con descuento si el rol puede ver costo.
+          if (verCosto && precioMin !== null) {
+            const cat = m.categoria_id
+              ? { desc_desarmado_base_pct: descBaseDesarmado.get(m.categoria_id) ?? 0 }
+              : null
+            const pct = descuentoModuloPct(mod, sede, cat)
+            item.precioConDescuento = convertirMoneda(aplicarDescuento(precioMin, pct), moneda, tasaUsd)
+            item.descuentoPct = pct
+          }
+          items.push(item)
         }
-        setData((await res.json()) as RespuestaCatalogo)
+
+        // Herrajes disponibles en la modalidad (buscarAccesorios ya filtró por disponibilidad).
+        for (const a of accesorios) {
+          const listaCop = mod === 'tradicional' ? a.precio_tradicional_cop : a.precio_desarmado_cop
+          const lista = typeof listaCop === 'number' ? listaCop : null
+          const item: ItemCatalogo = {
+            tipo: 'herraje',
+            id: a.id,
+            nombre: a.nombre ?? '',
+            subtitulo: `cód. ${a.codigo ?? ''}`,
+            categoria_id: null,
+            imagen_url: a.imagen_url ?? null,
+            precioLista: lista === null ? null : convertirMoneda(lista, moneda, tasaUsd),
+          }
+          if (verCosto && lista !== null) {
+            const pct = descuentoHerrajePct(mod, sede)
+            item.precioConDescuento = convertirMoneda(aplicarDescuento(lista, pct), moneda, tasaUsd)
+            item.descuentoPct = pct
+          }
+          items.push(item)
+        }
+
+        setData({ moneda, puedeVerCosto: verCosto, items })
       } catch (e) {
         setErrorCatalogo(e instanceof Error ? e.message : 'No se pudo cargar el catálogo')
         setData(null)

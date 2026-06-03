@@ -1,11 +1,17 @@
-# 16 · Estado Actual del Proyecto
+# Estado Actual del Proyecto
 
-> Este documento es el "reporte de avance de obra". Los docs 10-15 describen
-> el diseño completo (la visión). ESTE dice qué existe HOY y qué falta.
-> Actualízalo al cerrar cada rebanada. Es lo primero que Claude Code debe
-> leer al empezar una sesión, para saber dónde está parado.
+> El "reporte de avance de obra" y la **bitácora** del proyecto. `DISENO_SISTEMA.md`
+> describe la visión completa; ESTE dice qué existe HOY, qué falta y qué se tocó
+> cada día. Es lo primero que Claude Code debe leer al empezar una sesión.
+>
+> Estructura del documento:
+> - **Foto del estado** — tabla de rebanadas + qué se construyó (por bloque).
+> - **Deuda técnica y riesgos** — lo que falta o hay que vigilar.
+> - **Bitácora cronológica** — registro inverso de cambios, fecha a fecha.
+>   Agregar una entrada aquí al cerrar cada trabajo importante.
 
-Última actualización: Muebles especiales (motor completo) + totales canónicos. 2026-06-01.
+Última actualización: 2026-06-03 — consolidación de documentación. Trabajo previo:
+sedes por distribuidor + catálogo de consulta de precios (2026-06-02).
 
 ---
 
@@ -26,6 +32,9 @@
 | 7 — Proyectos (R8) | ✅ Cerrada — ver detalle abajo |
 | Design polish | ✅ Entregado — sistema de diseño, animaciones, skeletons, logos, home |
 | Resumen de proyecto PDF | ✅ Entregado — PDF consolidado con versiones seleccionadas desde ProyectoCard |
+| Muebles especiales + totales canónicos | ✅ Entregado — total único, especiales por el motor (2026-06-01) |
+| Sedes por distribuidor | ✅ Entregada — config de cálculo por sede, aislamiento por sede (2026-06-02) |
+| Catálogo de consulta de precios | ✅ Entregado — `/catalogo` con costo filtrado server-side (2026-06-02) |
 
 ## Rebanada 0 — qué se construyó (verificado en navegador)
 
@@ -649,20 +658,200 @@ cotizacion-pdf-button,orden-compra-pdf-button}.tsx`,
 
 ---
 
-## Próximo — pendiente
+## Sedes por distribuidor — qué se construyó ✅ (2026-06-02)
 
-- **Firestore Security Rules no desplegadas**: las reglas locales (`firestore.rules`) son
-  correctas pero no están en producción. `.firebaserc` tiene placeholder `REEMPLAZA_CON_TU_PROJECT_ID`.
-  El usuario debe poner el project ID real y correr `firebase deploy --only firestore:rules`.
-  Mientras tanto, `super_admin` ve error de permisos en `/admin/valoraciones`.
+Las condiciones de cálculo pasaron del distribuidor a una subcolección
+`distribuidores/{id}/sedes/{sedeId}`. Diseño completo en `DISENO_SISTEMA.md`
+(§1 Sedes y §3 datos).
 
+```
+apps/portal/src/
+├── lib/firebase/tipos-firestore.ts   SedeDoc; config de cálculo movida del
+│                                      DistribuidorDoc a la sede; sede_id en
+│                                      cotización/valoración; sedes en usuarios
+├── lib/firestore/sedes.ts            CRUD de sedes + lectura de la sede activa
+├── lib/firestore/distribuidores.ts   distribuidor identitario; helpers por sede
+├── app/(portal)/admin/distribuidores/[id]/page.tsx  super_admin crea/edita sedes (capa Delben)
+├── app/(portal)/configuracion/page.tsx              distribuidor_admin: universo POR sede
+├── app/(portal)/cotizaciones/nueva/page.tsx         selector de sede al iniciar
+├── store/carrito.ts                  arrastra sede_id; el motor lee condiciones de la sede
+└── firestore.rules                   aislamiento por sede (comercial de A no ve cotizaciones de B)
+```
+
+- **Capa Delben** (descuentos, servicios, gestión comercial): la define el super_admin por sede.
+- **Capa Distribuidor** (universo): la configura el distribuidor_admin por sede; la sede queda
+  "lista para cotizar" cuando el universo está completo.
+- **País/moneda/IVA** se derivan de la sede. El motor NO se tocó (caso 1.562.495 intacto).
+- **Sin migración legacy**: la data previa era de prueba; no se construyó compatibilidad
+  con el esquema plano viejo del distribuidor.
+- Pregunta operativa que quedó abierta en el diseño: la asignación de usuarios a sedes
+  (pantalla de equipo existente vs. nueva). Verificar cómo se resolvió en la implementación.
+
+## Catálogo de consulta de precios — qué se construyó ✅ (2026-06-02)
+
+```
+apps/portal/src/
+├── app/(portal)/catalogo/page.tsx    módulos y herrajes con precio lista − descuento
+│                                      por modalidad; módulos muestran "Desde {precio_min}"
+├── app/api/catalogo/route.ts         calcula y FILTRA el costo server-side (Admin SDK vía ADC):
+│                                      el distribuidor_comercial NO recibe el costo
+├── lib/firebase/admin.ts             init del Firebase Admin SDK
+├── lib/catalogo-precios.ts           lista − descuento principal por modalidad
+├── lib/catalogo-tipos.ts             tipos del catálogo de consulta
+└── lib/importar/parser-modulos.ts    + backfill de precio_min sobre el catálogo existente
+tests/catalogo/SEGURIDAD.md           verificación de la regla de oro #2 (ver el doc)
+tests/catalogo/check-comercial.mjs    script: falla si el comercial recibe el costo
+```
+
+- Delben elige distribuidor → sede → modalidad; el distribuidor ve su propia sede.
+- **Separación real (regla de oro #2)**: `precioConDescuento`/`descuentoPct` solo se adjuntan
+  a la respuesta si el rol puede ver costo; para el comercial el campo no existe en el JSON.
+  El rol sale del token verificado, no del cliente. Detalle y verificación en
+  `tests/catalogo/SEGURIDAD.md`.
+- Límite conocido: el catálogo aplica solo lista − descuento principal (no expone servicios
+  ni gestión comercial). Ver deuda técnica §1.
+
+---
+
+## Deuda técnica y riesgos
+
+> Absorbido del antiguo `RESUMEN_PROYECTO_COMPLETO.md`. Lo accionable que falta o
+> hay que vigilar.
+
+### 1. ⚠️ Seguridad: el costo Delben es alcanzable por `distribuidor_comercial`
+La regla de oro #2 dice que el comercial **jamás** debe recibir el costo Delben
+("separación real en backend, no visual"). Sin embargo, las cotizaciones guardadas
+almacenan `costo_delben` y los pasos internos **dentro de cada `resultado`** del
+snapshot, y las Security Rules de cotizaciones permiten leer a cualquier miembro
+del tenant (incluido el comercial). `filtrarPorRol()` existe pero hoy solo se
+aplica en la UI. **Mitigación posible**: no persistir los campos de costo en el
+snapshot legible por ese rol, separarlos en otro documento/colección con reglas
+que excluyan al comercial, o servir los cálculos por un endpoint que filtre antes
+de responder (como ya hace `/api/catalogo`). El catálogo de consulta ya sigue el
+patrón correcto; las cotizaciones aún no.
+
+### 2. Inconsistencia de roles documentación ↔ código
+`delben_comercial` aparece en `CLAUDE.md` y `DISENO_SISTEMA.md`, pero el código
+tiene **5 roles** (`packages/firebase/src/roles.ts`), sin ese rol. Decidir si se
+implementa o se elimina de la documentación, e igualar.
+
+### 3. Auth server-side parcial
+El middleware de auth fue un STUB en la Rebanada 0; la verificación fuerte
+server-side con Admin SDK estaba prevista para multi-tenant. `/api/catalogo` ya
+verifica el token con Admin SDK; conviene confirmar el estado de la verificación
+de sesión en el resto de rutas server-side.
+
+### 4. Estado de servidor
+El diseño menciona TanStack Query, pero en la práctica las páginas leen Firestore
+directamente (client SDK). No es un bug; tenerlo presente para caché/revalidación.
+
+### 5. Despliegue de Security Rules
+Las reglas (`firestore.rules`, `storage.rules`) viven en el repo. Verificar que la
+versión desplegada coincide (`firebase deploy --only firestore:rules`). `.firebaserc`
+tenía placeholder `REEMPLAZA_CON_TU_PROJECT_ID`: confirmar el project ID real.
+
+### 6. Snapshots históricos congelados
+Cotizaciones guardadas con código anterior conservan totales viejos (sin especiales
+o sin costos fijos consistentes) y no tienen muebles especiales (nunca se escribieron).
+Para corregir una: abrir → "Actualizar precios" → guardar. Los especiales viejos no
+son recuperables; hay que rehacerlos.
+
+### 7. Pendientes de obra
 - **Web institucional** (`apps/web/`): la ruta existe en el monorepo pero está vacía.
-  Pendiente construirla (siguiente sesión).
-
-- ✅ **Conectar a GitHub**: hecho. El repo tiene remoto `origin/main` y el trabajo
-  está pusheado.
-
-- **Tipo MELAMINA PREMIUM en tipos_estructura**: el usuario la eliminará manualmente
+- **Tipo MELAMINA PREMIUM en `tipos_estructura`**: el usuario lo eliminará manualmente
   desde Firebase Console (no tiene datos de precios asociados).
-  
+- ✅ **GitHub**: conectado, `origin/main` con el trabajo pusheado.
 
+---
+
+## Bitácora cronológica
+
+> Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
+> cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
+> Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-06-03 — Consolidación de la documentación
+- Se unificaron los documentos del repo para reducir desorden: el changelog del
+  README se movió a esta bitácora; `RESUMEN_PROYECTO_COMPLETO.md` se absorbió en
+  "Deuda técnica y riesgos" y el estado por rebanadas; `REBANADA_SEDES.md` se volcó
+  en `DISENO_SISTEMA.md` (§1 Sedes, §3 datos) + la sección de sedes de este doc;
+  `LEEME.md` y `_LEEME.md` se retiraron (su contenido vivo ya está en `CLAUDE.md`).
+- Toda la documentación de lectura quedó en `docs/`; en la raíz solo permanecen los dos
+  archivos con función técnica: `CLAUDE.md` (lo lee Claude Code automáticamente desde la
+  raíz) y `README.md` (portada del repo). `PRODUCT.md` y `DESIGN.md` se movieron a `docs/`,
+  y los archivos de referencia sueltos a `docs/_referencia_codigo/`.
+- Documentos resultantes: raíz → `CLAUDE.md`, `README.md`; `docs/` → `DISENO_SISTEMA.md`,
+  `ESTADO_ACTUAL.md`, `PRODUCT.md`, `DESIGN.md`, `_referencia_codigo/` (casos del motor +
+  motor de referencia + spec del importador + prototipo).
+
+### 2026-06-02 — Sedes por distribuidor + catálogo de consulta de precios
+- **Sedes**: las condiciones de cálculo pasan del distribuidor a `sedes/{id}` (país,
+  accesos, capa Delben, universo). El super_admin crea/edita sedes (capa Delben) y el
+  distribuidor_admin configura el universo por sede. El cotizador, la persistencia y
+  las vistas Delben arrastran `sede_id`. Aislamiento por sede en `firestore.rules`. El
+  motor no se tocó (1.562.495 intacto). Ver sección "Sedes por distribuidor" arriba.
+- **Catálogo `/catalogo`**: módulos y herrajes con precio lista − descuento por
+  modalidad; el costo se calcula y filtra server-side (`/api/catalogo` con Admin SDK):
+  el comercial no lo recibe. Ver "Catálogo de consulta de precios" arriba y
+  `tests/catalogo/SEGURIDAD.md`.
+- Archivos: ver las dos secciones "qué se construyó" correspondientes.
+
+### 2026-06-01 — Desglose de cotización guardada: especiales fundidos + fix de utilidad
+- Síntomas en el detalle guardado (no en el carrito): "Utilidad (margin)" mostraba ~$5; el "Precio base" no incluía los muebles especiales; aparecía una línea suelta "Muebles especiales" confusa. El total final SÍ era correcto.
+- **Bug de utilidad:** en `calcularDesglose` la utilidad se calculaba como `distribuidor_subtotal2 − universo_aditivo`, pero `universo_aditivo` era idéntico a `distribuidor_subtotal2` → ≈0. Corregido a `precio_sin_iva − distribuidor_subtotal2`. (Era solo de visualización; el total nunca dependió de esto.)
+- **Especiales fundidos en el desglose (incl. costo Delben y utilidad):** cada mueble especial nuevo guarda su `resultado` del motor; `calcularResumenTotal` lo descompone por capas igual que un módulo. Para los especiales **viejos** (sin `resultado`), `reconstruirResultadoEspecial()` reconstruye la descomposición desde su costo Delben unitario + parámetros del distribuidor. Desaparece la línea suelta "Muebles especiales" del desglose por capas.
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `components/cotizador/buscador-modulos.tsx`, `lib/firestore/cotizaciones.ts`, `valoraciones.ts`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
+### 2026-06-01 — Muebles especiales pasan por el motor completo (costo consistente con el catálogo)
+- Síntoma: el costo total a Delben salía **más bajo** en cotizaciones con muebles especiales. Causa: los especiales solo restaban el descuento, pero NO sumaban los servicios Delben que sí incluye un módulo normal en su `costo_delben`.
+- Fix: el panel de especiales ahora llama a `calcularItem()` (el motor validado) con el precio de lista como `precio_base_cop` y `tipo_item: 'mueble'`. El costo del especial queda **idéntico** al de un módulo del catálogo con el mismo precio de lista.
+- Decisión confirmada con el dueño: "motor completo" (reemplaza la decisión previa de "lista − descuento").
+- **Limitación conocida:** "Actualizar precios" no recalcula los especiales (guardan su costo/precio unitario, no el precio de lista base).
+- Archivo: `components/cotizador/buscador-modulos.tsx`.
+
+### 2026-05-30 — Fix crítico: un único total consistente en carrito, lista, PDF cotización y orden de compra
+- **Causa raíz:** el total se calculaba con tres fórmulas distintas. **Solución:** función única `calcularTotalesCotizacion()` en `store/carrito.ts` (fuente de verdad del total). La usan la pantalla del carrito, `guardar()` y `guardarValoracion()`. Los PDFs derivan el mismo total.
+- **Muebles especiales** ahora se persisten en Firestore (`itemsEspeciales`), sobreviven al refresco, se restauran al reabrir/copiar/recalcular, y aparecen en el PDF de cotización (precio cliente) y en la orden de compra (costo Delben). La orden de compra NO incluye transporte/instalación fijos.
+- **Pendiente operativo:** cotizaciones guardadas ANTES de este fix conservan su total viejo; para corregirlas, abrir → "Actualizar precios" → guardar.
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `lib/firestore/{cotizaciones,valoraciones,recalcular}.ts`, `lib/pdf-helpers.ts`, `components/cotizador/{cotizacion-pdf,orden-compra-pdf,cotizacion-pdf-button,orden-compra-pdf-button}.tsx`, `cotizaciones/{borrador,[id]}/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
+### 2026-05-30 — Fix: el costo de muebles especiales ahora aplica el descuento del distribuidor
+- Antes, "Precio Delben al distribuidor" se usaba tal cual como costo (sin descuento), inflando el costo y el precio al cliente. Ahora el campo es **"Precio de lista Delben (antes de descuento)"** y el costo real = lista × (1 − `descuento_muebles_pct`). (Esta decisión fue reemplazada el 2026-06-01 por "motor completo".)
+- Archivo: `components/cotizador/buscador-modulos.tsx`.
+
+### 2026-05-29 — Polish pass: shimmer consistente, stagger cap, page title, DESIGN.md sincronizado
+- `SkeletonProyectoCard` migrado de `animate-pulse` a `.skeleton`. Stagger cap a 5 ítems (`Math.min(i, 4) * 40ms`). `h1 "Proyectos"` corregido a `text-2xl`. DESIGN.md sincronizado con los valores de animación actuales.
+- Archivos: `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `DESIGN.md`.
+
+### 2026-05-29 — Design engineering: correcciones de animación (Emil Kowalski)
+- `aparecer` 500ms → 200ms, `translateY(10px)` → `5px`. `aparecer-lento` eliminado. `shimmer` `ease-in-out` → `linear`. `FichaModulo` panel lateral: `animate-deslizarse-derecha`. `transition-all` → `transition-colors` en inputs/selects. `prefers-reduced-motion` añadido. Nuevo keyframe `deslizarse-derecha`.
+- Archivos: `tailwind.config.ts`, `globals.css`, `ficha-modulo.tsx`, `buscador-modulos.tsx`.
+
+### 2026-05-29 — Design polish: 7 mejoras de UI (caoba, divide-y, shimmer, stagger, nav, empty states)
+- Color caoba en CTAs primarios; cards → `divide-y` en borrador; shimmer en skeletons; stagger en listas; nav con indicador de ruta activa (`border-b-2 border-caoba-500`); avatar de usuario; empty states con jerarquía.
+- Archivos: `tailwind.config.ts`, `globals.css`, `nav-portal.tsx`, `cotizaciones/page.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`, `buscador-modulos.tsx`, `ficha-modulo.tsx`.
+
+### 2026-05-29 — UX: mejoras al cotizador (observaciones, staging herrajes, costos unitarios)
+- Observaciones visibles en la fila del carrito; staging de herrajes en el buscador antes de confirmar; costo unitario por ítem para roles con acceso a costo cuando la cantidad > 1.
+- Archivos: `buscador-modulos.tsx`, `cotizaciones/borrador/page.tsx`, `valoraciones/borrador/page.tsx`.
+
+### 2026-05-28/29 — Fixes de fecha al rehidratar el store
+- Al rehidratar desde localStorage, `fecha`/`cotizacionInfo.fecha` quedaba como string ISO; el motor llamaba `.getTime()` y fallaba. Solución: `new Date(...)` en los puntos donde se construye `motorBase` / payload de herrajes y al duplicar.
+- Archivos: `store/carrito.ts`, `lib/firestore/cotizaciones.ts`.
+
+### 2026-05-28 — Cantidades decimales en todos los campos
+- Soporte decimal en todos los controles de cantidad (herrajes, especiales, store): botones ±0.5, input editable, mínimo 0.1.
+- Archivos: `carrito.ts`, `buscador-modulos.tsx`, `cotizaciones/borrador/page.tsx`.
+
+### 2026-05-27 — Arreglos solicitados por Cindy
+- Correcciones varias en UI/UX del cotizador según revisión interna.
+
+### 2026-05 — Hitos previos
+- **Resumen de proyecto PDF**: PDF consolidado con versiones seleccionadas desde `ProyectoCard`.
+- **Design polish pass**: `PRODUCT.md` y `DESIGN.md` creados; skeletons, stagger, nav activo, home distribuidor.
+- **Valoraciones internas** (`delben_facturacion`): colección `valoraciones/`, 4 páginas `/admin/valoraciones/*`, Security Rules.
+- **Mejoras transversales (R6)**: Security Rules con aislamiento por tenant, tasa USD con historial, historial de condiciones, categoría en cotización, costos fijos transporte/instalación, desglose por ítem.
+
+### 2026-04 — Multi-tenant y cotizador conectado (Rebanada 3) / Catálogo en Firestore (Rebanada 2)
+- R3: panel de distribuidores y gestión de usuarios por tenant; cotizador conectado a Firestore (módulos, precios, herrajes); deduplicación por variantes; herrajes asociados en la ficha.
+- R2: panel admin de importación desde Excel (idempotente); ~2.076 módulos + ~447 herrajes; imágenes en Storage con matching automático.

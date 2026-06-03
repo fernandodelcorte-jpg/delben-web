@@ -3,15 +3,22 @@
 > Este archivo vive en la raíz del repositorio. Claude Code lo lee
 > automáticamente en cada sesión. Son las reglas permanentes del proyecto.
 
-## Documentación del proyecto (solo 2 documentos)
+## Documentación del proyecto
 
-- `docs/ESTADO_ACTUAL.md` — dónde va la obra HOY. **Léelo PRIMERO** en cada
-  sesión para saber en qué punto está el proyecto.
+Los dos documentos de obra (en `docs/`):
+
+- `docs/ESTADO_ACTUAL.md` — dónde va la obra HOY: foto del estado, **deuda
+  técnica y riesgos**, y la **bitácora** cronológica. **Léelo PRIMERO** en cada
+  sesión. Al cerrar trabajo importante, agrega una entrada en la bitácora.
 - `docs/DISENO_SISTEMA.md` — el diseño completo en 6 secciones numeradas
   (1 negocio, 2 motor, 3 datos, 4 interfaz, 5 plan, 6 herrajes). Consúltalo
   según la tarea; no hace falta leerlo entero cada vez.
 
-No hay más documentos de diseño. Si algo no está en esos dos, pregunta.
+Apoyo: `README.md` (entrada al repo: stack, estructura, comandos),
+`docs/PRODUCT.md` y `docs/DESIGN.md` (producto y sistema de diseño),
+`docs/_referencia_codigo/CASOS_PRUEBA_MOTOR.md` (casos del motor).
+
+No hay más documentos de diseño. Si algo no está aquí, pregunta.
 
 ## Qué es este proyecto
 
@@ -88,6 +95,8 @@ el cliente final lo configura el admin del distribuidor.
 ## Roles
 
 - Delben: `super_admin`, `delben_facturacion`, `delben_comercial`
+  - ⚠️ `delben_comercial` está en el diseño pero **no en el código** (hoy son 5
+    roles). Inconsistencia a resolver — ver deuda técnica §2 en `ESTADO_ACTUAL.md`.
 - Distribuidor: `distribuidor_admin`, `distribuidor_costos`, `distribuidor_comercial`
 - Delben crea: los 3 de Delben + el admin de cada distribuidor.
 - El distribuidor_admin crea: costos y comercial de su empresa.
