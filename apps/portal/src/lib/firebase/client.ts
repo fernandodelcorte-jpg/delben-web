@@ -3,6 +3,7 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   type IdTokenResult,
@@ -46,6 +47,10 @@ export async function iniciarSesion(correo: string, contrasena: string) {
 
 export async function cerrarSesion() {
   return signOut(auth)
+}
+
+export async function recuperarContrasena(correo: string) {
+  return sendPasswordResetEmail(auth, correo)
 }
 
 export function extraerRol(token: IdTokenResult): Rol | null {
