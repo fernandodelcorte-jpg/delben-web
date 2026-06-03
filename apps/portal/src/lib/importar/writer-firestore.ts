@@ -12,6 +12,7 @@ import {
 import { db } from '@/lib/firebase/client'
 import type { ResultadoParserModulos, ItemConId } from './parser-modulos'
 import type { ResultadoParserHerrajes } from './parser-herrajes'
+import type { ModuloDoc } from '@/lib/firebase/tipos-firestore'
 
 const BATCH_SIZE = 400
 
@@ -26,7 +27,9 @@ async function escribirLotes<T extends object>(
   offsetPct: number,
   rangoPct: number,
   etiqueta: string,
-  camposPreservados?: string[],
+  // string[] fijo, o una función por-documento (para campos opcionales: el mask
+  // de cada doc puede variar, ej. colores_metal solo en módulos planos).
+  camposPreservados?: string[] | ((doc: T) => string[]),
 ) {
   let escritas = 0
   const total = items.length
@@ -38,8 +41,11 @@ async function escribirLotes<T extends object>(
     for (const item of chunk) {
       const ref = doc(collection(db, coleccionPath), item.id)
       if (camposPreservados) {
-        // mergeFields: actualiza solo estos campos; deja el resto intacto en Firestore
-        lote.set(ref, item.doc, { mergeFields: camposPreservados })
+        // mergeFields: actualiza solo estos campos; deja el resto intacto en Firestore.
+        // Resuelto por-documento cuando es función (campos opcionales por doc).
+        const campos =
+          typeof camposPreservados === 'function' ? camposPreservados(item.doc) : camposPreservados
+        lote.set(ref, item.doc, { mergeFields: campos })
       } else {
         lote.set(ref, item.doc)
       }
@@ -65,22 +71,34 @@ export async function escribirModulos(
   const CAMPOS_MODULO = [
     'codigo_excel', 'categoria_id', 'tipologia', 'nombre',
     'altura', 'profundidad', 'imagen_nombre', 'search_keywords', 'activo',
-    'requiere_fachada', 'requiere_estructura', 'precio_min', 'colores_metal',
+    'requiere_fachada', 'requiere_estructura', 'precio_min',
   ]
+
+  // colores_metal es OPCIONAL: solo lo traen los módulos planos con color de metal
+  // (ej. tubo de colgar). Incluirlo en el field mask de un módulo que NO lo trae hace
+  // que Firestore rechace el set ("specified in your field mask but missing from your
+  // input data"). Por eso el mask de módulos se arma por-documento: se agrega
+  // 'colores_metal' SOLO cuando el módulo realmente lo trae con valores.
+  const camposModulo = (doc: object): string[] => {
+    const m = doc as ModuloDoc
+    return Array.isArray(m.colores_metal) && m.colores_metal.length > 0
+      ? [...CAMPOS_MODULO, 'colores_metal']
+      : CAMPOS_MODULO
+  }
 
   const pasos: Array<{
     items: ItemConId<object>[]
     path: string
     label: string
     peso: number
-    campos?: string[]
+    campos?: string[] | ((doc: object) => string[])
   }> = [
     { items: datos.tiposEstructura, path: 'tipos_estructura', label: 'Tipos estructura', peso: 2 },
     { items: datos.tiposFachada, path: 'tipos_fachada', label: 'Tipos fachada', peso: 2 },
     { items: datos.categorias as ItemConId<object>[], path: 'categorias', label: 'Categorías', peso: 2, campos: CAMPOS_CATEGORIA },
     { items: datos.subcategorias, path: 'subcategorias', label: 'Subcategorías', peso: 2 },
     { items: datos.acabados, path: 'acabados', label: 'Acabados', peso: 4 },
-    { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: CAMPOS_MODULO },
+    { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: camposModulo },
   ]
 
   // Calcular offset de progreso por paso
