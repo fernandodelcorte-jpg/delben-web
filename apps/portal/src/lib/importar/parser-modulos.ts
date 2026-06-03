@@ -259,6 +259,9 @@ export async function parsearExcelModulos(
   const moduloTieneEstructura = new Map<string, boolean>()
   // Precio mínimo por módulo (para mostrar "Desde $X" en el buscador)
   const moduloPrecioMin = new Map<string, number>()
+  // Colores de metal de módulos PLANOS (sin fachada) — ej. tubo de colgar. Para
+  // módulos CON fachada el metal va por la vía ALUMINIO VIDRIO (en tipos_fachada).
+  const moduloColoresMetal = new Map<string, Set<string>>()
 
   for (const r of filasValidas) {
     const nombreRaw = normalizarNombre(r['NOMBRE']?.toString() ?? '')
@@ -301,6 +304,20 @@ export async function parsearExcelModulos(
     const fachId = tieneFach ? slugify(tipoFachNombre) : SIN_FACHADA_ID
     const precioId = `${moduloId}_${estrId}_${fachId}`
 
+    // Módulo plano (sin fachada) con COLOR METAL propio: guardar sus colores en el
+    // módulo. En módulos CON fachada el metal lo aporta la fachada (ALUMINIO VIDRIO).
+    if (!tieneFach) {
+      const metalRaw = r['COLOR METAL']?.toString() ?? ''
+      const colores = metalRaw
+        .split(',')
+        .map((c: string) => c.trim())
+        .filter(Boolean)
+      if (colores.length > 0) {
+        if (!moduloColoresMetal.has(moduloKey)) moduloColoresMetal.set(moduloKey, new Set())
+        colores.forEach((c) => moduloColoresMetal.get(moduloKey)!.add(c))
+      }
+    }
+
     if (estrId !== SIN_ESTRUCTURA_ID) moduloTieneEstructura.set(moduloKey, true)
     if (fachId !== SIN_FACHADA_ID) moduloTieneFachada.set(moduloKey, true)
 
@@ -324,6 +341,8 @@ export async function parsearExcelModulos(
     item.doc.requiere_estructura = moduloTieneEstructura.get(key) ?? false
     const pMin = moduloPrecioMin.get(key)
     if (pMin !== undefined) item.doc.precio_min = pMin
+    const metales = moduloColoresMetal.get(key)
+    if (metales && metales.size > 0) item.doc.colores_metal = Array.from(metales)
   }
 
   const categoriasConDescuento0 = Array.from(categoriasMap.values())

@@ -221,6 +221,16 @@ export function FichaModulo() {
     }
   }, [tipoEstructuraId, tiposEstructura])
 
+  // Restaurar color de metal de un módulo PLANO en modo edición. La vía ALUMINIO
+  // VIDRIO lo restaura en el efecto de fachada; ese efecto retorna temprano con
+  // 'sin-fachada', así que aquí cubrimos el caso del módulo plano.
+  useEffect(() => {
+    if ((moduloActual?.colores_metal?.length ?? 0) > 0 && pendingColorMetal.current !== null) {
+      setColorMetal(pendingColorMetal.current)
+      pendingColorMetal.current = null
+    }
+  }, [moduloActual])
+
   // Búsqueda de herrajes con debounce
   useEffect(() => {
     if (busquedaHerraje.trim().length < 2) {
@@ -260,6 +270,14 @@ export function FichaModulo() {
   const esAluminioVidrio = fachada?.es_aluminio_vidrio ?? false
   const esPremium = estructura?.es_premium ?? false
 
+  // Color de metal de un módulo PLANO (sin fachada), ej. tubo de colgar. Es una vía
+  // DISTINTA a ALUMINIO VIDRIO (donde el metal lo aporta la fachada): conviven sin
+  // pisarse — en un módulo plano esAluminioVidrio es false; en uno con fachada el
+  // módulo no trae colores_metal. Cuando el módulo ofrece colores, elegir uno es
+  // obligatorio.
+  const coloresMetalModulo = moduloActual?.colores_metal ?? []
+  const requiereMetalModulo = coloresMetalModulo.length > 0
+
   // Dimensiones disponibles para los selectors
   const alturasDisponibles = [...new Set(variantes.map((v) => v.altura))].sort((a, b) => a - b)
   const profundidadesDisponibles = alturaSeleccionada
@@ -274,11 +292,17 @@ export function FichaModulo() {
       (v) => v.altura === alturaSeleccionada && v.profundidad === profundidadSeleccionada,
     )
 
+  // Módulos planos (ej. tubo de colgar) no tienen alto/prof reales: el Excel los trae
+  // vacíos (→ 0). Se ocultan los selectores, pero la selección interna queda en 0/0
+  // para que la búsqueda de precio por sentinel siga encontrando la variante.
+  const tieneDimensiones = variantes.some((v) => v.altura > 0 || v.profundidad > 0)
+
   const listo =
     !cargandoCatalogo &&
     hayVarianteSeleccionada &&
     (!requiereFachada || (!!subcategoriaId && !!acabadoId)) &&
-    (!esPremium || !!acabadoEstructura)
+    (!esPremium || !!acabadoEstructura) &&
+    (!requiereMetalModulo || !!colorMetal)
 
   function handleAgregar() {
     if (!moduloPendiente || !moduloActual || !listo) return
@@ -310,7 +334,8 @@ export function FichaModulo() {
       acabadoNombre: acabadoEfectivo?.nombre ?? '',
       acabadoEstructura: esPremium ? acabadoEstructura : null,
       colorVidrio: esAluminioVidrio ? colorVidrio : null,
-      colorMetal: esAluminioVidrio ? colorMetal : null,
+      // Metal por dos vías: fachada ALUMINIO VIDRIO o módulo plano con colores propios.
+      colorMetal: esAluminioVidrio || requiereMetalModulo ? colorMetal : null,
       altura: moduloActual.altura,
       profundidad: moduloActual.profundidad,
       cantidad,
@@ -413,34 +438,36 @@ export function FichaModulo() {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Dimensiones */}
-            <div className="grid grid-cols-2 gap-4">
-              <Campo label="Alto (mm)">
-                <Select
-                  value={alturaSeleccionada?.toString() ?? ''}
-                  onChange={(v) => {
-                    const n = Number(v)
-                    setAlturaSeleccionada(n)
-                    setProfundidadSeleccionada(null)
-                  }}
-                  options={alturasDisponibles.map((a) => ({
-                    value: a.toString(),
-                    label: `${a} mm`,
-                  }))}
-                />
-              </Campo>
-              <Campo label="Prof. (mm)">
-                <Select
-                  value={profundidadSeleccionada?.toString() ?? ''}
-                  onChange={(v) => setProfundidadSeleccionada(Number(v))}
-                  options={profundidadesDisponibles.map((p) => ({
-                    value: p.toString(),
-                    label: `${p} mm`,
-                  }))}
-                  disabled={profundidadesDisponibles.length === 0}
-                />
-              </Campo>
-            </div>
+            {/* Dimensiones — ocultas en módulos planos sin alto/prof reales */}
+            {tieneDimensiones && (
+              <div className="grid grid-cols-2 gap-4">
+                <Campo label="Alto (mm)">
+                  <Select
+                    value={alturaSeleccionada?.toString() ?? ''}
+                    onChange={(v) => {
+                      const n = Number(v)
+                      setAlturaSeleccionada(n)
+                      setProfundidadSeleccionada(null)
+                    }}
+                    options={alturasDisponibles.map((a) => ({
+                      value: a.toString(),
+                      label: `${a} mm`,
+                    }))}
+                  />
+                </Campo>
+                <Campo label="Prof. (mm)">
+                  <Select
+                    value={profundidadSeleccionada?.toString() ?? ''}
+                    onChange={(v) => setProfundidadSeleccionada(Number(v))}
+                    options={profundidadesDisponibles.map((p) => ({
+                      value: p.toString(),
+                      label: `${p} mm`,
+                    }))}
+                    disabled={profundidadesDisponibles.length === 0}
+                  />
+                </Campo>
+              </div>
+            )}
 
             {/* Tipo de estructura — oculto en módulos sin estructura (ej. complementos) */}
             {requiereEstructura && (
@@ -562,6 +589,22 @@ export function FichaModulo() {
                   </Campo>
                 )}
               </>
+            )}
+
+            {/* Color de metal — módulo plano sin fachada (ej. tubo de colgar). Vía
+                distinta a la de ALUMINIO VIDRIO de arriba; aquí es obligatorio y sin
+                default: el comercial debe elegir uno antes de poder agregar. */}
+            {requiereMetalModulo && (
+              <Campo label="Color de metal" nota="Obligatorio">
+                <Select
+                  value={colorMetal ?? ''}
+                  onChange={setColorMetal}
+                  options={[
+                    { value: '', label: 'Elige un color…' },
+                    ...coloresMetalModulo.map((c) => ({ value: c, label: c })),
+                  ]}
+                />
+              </Campo>
             )}
 
             {/* Cantidad */}

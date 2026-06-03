@@ -69,6 +69,8 @@ export interface ModuloDoc {
   requiere_fachada?: boolean    // false → sin selector fachada; precio usa sentinel sin-fachada
   requiere_estructura?: boolean // false → sin selector estructura; precio usa sentinel sin-estructura
   precio_min?: number           // precio mínimo del catálogo (denormalizado del import para mostrar en buscador)
+  colores_metal?: string[]      // colores de metal de un módulo PLANO sin fachada (ej. tubo de colgar).
+                                // No confundir con tipos_fachada.colores_metal (vía ALUMINIO VIDRIO).
 }
 
 export interface PrecioDoc {
