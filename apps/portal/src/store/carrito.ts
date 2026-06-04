@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { calcularItem } from '@delben/core'
 import type { ResultadoCalculo, Campana as CampanaMotor } from '@delben/core'
 import {
@@ -268,6 +268,85 @@ export function buildEspecialDesdeSnapshot(snap: ItemEspecialSnapshot): ItemEspe
   }
 }
 
+// ─── Persistencia con escritura diferida ────────────────────────────────────
+// El persist de Zustand serializa TODO el carrito a localStorage en cada `set`.
+// Para los cambios de alta frecuencia (cantidad ±0,5) eso es un JSON.stringify
+// repetido en el hilo principal. Diferimos esas escrituras (debounce); los
+// eventos importantes (agregar, eliminar, guardar, reabrir…) escriben de
+// inmediato para no perder datos si el usuario recarga justo después.
+
+const RETRASO_PERSIST_MS = 400
+
+// Por defecto las escrituras son inmediatas. Solo las acciones de cantidad las
+// marcan como diferidas mientras corren. Zustand llama a storage.setItem de
+// forma SÍNCRONA dentro de `set` (middleware.mjs), así que el flag se lee en el
+// momento exacto de la escritura.
+let escrituraInmediata = true
+
+function conPersistenciaDiferida(accion: () => void): void {
+  escrituraInmediata = false
+  try {
+    accion()
+  } finally {
+    escrituraInmediata = true
+  }
+}
+
+// Storage custom para persist: difiere el JSON.stringify + write de las
+// escrituras de alta frecuencia y lo hace inmediato para el resto. Conserva
+// exactamente el mismo `partialize` (lo aplica Zustand antes de llamar aquí).
+function crearAlmacenThrottled<S>(retrasoMs: number): PersistStorage<S> {
+  let pendiente: { name: string; value: StorageValue<S> } | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const escribir = (): void => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    if (!pendiente) return
+    try {
+      localStorage.setItem(pendiente.name, JSON.stringify(pendiente.value))
+    } catch {
+      /* cuota excedida — se descarta esta escritura */
+    }
+    pendiente = null
+  }
+
+  // No perder el último cambio diferido si el usuario recarga o cierra la pestaña.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', escribir)
+    window.addEventListener('pagehide', escribir)
+  }
+
+  return {
+    getItem: (name) => {
+      try {
+        const str = localStorage.getItem(name)
+        return str ? (JSON.parse(str) as StorageValue<S>) : null
+      } catch {
+        return null
+      }
+    },
+    setItem: (name, value) => {
+      pendiente = { name, value }
+      if (escrituraInmediata) {
+        escribir()
+      } else {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(escribir, retrasoMs)
+      }
+    },
+    removeItem: (name) => {
+      try {
+        localStorage.removeItem(name)
+      } catch {
+        /* noop */
+      }
+    },
+  }
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useCarrito = create<CarritoState>()(
@@ -323,38 +402,42 @@ export const useCarrito = create<CarritoState>()(
     set({ itemEditando: item, moduloPendiente: item.modulo, pantallaActiva: 'ficha' }),
 
   cambiarCantidadItem: (id, delta) =>
-    set((state) => ({
-      items: state.items.map((i) => {
-        if (i.id !== id) return i
-        const nuevaCantidad = Math.max(0.1, parseFloat((i.config.cantidad + delta).toFixed(4)))
-        return {
-          ...i,
-          config: { ...i.config, cantidad: nuevaCantidad },
-          resultado: {
-            ...i.resultado,
-            cantidad: nuevaCantidad,
-            subtotal_linea: i.resultado.precio_final_unitario * nuevaCantidad,
-          },
-        }
-      }),
-    })),
+    conPersistenciaDiferida(() =>
+      set((state) => ({
+        items: state.items.map((i) => {
+          if (i.id !== id) return i
+          const nuevaCantidad = Math.max(0.1, parseFloat((i.config.cantidad + delta).toFixed(4)))
+          return {
+            ...i,
+            config: { ...i.config, cantidad: nuevaCantidad },
+            resultado: {
+              ...i.resultado,
+              cantidad: nuevaCantidad,
+              subtotal_linea: i.resultado.precio_final_unitario * nuevaCantidad,
+            },
+          }
+        }),
+      })),
+    ),
 
   cambiarCantidadHerraje: (id, delta) =>
-    set((state) => ({
-      itemsHerraje: state.itemsHerraje.map((i) => {
-        if (i.id !== id) return i
-        const nuevaCantidad = Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4)))
-        return {
-          ...i,
-          cantidad: nuevaCantidad,
-          resultado: {
-            ...i.resultado,
+    conPersistenciaDiferida(() =>
+      set((state) => ({
+        itemsHerraje: state.itemsHerraje.map((i) => {
+          if (i.id !== id) return i
+          const nuevaCantidad = Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4)))
+          return {
+            ...i,
             cantidad: nuevaCantidad,
-            subtotal_linea: i.resultado.precio_final_unitario * nuevaCantidad,
-          },
-        }
-      }),
-    })),
+            resultado: {
+              ...i.resultado,
+              cantidad: nuevaCantidad,
+              subtotal_linea: i.resultado.precio_final_unitario * nuevaCantidad,
+            },
+          }
+        }),
+      })),
+    ),
 
   agregarItem: (modulo, config, subcategoria, precioCop, categoriaCalculo, herrajesBorrador) => {
     const { cotizacionInfo, distribuidorData: dist, sedeData: sede, campanasDisponibles, tasaUsd, itemEditando } = get()
@@ -487,11 +570,13 @@ export const useCarrito = create<CarritoState>()(
     set((state) => ({ itemsEspeciales: state.itemsEspeciales.filter((i) => i.id !== id) })),
 
   cambiarCantidadEspecial: (id, delta) =>
-    set((state) => ({
-      itemsEspeciales: state.itemsEspeciales.map((i) =>
-        i.id === id ? { ...i, cantidad: Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4))) } : i,
-      ),
-    })),
+    conPersistenciaDiferida(() =>
+      set((state) => ({
+        itemsEspeciales: state.itemsEspeciales.map((i) =>
+          i.id === id ? { ...i, cantidad: Math.max(0.1, parseFloat((i.cantidad + delta).toFixed(4))) } : i,
+        ),
+      })),
+    ),
 
   guardar: async (distribuidorId, userId) => {
     const { cotizacionInfo, cotizacionGuardadaId, items, itemsHerraje, itemsEspeciales } = get()
@@ -892,7 +977,7 @@ export const useCarrito = create<CarritoState>()(
   }),
   {
     name: 'delben-carrito',
-    storage: createJSONStorage(() => localStorage),
+    storage: crearAlmacenThrottled(RETRASO_PERSIST_MS),
     // campanasDisponibles: no se persiste, se refresca en cada sesión
     partialize: (state) => ({
       cotizacionInfo: state.cotizacionInfo,

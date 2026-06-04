@@ -120,6 +120,7 @@ export function ImportarModulos() {
                 {[
                   ['Filas válidas', resultado.estadisticas.filasValidas.toLocaleString('es-CO')],
                   ['Módulos únicos', resultado.estadisticas.modulosUnicos.toLocaleString('es-CO')],
+                  ['Módulos de búsqueda (derivados)', resultado.estadisticas.modulosBusqueda.toLocaleString('es-CO')],
                   ['Tipos de estructura', resultado.tiposEstructura.length],
                   ['Tipos de fachada', resultado.tiposFachada.length],
                   ['Categorías', resultado.categorias.length],

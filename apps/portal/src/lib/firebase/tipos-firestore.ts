@@ -73,6 +73,24 @@ export interface ModuloDoc {
                                 // No confundir con tipos_fachada.colores_metal (vía ALUMINIO VIDRIO).
 }
 
+// Doc derivado para el buscador del cotizador: un registro por NOMBRE único
+// (≈727), no por variante (≈2.076). Lo deriva el importador agrupando las
+// variantes de `modulos` por categoria_id + nombre. El buscador lo consulta en
+// vez de bajar los 2.076; las variantes (altura×profundidad) se cargan bajo
+// demanda en la ficha vía getVariantesModulo. NO lleva costo Delben (precio_min
+// es precio de lista, ya visible en el buscador). requiere_* = OR de las
+// variantes (clave para que los planos NO muestren selectores de estr/fachada).
+export interface ModuloBusquedaDoc {
+  nombre: string
+  categoria_id: string
+  tipologia: string
+  imagen_url: string | null
+  requiere_estructura: boolean
+  requiere_fachada: boolean
+  precio_min?: number
+  activo: boolean
+}
+
 export interface PrecioDoc {
   tipo_estructura_id: string
   tipo_fachada_id: string
@@ -250,6 +268,7 @@ export type Acabado = AcabadoDoc & { id: string }
 export type CategoriaMacro = CategoriaMacroDoc & { id: string }
 export type Categoria = CategoriaDoc & { id: string }
 export type Modulo = ModuloDoc & { id: string }
+export type ModuloBusqueda = ModuloBusquedaDoc & { id: string }
 export type Precio = PrecioDoc & { id: string }
 export type Accesorio = AccesorioDoc & { id: string }
 export type Distribuidor = DistribuidorDoc & { id: string }

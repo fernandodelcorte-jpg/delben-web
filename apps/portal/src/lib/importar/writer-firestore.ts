@@ -10,8 +10,10 @@ import {
   getFirestore,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase/client'
+import { slugify } from './slugify'
 import type { ResultadoParserModulos, ItemConId } from './parser-modulos'
 import type { ResultadoParserHerrajes } from './parser-herrajes'
+import type { ModuloDoc } from '@/lib/firebase/tipos-firestore'
 
 const BATCH_SIZE = 400
 
@@ -87,6 +89,15 @@ export async function escribirModulos(
     'requiere_fachada', 'requiere_estructura', 'precio_min', 'colores_metal',
   ]
 
+  // Colección derivada para el buscador (1 doc por nombre). precio_min es opcional
+  // → maskPresente lo omite cuando falta. imagen_url se escribe aquí (a diferencia
+  // de `modulos`, donde la gestiona subirImagenes): en `modulos_busqueda` es un
+  // valor derivado del representante, no el campo gestionado por la subida de imágenes.
+  const CAMPOS_BUSQUEDA = [
+    'nombre', 'categoria_id', 'tipologia', 'imagen_url',
+    'requiere_estructura', 'requiere_fachada', 'precio_min', 'activo',
+  ]
+
   const pasos: Array<{
     items: ItemConId<object>[]
     path: string
@@ -100,6 +111,7 @@ export async function escribirModulos(
     { items: datos.subcategorias, path: 'subcategorias', label: 'Subcategorías', peso: 2 },
     { items: datos.acabados, path: 'acabados', label: 'Acabados', peso: 4 },
     { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: maskPresente(CAMPOS_MODULO) },
+    { items: datos.modulosBusqueda as ItemConId<object>[], path: 'modulos_busqueda', label: 'Módulos búsqueda', peso: 4, campos: maskPresente(CAMPOS_BUSQUEDA) },
   ]
 
   // Calcular offset de progreso por paso
@@ -220,7 +232,24 @@ export async function revincularImagenes(
 
       if (snap.docs.length > 0) {
         const lote = wb2(db)
-        snap.docs.forEach((d) => lote.update(d.ref, { imagen_url: url }))
+        const busquedaVistos = new Set<string>()
+        snap.docs.forEach((d) => {
+          lote.update(d.ref, { imagen_url: url })
+          // Propagar la imagen al doc derivado de búsqueda del mismo nombre
+          // (modulos_busqueda lo escribe el reimport con imagen_url del representante;
+          // aquí se actualiza al vincular/subir, igual que en `modulos`). merge:true
+          // toca solo imagen_url. Dedup: varias variantes comparten un imagen_nombre
+          // y mapean al MISMO doc de búsqueda — Firestore prohíbe 2 escrituras al
+          // mismo doc en un batch.
+          if (coleccion === 'modulos') {
+            const m = d.data() as ModuloDoc
+            const bid = slugify(`${m.categoria_id} ${m.nombre}`)
+            if (!busquedaVistos.has(bid)) {
+              busquedaVistos.add(bid)
+              lote.set(doc(db, 'modulos_busqueda', bid), { imagen_url: url }, { merge: true })
+            }
+          }
+        })
         await lote.commit()
         vinculadas += snap.docs.length
       } else {
@@ -265,7 +294,24 @@ export async function subirImagenes(
 
       if (snap.docs.length > 0) {
         const lote = wb2(db)
-        snap.docs.forEach((d) => lote.update(d.ref, { imagen_url: url }))
+        const busquedaVistos = new Set<string>()
+        snap.docs.forEach((d) => {
+          lote.update(d.ref, { imagen_url: url })
+          // Propagar la imagen al doc derivado de búsqueda del mismo nombre
+          // (modulos_busqueda lo escribe el reimport con imagen_url del representante;
+          // aquí se actualiza al vincular/subir, igual que en `modulos`). merge:true
+          // toca solo imagen_url. Dedup: varias variantes comparten un imagen_nombre
+          // y mapean al MISMO doc de búsqueda — Firestore prohíbe 2 escrituras al
+          // mismo doc en un batch.
+          if (coleccion === 'modulos') {
+            const m = d.data() as ModuloDoc
+            const bid = slugify(`${m.categoria_id} ${m.nombre}`)
+            if (!busquedaVistos.has(bid)) {
+              busquedaVistos.add(bid)
+              lote.set(doc(db, 'modulos_busqueda', bid), { imagen_url: url }, { merge: true })
+            }
+          }
+        })
         await lote.commit()
       }
 

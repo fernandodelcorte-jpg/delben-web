@@ -770,6 +770,46 @@ son recuperables; hay que rehacerlos.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-04 — Rendimiento: primera tanda (throttle persist, caché herrajes, waterfall, memo)
+Cuatro mejoras de rendimiento del cotizador, sin tocar el motor (`packages/core`)
+ni reglas de negocio. Diagnóstico previo en sesión aparte.
+
+1. **Throttle de la escritura de `persist`** (`store/carrito.ts`): el persist
+   serializaba TODO el carrito a localStorage en cada `set`, incluido cada tick de
+   cantidad. Ahora un storage custom (`crearAlmacenThrottled`) difiere 400ms las
+   escrituras de alta frecuencia (las tres acciones `cambiarCantidad*`, envueltas en
+   `conPersistenciaDiferida`) y escribe de inmediato el resto (agregar/eliminar/
+   guardar/reabrir). Flush en `beforeunload`/`pagehide` para no perder el último
+   cambio diferido. Mismo `partialize` (no cambia QUÉ se persiste, solo CUÁNDO).
+   Medición (store+persist, carrito 25 ítems, sin render React): subir cantidad ±0,5
+   pasó de **0,22 ms → 0,02 ms media (~11×)**; agregar ítem se mantiene en ~0,5 ms
+   (esperado: sigue siendo escritura inmediata).
+2. **Caché de accesorios + recorte del blob de módulos** (`lib/firestore/modulos.ts`):
+   los 447 herrajes ahora se cachean en localStorage (`delben_accesorios_v1`, TTL 24h),
+   ya no se re-descargan en cada sesión/pestaña. El blob de módulos (`delben_modulos_v2`)
+   ya NO guarda `imagen_url` ni `search_keywords` en disco: `search_keywords` es
+   redundante con el nombre (la búsqueda matchea contra `normalizar(nombre)`) y
+   `imagen_url` son URLs largas de Storage que arriesgan la cuota. La caché en memoria
+   conserva el objeto completo; al rehidratar desde disco, `imagen_url`→null (miniatura
+   con fallback de iniciales) y `search_keywords`→[] (búsqueda intacta).
+3. **`getLogoDelben` fuera del waterfall + `?pid=` al guardar**
+   (`cotizaciones/[id]/page.tsx`, `cotizaciones/borrador/page.tsx`): el logo de Delben
+   ya no espera a que resuelva la cotización (no depende de ella). El `push` tras
+   guardar ahora incluye `?pid=` para leer el doc directo y no caer al fallback que
+   escanea todo el tenant. (La fila legacy sin `proyecto_id` SÍ debe usar el fallback;
+   se deja como está, es correcto por diseño.)
+4. **`React.memo` + `useCallback` en filas del carrito** (`cotizaciones/borrador/page.tsx`):
+   `CarritoItemRow`/`HerrajeItemRow`/`EspecialItemRow` memoizadas; los handlers pasan
+   referencias estables (acciones del store + `toggleExpandido` con `useCallback`) y la
+   firma cambió a basada en `id`. Cambiar la cantidad de un ítem ya no re-renderiza las
+   demás filas. Sin cambios de lógica.
+
+Pendiente (no se hizo, queda para revisión): #5 recálculo N+1, #6 búsqueda
+server-side por categoría, #7 TanStack Query. Herramienta de medición reproducible
+en `apps/portal/bench/` (no se incluye en el build; bundle vía esbuild).
+Archivos: `store/carrito.ts`, `lib/firestore/modulos.ts`,
+`cotizaciones/[id]/page.tsx`, `cotizaciones/borrador/page.tsx`, `apps/portal/bench/*`.
+
 ### 2026-06-03 — Consolidación de la documentación
 - Se unificaron los documentos del repo para reducir desorden: el changelog del
   README se movió a esta bitácora; `RESUMEN_PROYECTO_COMPLETO.md` se absorbió en

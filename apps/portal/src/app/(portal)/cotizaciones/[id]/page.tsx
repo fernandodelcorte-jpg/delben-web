@@ -90,6 +90,12 @@ function CotizacionDetalleContent() {
 
   useEffect(() => {
     if (cargandoAuth || !distribuidorId) return
+
+    // El logo de Delben no depende de la cotización → en paralelo, no en cascada.
+    getLogoDelben().then((url) => {
+      if (url) urlADataUrl(url).then(setLogoDelbenData).catch(() => {})
+    }).catch(() => {})
+
     getCotizacion(distribuidorId, id, proyectoId)
       .then((c) => {
         if (!c) setError('Cotización no encontrada.')
@@ -103,9 +109,6 @@ function CotizacionDetalleContent() {
           }).catch(() => {})
           // Las condiciones del desglose salen de la sede de la cotización.
           getSede(c.distribuidor_id, c.sede_id).then(setSede).catch(() => {})
-          getLogoDelben().then((url) => {
-            if (url) urlADataUrl(url).then(setLogoDelbenData).catch(() => {})
-          }).catch(() => {})
         }
       })
       .catch(() => setError('No se pudo cargar la cotización.'))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -143,14 +143,14 @@ export default function BorradorPage() {
       itemsEspeciales.reduce((s, i) => s + i.precioDelbenUnitario * i.cantidad, 0)
     : 0
 
-  function toggleExpandido(id: string) {
+  const toggleExpandido = useCallback((id: string) => {
     setExpandidos((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
   async function handleGuardar() {
     if (!distribuidorId || !usuario) {
@@ -161,7 +161,10 @@ export default function BorradorPage() {
     setErrorGuardar(null)
     try {
       const id = await guardar(distribuidorId, usuario.uid)
-      router.push(`/cotizaciones/${id}`)
+      // Incluir ?pid= para que el detalle lea el doc directo y no caiga al
+      // fallback que escanea todo el tenant.
+      const pid = cotizacionInfo?.proyectoId
+      router.push(`/cotizaciones/${id}${pid ? `?pid=${pid}` : ''}`)
     } catch {
       setErrorGuardar('Error al guardar. Intenta de nuevo.')
       setGuardando(false)
@@ -241,10 +244,10 @@ export default function BorradorPage() {
                 <CarritoItemRow
                   item={item}
                   expandido={expandidos.has(item.id)}
-                  onToggle={() => toggleExpandido(item.id)}
-                  onEliminar={() => eliminarItem(item.id)}
-                  onEditar={() => editarModulo(item)}
-                  onCambiarCantidad={(delta) => cambiarCantidadItem(item.id, delta)}
+                  onToggle={toggleExpandido}
+                  onEliminar={eliminarItem}
+                  onEditar={editarModulo}
+                  onCambiarCantidad={cambiarCantidadItem}
                   puedeVerCosto={puedeVerCosto}
                 />
               </div>
@@ -269,8 +272,8 @@ export default function BorradorPage() {
                 <div key={item.id} className="animate-aparecer" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
                   <HerrajeItemRow
                     item={item}
-                    onEliminar={() => eliminarHerraje(item.id)}
-                    onCambiarCantidad={(delta) => cambiarCantidadHerraje(item.id, delta)}
+                    onEliminar={eliminarHerraje}
+                    onCambiarCantidad={cambiarCantidadHerraje}
                     puedeVerCosto={puedeVerCosto}
                   />
                 </div>
@@ -298,8 +301,8 @@ export default function BorradorPage() {
                 <div key={item.id} className="animate-aparecer" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
                   <EspecialItemRow
                     item={item}
-                    onEliminar={() => eliminarEspecial(item.id)}
-                    onCambiarCantidad={(delta) => cambiarCantidadEspecial(item.id, delta)}
+                    onEliminar={eliminarEspecial}
+                    onCambiarCantidad={cambiarCantidadEspecial}
                     puedeVerCosto={puedeVerCosto}
                   />
                 </div>
@@ -441,7 +444,7 @@ export default function BorradorPage() {
 
 // ─── Fila de ítem ─────────────────────────────────────────────────────────────
 
-function CarritoItemRow({
+const CarritoItemRow = memo(function CarritoItemRow({
   item,
   expandido,
   onToggle,
@@ -452,17 +455,17 @@ function CarritoItemRow({
 }: {
   item: ItemCarrito
   expandido: boolean
-  onToggle: () => void
-  onEliminar: () => void
-  onEditar: () => void
-  onCambiarCantidad: (delta: number) => void
+  onToggle: (id: string) => void
+  onEliminar: (id: string) => void
+  onEditar: (item: ItemCarrito) => void
+  onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
 }) {
   return (
     <div>
       <div className="flex items-center gap-3 px-4 py-3.5">
         <button
-          onClick={onToggle}
+          onClick={() => onToggle(item.id)}
           className="tactil flex-1 flex items-center gap-3 text-left min-w-0"
         >
           <ModuloImagen url={item.modulo.imagen_url} nombre={item.modulo.nombre} size="sm" />
@@ -507,7 +510,7 @@ function CarritoItemRow({
         {/* Controles de cantidad */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-0.5)}
+            onClick={() => onCambiarCantidad(item.id, -0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
@@ -519,12 +522,12 @@ function CarritoItemRow({
             value={item.config.cantidad}
             onChange={(e) => {
               const n = parseFloat(e.target.value)
-              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.config.cantidad).toFixed(4)))
+              if (!isNaN(n) && n > 0) onCambiarCantidad(item.id, parseFloat((n - item.config.cantidad).toFixed(4)))
             }}
             className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <button
-            onClick={() => onCambiarCantidad(0.5)}
+            onClick={() => onCambiarCantidad(item.id, 0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />
@@ -532,7 +535,7 @@ function CarritoItemRow({
         </div>
 
         <button
-          onClick={onEditar}
+          onClick={() => onEditar(item)}
           className="tactil shrink-0 rounded-md p-1.5 text-stone-300 hover:bg-stone-100 hover:text-stone-600 transition-colors"
           title="Editar módulo"
         >
@@ -540,7 +543,7 @@ function CarritoItemRow({
         </button>
 
         <button
-          onClick={onEliminar}
+          onClick={() => onEliminar(item.id)}
           className="tactil shrink-0 rounded-md p-1.5 text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
         >
           <Trash size={15} weight="bold" />
@@ -557,17 +560,17 @@ function CarritoItemRow({
       )}
     </div>
   )
-}
+})
 
-function HerrajeItemRow({
+const HerrajeItemRow = memo(function HerrajeItemRow({
   item,
   onEliminar,
   onCambiarCantidad,
   puedeVerCosto,
 }: {
   item: ItemHerrajeCarrito
-  onEliminar: () => void
-  onCambiarCantidad: (delta: number) => void
+  onEliminar: (id: string) => void
+  onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
 }) {
   return (
@@ -603,7 +606,7 @@ function HerrajeItemRow({
         {/* Controles de cantidad */}
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-0.5)}
+            onClick={() => onCambiarCantidad(item.id, -0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
@@ -615,12 +618,12 @@ function HerrajeItemRow({
             value={item.cantidad}
             onChange={(e) => {
               const n = parseFloat(e.target.value)
-              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.cantidad).toFixed(4)))
+              if (!isNaN(n) && n > 0) onCambiarCantidad(item.id, parseFloat((n - item.cantidad).toFixed(4)))
             }}
             className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <button
-            onClick={() => onCambiarCantidad(0.5)}
+            onClick={() => onCambiarCantidad(item.id, 0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />
@@ -628,14 +631,14 @@ function HerrajeItemRow({
         </div>
 
         <button
-          onClick={onEliminar}
+          onClick={() => onEliminar(item.id)}
           className="tactil shrink-0 rounded-md p-1.5 text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
         >
           <Trash size={15} weight="bold" />
         </button>
       </div>
   )
-}
+})
 
 function HerrajesAsociadosList({
   herrajes,
@@ -673,15 +676,15 @@ function HerrajesAsociadosList({
   )
 }
 
-function EspecialItemRow({
+const EspecialItemRow = memo(function EspecialItemRow({
   item,
   onEliminar,
   onCambiarCantidad,
   puedeVerCosto,
 }: {
   item: ItemEspecial
-  onEliminar: () => void
-  onCambiarCantidad: (delta: number) => void
+  onEliminar: (id: string) => void
+  onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
 }) {
   const dims = [
@@ -726,7 +729,7 @@ function EspecialItemRow({
 
         <div className="flex items-center gap-1 shrink-0">
           <button
-            onClick={() => onCambiarCantidad(-0.5)}
+            onClick={() => onCambiarCantidad(item.id, -0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Minus size={11} weight="bold" />
@@ -738,12 +741,12 @@ function EspecialItemRow({
             value={item.cantidad}
             onChange={(e) => {
               const n = parseFloat(e.target.value)
-              if (!isNaN(n) && n > 0) onCambiarCantidad(parseFloat((n - item.cantidad).toFixed(4)))
+              if (!isNaN(n) && n > 0) onCambiarCantidad(item.id, parseFloat((n - item.cantidad).toFixed(4)))
             }}
             className="w-10 text-center text-xs font-semibold text-stone-700 tabular-nums bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
           <button
-            onClick={() => onCambiarCantidad(0.5)}
+            onClick={() => onCambiarCantidad(item.id, 0.5)}
             className="tactil flex h-7 w-7 items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:bg-stone-50 hover:text-stone-700 transition-colors"
           >
             <Plus size={11} weight="bold" />
@@ -751,7 +754,7 @@ function EspecialItemRow({
         </div>
 
         <button
-          onClick={onEliminar}
+          onClick={() => onEliminar(item.id)}
           className="tactil shrink-0 rounded-md p-1.5 text-stone-300 hover:bg-red-50 hover:text-red-500 transition-colors"
         >
           <Trash size={15} weight="bold" />
@@ -767,7 +770,7 @@ function EspecialItemRow({
       )}
     </div>
   )
-}
+})
 
 function DetalleGrid({
   item,

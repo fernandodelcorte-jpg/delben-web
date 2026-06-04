@@ -129,6 +129,14 @@ service cloud.firestore {
       }
     }
 
+    // Colección derivada para el buscador del cotizador (1 doc por nombre único).
+    // No contiene costo Delben (precio_min es precio de lista). La escribe el
+    // importador (super_admin); la lee cualquier usuario autenticado, igual que modulos.
+    match /modulos_busqueda/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
     match /accesorios/{id} {
       allow read: if autenticado();
       allow write: if esSuperAdmin();

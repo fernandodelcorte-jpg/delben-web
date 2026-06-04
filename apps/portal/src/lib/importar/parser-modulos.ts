@@ -12,6 +12,7 @@ import type {
   AcabadoDoc,
   CategoriaDoc,
   ModuloDoc,
+  ModuloBusquedaDoc,
   PrecioDoc,
 } from '@/lib/firebase/tipos-firestore'
 
@@ -43,11 +44,13 @@ export type ResultadoParserModulos = {
   subcategorias: ItemConId<SubcategoriaDoc>[]
   acabados: ItemConId<AcabadoDoc>[]
   modulos: ItemConId<ModuloDoc>[]
+  modulosBusqueda: ItemConId<ModuloBusquedaDoc>[]
   precios: (ItemConId<PrecioDoc> & { modulo_id: string })[]
   estadisticas: {
     totalFilas: number
     filasValidas: number
     modulosUnicos: number
+    modulosBusqueda: number
     categoriasConDescuento0: string[]
   }
   advertencias: string[]
@@ -345,6 +348,43 @@ export async function parsearExcelModulos(
     if (metales && metales.size > 0) item.doc.colores_metal = Array.from(metales)
   }
 
+  // ── Módulos de búsqueda (derivados): 1 doc por categoria_id + nombre ─────────
+  // El buscador del cotizador consulta esta colección (≈727) en vez de los ≈2.076
+  // de `modulos`. Paso ADITIVO: no toca modulos/precios/codigo_excel. Reglas:
+  //  · requiere_* = OR de las variantes (si NINGUNA requiere, el grupo no requiere
+  //    → los planos NO muestran selectores de estructura/fachada en la ficha).
+  //  · precio_min = mínimo entre variantes; imagen_url + tipologia del representante
+  //    (variante de menor altura×profundidad). id determinista → idempotente.
+  const gruposBusqueda = new Map<string, ModuloDoc[]>()
+  for (const { doc: m } of modulosMap.values()) {
+    const id = slugify(`${m.categoria_id} ${m.nombre}`)
+    const arr = gruposBusqueda.get(id) ?? []
+    arr.push(m)
+    gruposBusqueda.set(id, arr)
+  }
+  const modulosBusqueda: ItemConId<ModuloBusquedaDoc>[] = []
+  for (const [id, variantes] of gruposBusqueda) {
+    const rep = variantes.reduce((a, b) =>
+      (b.altura - a.altura || b.profundidad - a.profundidad) < 0 ? b : a,
+    )
+    const precios = variantes
+      .map((v) => v.precio_min)
+      .filter((p): p is number => p !== undefined)
+    modulosBusqueda.push({
+      id,
+      doc: {
+        nombre: rep.nombre,
+        categoria_id: rep.categoria_id,
+        tipologia: rep.tipologia,
+        imagen_url: rep.imagen_url,
+        requiere_estructura: variantes.some((v) => v.requiere_estructura),
+        requiere_fachada: variantes.some((v) => v.requiere_fachada),
+        ...(precios.length > 0 ? { precio_min: Math.min(...precios) } : {}),
+        activo: true,
+      },
+    })
+  }
+
   const categoriasConDescuento0 = Array.from(categoriasMap.values())
     .filter((c) => c.doc.desc_desarmado_base_pct === 0)
     .map((c) => c.doc.nombre)
@@ -363,11 +403,13 @@ export async function parsearExcelModulos(
     subcategorias: Array.from(subcategoriasMap.values()),
     acabados: Array.from(acabadosMap.values()),
     modulos: Array.from(modulosMap.values()),
+    modulosBusqueda,
     precios: Array.from(preciosMap.values()),
     estadisticas: {
       totalFilas: rawRows.length,
       filasValidas: filasValidas.length,
       modulosUnicos: modulosMap.size,
+      modulosBusqueda: modulosBusqueda.length,
       categoriasConDescuento0,
     },
     advertencias,
