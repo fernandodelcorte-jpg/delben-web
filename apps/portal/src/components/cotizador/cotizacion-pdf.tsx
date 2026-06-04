@@ -1,7 +1,7 @@
 'use client'
 
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
-import { formatCOP } from '@/lib/datos-demo'
+import { formatMoneda } from '@/lib/datos-demo'
 import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const s = StyleSheet.create({
@@ -168,8 +168,9 @@ type Props = {
 }
 
 export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = [] }: Props) {
-  const subtotalSinIva = items.reduce((s, i) => s + i.precioSinIva * i.cantidad, 0)
-  const ivaTotal = items.reduce((s, i) => s + i.ivaMonto, 0)
+  const moneda = info.moneda
+  const fmt = (n: number) => formatMoneda(n, moneda)
+
   const totalModulos = items.reduce((s, i) => s + i.precioSubtotal, 0)
   const totalHerrajesAsoc = items.reduce(
     (s, i) => s + i.herrajes.reduce((hs, h) => hs + h.precioSubtotal, 0),
@@ -188,6 +189,17 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = 
     transporteFijo +
     instalacionFija
 
+  // IVA real de TODOS los renglones (los fijos no llevan IVA). El % se deriva de la
+  // base gravada (renglones sin IVA), no del país: en exportación con IVA de sede
+  // mostrará ese %, y donde el IVA es 0 no se muestra la línea.
+  const ivaTotal =
+    items.reduce((s, i) => s + i.ivaSubtotal + i.herrajes.reduce((hs, h) => hs + h.ivaSubtotal, 0), 0) +
+    herrajesSueltos.reduce((s, h) => s + h.ivaSubtotal, 0) +
+    especiales.reduce((s, e) => s + e.ivaSubtotal, 0)
+  const subtotalSinIva = total - ivaTotal
+  const baseGravada = total - transporteFijo - instalacionFija - ivaTotal
+  const ivaPct = baseGravada > 0 ? Math.round((ivaTotal / baseGravada) * 100) : 0
+
   const fecha = info.fecha.toLocaleDateString('es-CO', {
     year: 'numeric',
     month: 'long',
@@ -203,10 +215,8 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = 
             {info.logoDistribuidorUrl ? (
               <Image src={info.logoDistribuidorUrl} style={s.logo} />
             ) : (
-              <>
-                <Text style={s.marca}>DELBEN</Text>
-                <Text style={s.marcaSub}>Carpintería de alta calidad · Desde 1976</Text>
-              </>
+              // Cotización al cliente: marca del DISTRIBUIDOR, nunca Delben.
+              <Text style={s.marca}>{info.distribuidorNombre ?? info.proyectoNombre}</Text>
             )}
           </View>
           <View style={s.headerRight}>
@@ -239,8 +249,8 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = 
           </View>
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Moneda</Text>
-            <Text style={s.infoValor}>COP — Pesos colombianos</Text>
-            <Text style={s.infoSub}>IVA incluido en precio final</Text>
+            <Text style={s.infoValor}>{moneda === 'USD' ? 'USD — Dólares' : 'COP — Pesos colombianos'}</Text>
+            <Text style={s.infoSub}>{ivaTotal > 0 ? 'IVA incluido en el total' : 'Sin IVA'}</Text>
           </View>
         </View>
 
@@ -338,47 +348,31 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = 
           </>
         )}
 
-        {/* Totales */}
+        {/* Totales (esencial): Subtotal / IVA / Total. La línea de IVA solo si aplica. */}
         <View style={s.totalesBloque}>
           <View style={s.totalesInner}>
-            <View style={s.totalFila}>
-              <Text style={s.totalLabel}>Subtotal sin IVA</Text>
-              <Text style={s.totalValor}>{formatCOP(subtotalSinIva)}</Text>
-            </View>
-            <View style={s.totalFila}>
-              <Text style={s.totalLabel}>IVA 19%</Text>
-              <Text style={s.totalValor}>{formatCOP(ivaTotal)}</Text>
-            </View>
-            {totalEspeciales > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Muebles especiales</Text>
-                <Text style={s.totalValor}>{formatCOP(totalEspeciales)}</Text>
-              </View>
-            )}
-            {transporteFijo > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Transporte</Text>
-                <Text style={s.totalValor}>{formatCOP(transporteFijo)}</Text>
-              </View>
-            )}
-            {instalacionFija > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Instalación</Text>
-                <Text style={s.totalValor}>{formatCOP(instalacionFija)}</Text>
-              </View>
-            )}
+            {ivaTotal > 0 ? (
+              <>
+                <View style={s.totalFila}>
+                  <Text style={s.totalLabel}>Subtotal sin IVA</Text>
+                  <Text style={s.totalValor}>{fmt(subtotalSinIva)}</Text>
+                </View>
+                <View style={s.totalFila}>
+                  <Text style={s.totalLabel}>IVA {ivaPct}%</Text>
+                  <Text style={s.totalValor}>{fmt(ivaTotal)}</Text>
+                </View>
+              </>
+            ) : null}
             <View style={s.totalFinalFila}>
               <Text style={s.totalFinalLabel}>Total</Text>
-              <Text style={s.totalFinalValor}>{formatCOP(total)}</Text>
+              <Text style={s.totalFinalValor}>{fmt(total)}</Text>
             </View>
           </View>
         </View>
 
-        {/* Footer */}
+        {/* Footer — sin marca Delben en la cotización al cliente; solo paginación */}
         <View style={s.footer} fixed>
-          <Text style={s.footerTexto}>
-            Cotización generada por Plataforma Delben · Precios en COP con IVA
-          </Text>
+          <Text style={s.footerTexto}> </Text>
           <Text
             style={s.footerTexto}
             render={({ pageNumber, totalPages }) =>

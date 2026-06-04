@@ -15,6 +15,7 @@ import { sedeHabilitada } from '@/lib/firebase/tipos-firestore'
 const schema = z.object({
   distribuidorId: z.string().min(1, 'Selecciona un distribuidor'),
   sedeId: z.string().min(1, 'Selecciona una sede'),
+  numeroOp: z.string().trim().min(1, 'Ingresa el número de OP'),
   clienteNombre: z.string().min(2, 'Mínimo 2 caracteres'),
   proyectoNombre: z.string().min(2, 'Mínimo 2 caracteres'),
   modalidad: z.enum(['tradicional', 'desarmado']),
@@ -89,6 +90,7 @@ export default function NuevaValoracionPage() {
         categoriaNombre: '',
         transporteFijo: 0,
         instalacionFija: 0,
+        numeroOp: data.numeroOp.trim(),
       },
       dist ?? null,
       sede,
@@ -222,6 +224,22 @@ export default function NuevaValoracionPage() {
                 )}
               </div>
             )}
+
+            {/* Número de OP (Orden de Producción) — interno Delben */}
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1.5">
+                N.º de OP
+              </label>
+              <input
+                {...register('numeroOp')}
+                placeholder="Ej. BOG-1042"
+                className="w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm placeholder:text-stone-400 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all"
+              />
+              <p className="mt-1 text-xs text-stone-400">Orden de Producción interna. Solo referencia; no aparece en el PDF.</p>
+              {errors.numeroOp && (
+                <p className="mt-1.5 text-xs text-red-600">{errors.numeroOp.message}</p>
+              )}
+            </div>
 
             {/* Cliente */}
             <div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
-import { formatCOP } from '@/lib/datos-demo'
+import { formatMoneda } from '@/lib/datos-demo'
 import type { ItemPDF, HerrajePDF, EspecialPDF, InfoPDF } from '@/lib/pdf-helpers'
 
 const s = StyleSheet.create({
@@ -226,6 +226,9 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
     day: 'numeric',
   })
 
+  const moneda = info.moneda
+  const fmt = (n: number) => formatMoneda(n, moneda)
+
   const totalModulos = items.reduce((s, i) => s + i.costoSubtotal, 0)
   const totalHerrajesAsociados = items.reduce(
     (s, i) => s + i.herrajes.reduce((hs, h) => hs + h.costoSubtotal, 0),
@@ -236,6 +239,8 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
   // Costo de fábrica al distribuidor: NO incluye transporte/instalación fijos
   // (esos son costos propios del distribuidor, no de Delben).
   const totalCosto = totalModulos + totalHerrajesAsociados + totalHerrajesSueltos + totalEspeciales
+  // La orden de compra NUNCA lleva IVA (ni Colombia ni exportación) — es el costo de
+  // fábrica Delben al distribuidor. Subtotal = Total, sin línea de IVA, igual para ambos países.
 
   return (
     <Document>
@@ -292,7 +297,7 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
           </View>
           <View style={s.infoBloque}>
             <Text style={s.infoLabel}>Moneda</Text>
-            <Text style={s.infoValor}>COP — Sin IVA</Text>
+            <Text style={s.infoValor}>{moneda === 'USD' ? 'USD — Exportación' : 'COP'}</Text>
             <Text style={s.infoSub}>Costo de fábrica al distribuidor</Text>
           </View>
         </View>
@@ -326,15 +331,15 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
                       <Text style={s.tdConfigTexto}>{item.configLinea}</Text>
                     </View>
                     <Text style={s.tdQty}>{item.cantidad}</Text>
-                    <Text style={s.tdCosto}>{formatCOP(item.costoUnitario)}</Text>
-                    <Text style={s.tdSubtotal}>{formatCOP(item.costoSubtotal)}</Text>
+                    <Text style={s.tdCosto}>{fmt(item.costoUnitario)}</Text>
+                    <Text style={s.tdSubtotal}>{fmt(item.costoSubtotal)}</Text>
                   </View>
 
                   {item.herrajes.map((h, j) => (
                     <View key={j} style={s.herrajesFila}>
                       <Text style={s.herrajeNombre}>↳ {h.nombre}</Text>
                       <Text style={s.herrajeQty}>×{h.cantidad}</Text>
-                      <Text style={s.herrajeCosto}>{formatCOP(h.costoSubtotal)}</Text>
+                      <Text style={s.herrajeCosto}>{fmt(h.costoSubtotal)}</Text>
                     </View>
                   ))}
                 </View>
@@ -357,7 +362,7 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
                 <View key={i} style={s.tablaFila}>
                   <Text style={[s.tdNombreTexto, { flex: 4 }]}>{h.nombre}</Text>
                   <Text style={s.tdQty}>{h.cantidad}</Text>
-                  <Text style={s.tdSubtotal}>{formatCOP(h.costoSubtotal)}</Text>
+                  <Text style={s.tdSubtotal}>{fmt(h.costoSubtotal)}</Text>
                 </View>
               ))}
             </View>
@@ -388,7 +393,7 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
                       <Text style={s.tdConfigTexto}>{e.configLinea}</Text>
                     </View>
                     <Text style={s.tdQty}>{e.cantidad}</Text>
-                    <Text style={s.tdSubtotal}>{formatCOP(e.costoSubtotal)}</Text>
+                    <Text style={s.tdSubtotal}>{fmt(e.costoSubtotal)}</Text>
                   </View>
                   {e.herrajes.map((h, j) => (
                     <View key={j} style={s.herrajesFila}>
@@ -402,36 +407,16 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
           </>
         )}
 
-        {/* Totales */}
+        {/* Totales (esencial): Subtotal / Total, sin IVA, igual para Colombia y exportación. */}
         <View style={s.totalesBloque}>
           <View style={s.totalesInner}>
-            {totalHerrajesAsociados > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Módulos</Text>
-                <Text style={s.totalValor}>{formatCOP(totalModulos)}</Text>
-              </View>
-            )}
-            {totalHerrajesAsociados > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Herrajes de módulos</Text>
-                <Text style={s.totalValor}>{formatCOP(totalHerrajesAsociados)}</Text>
-              </View>
-            )}
-            {totalHerrajesSueltos > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Herrajes sueltos</Text>
-                <Text style={s.totalValor}>{formatCOP(totalHerrajesSueltos)}</Text>
-              </View>
-            )}
-            {totalEspeciales > 0 && (
-              <View style={s.totalFila}>
-                <Text style={s.totalLabel}>Muebles especiales</Text>
-                <Text style={s.totalValor}>{formatCOP(totalEspeciales)}</Text>
-              </View>
-            )}
+            <View style={s.totalFila}>
+              <Text style={s.totalLabel}>Subtotal</Text>
+              <Text style={s.totalValor}>{fmt(totalCosto)}</Text>
+            </View>
             <View style={s.totalFinalFila}>
               <Text style={s.totalFinalLabel}>Total orden de compra</Text>
-              <Text style={s.totalFinalValor}>{formatCOP(totalCosto)}</Text>
+              <Text style={s.totalFinalValor}>{fmt(totalCosto)}</Text>
             </View>
           </View>
         </View>
@@ -440,7 +425,7 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
         <View style={s.notaConfidencial}>
           <Text style={s.notaTexto}>
             Documento de uso interno. Los valores corresponden al costo de fábrica Delben al
-            distribuidor, sin IVA. No compartir con el cliente final.
+            distribuidor y NO incluyen IVA. No compartir con el cliente final.
           </Text>
         </View>
 

@@ -100,7 +100,7 @@ contra cálculo a mano en sus 5 caminos principales. TODOS coinciden:
 |---|---|---|
 | 1 | desarmado / cocina / Colombia | 1.562.495 ✓ |
 | 2 | tradicional / mueble 35% / Colombia | 1.450.889 ✓ |
-| 3 | exportación / USA / sin IVA / USD (tasa 4000) | 328,26 USD ✓ |
+| 3 | exportación / Venezuela / IVA sede 16% / USD (tasa 4000) | 380,78 USD ✓ (sin IVA: 328,26) |
 | 4 | magenta +12% recargo / desarmado / Colombia | 1.749.995 ✓ |
 | 5 | campaña global −10% / desarmado / Colombia | 1.406.246 ✓ |
 
@@ -740,6 +740,12 @@ Misma clase de problema que arriba (campos sensibles dentro de `resultado` del s
 **No se arregla ahora**; mitigación futura: no persistir los campos de venta en
 valoraciones, o separarlos. Detectado al arreglar el bug de selectores (2026-06-04).
 
+**Mitad facturación↔precio de venta — CERRADA (2026-06-04):** se cortó la fuga por la que
+`delben_facturacion` alcanzaba el precio de venta de cotizaciones de distribuidores (regla del
+`collectionGroup` + dashboard sin gate). Quitado `esFacturacionDelben()` de los reads de cotizaciones
+y gateado el dashboard. **La mitad de ESTA sección (comercial↔`costo_delben`) sigue abierta** con la
+misma causa raíz (snapshot monolítico). Solución sistémica común: Opción C. Ver bitácora 2026-06-04.
+
 ### 2. Inconsistencia de roles documentación ↔ código
 `delben_comercial` aparece en `CLAUDE.md` y `DISENO_SISTEMA.md`, pero el código
 tiene **5 roles** (`packages/firebase/src/roles.ts`), sin ese rol. Decidir si se
@@ -819,6 +825,124 @@ server-side por categoría, #7 TanStack Query. Herramienta de medición reproduc
 en `apps/portal/bench/` (no se incluye en el build; bundle vía esbuild).
 Archivos: `store/carrito.ts`, `lib/firestore/modulos.ts`,
 `cotizaciones/[id]/page.tsx`, `cotizaciones/borrador/page.tsx`, `apps/portal/bench/*`.
+
+### 2026-06-04 — Número consecutivo de cotización (anti-duplicados blindado)
+Identificador para contratos: `SIGLA_DIST-SIGLA_SEDE-AÑO-####` (ej. PIE-BOG-2026-0001).
+- **Consecutivo por distribuidor + sede + año**, reinicia el 1 de enero (contador por año).
+- **Anti-duplicados:** contador en `distribuidores/{id}/sedes/{sedeId}/contadores/{anio}` (`ContadorDoc`),
+  incrementado en `runTransaction` junto con la escritura del doc de cotización (todo o nada). Firestore
+  reintenta ante concurrencia → sin duplicados; transacción atómica → sin huecos. Regla con **constraint +1**
+  (`create` exige `ultimo==1`, `update` exige `ultimo==prev+1`) que blinda contra reinicios/saltos por SDK.
+- **Asignación al PRIMER `guardarCotizacion`** (no al borrador en memoria, no en re-guardados:
+  `actualizarCotizacion` no toca el número).
+- **Siglas explícitas** (`DistribuidorDoc.sigla`, `SedeDoc.sigla`), las define el super_admin, editables al
+  crear y editar (UI en `admin/distribuidores/nuevo` y `[id]`). **Si falta alguna, la transacción aborta**
+  (`SiglaFaltanteError`) sin consumir número y muestra mensaje al comercial. Las siglas se guardan en MAYÚSCULA.
+- **Snapshot:** `CotizacionDoc.numero_consecutivo/numero_seq/numero_anio` (opcionales). **Cotizaciones
+  existentes NO se renumeran** (se quedan sin número; solo las nuevas lo llevan). Se muestra en detalle y lista.
+- **Seguridad:** la `sigla` del distribuidor y de la sede quedan **bloqueadas para el distribuidor_admin**
+  (solo super_admin las edita) — en el distribuidor por field-lock (`distribuidor_admin` sí escribe el doc para
+  su logo, así que no se pudo restringir todo a super_admin); en la sede, sumando `sigla` a la lista de campos
+  fijados. El contador no tiene datos sensibles (regla #2 intacta).
+- **DEPLOY (NO hoy):** `firebase deploy --only firestore:rules` **debe ir primero o junto con el app** (la
+  transacción escribe el contador; sin la regla desplegada el guardado fallaría). Luego configurar las siglas
+  de los distribuidores/sedes activos (por la UI nueva, o manualmente en Firebase Console antes del app deploy
+  para que no haya ventana sin número). Hasta que estén configuradas, guardar muestra el `SiglaFaltanteError`.
+- Archivos: `tipos-firestore.ts`, `lib/firestore/cotizaciones.ts`, `firestore.rules`,
+  `admin/distribuidores/{nuevo,[id]}/page.tsx`, `cotizaciones/borrador/page.tsx`, `cotizaciones/[id]/page.tsx`,
+  `cotizaciones/page.tsx`. tsc limpio; el motor no se tocó.
+
+### 2026-06-04 — PDFs: moneda real, IVA real, totales esenciales, marca correcta (display)
+Cierra el pendiente que dejó la tanda de IVA. Solo display; no toca el motor.
+1. **Moneda real:** los PDFs formatean con la moneda del snapshot (USD en exportación) vía nuevo
+   `formatMoneda(n, moneda)`; se acabó el `formatCOP` hardcodeado. `InfoPDF` lleva `moneda`.
+2. **IVA real:** el % se deriva de los renglones (`ivaSubtotal`/base gravada), no "19%" fijo. En
+   exportación con IVA de sede muestra ese %; donde el IVA es 0 no se muestra la línea. Se agregó
+   `ivaSubtotal` (IVA del renglón = `iva_monto × cantidad`) a `ItemPDF`/`HerrajePDF`/`EspecialPDF`
+   (esto además corrige un bug latente: el IVA del total no multiplicaba por cantidad).
+3. **Totales Opción A:** bloque reducido a lo esencial. Cotización (COP y exportación) = Subtotal/IVA/Total.
+   Orden de compra = **Subtotal/Total SIN IVA en todos los casos** (Colombia y exportación por igual; es el
+   costo de fábrica Delben al distribuidor, nunca lleva IVA — confirmado con el dueño). Se quitaron las líneas
+   redundantes (muebles especiales, herrajes de módulos vs sueltos, transporte/instalación).
+4. **Pie:** se quitó "Cotización generada por Plataforma Delben · Precios en COP con IVA" SOLO de la
+   cotización al cliente (queda la paginación). La orden de compra (interna) conserva su pie y marca Delben.
+5. **Marca:** la cotización al cliente muestra logo/nombre del **distribuidor** (nunca "DELBEN" ni el
+   tagline). `InfoPDF.distribuidorNombre` se usa como fallback cuando no hay logo.
+- Archivos: `lib/datos-demo.ts` (`formatMoneda`), `lib/pdf-helpers.ts` (InfoPDF + `ivaSubtotal` + converters),
+  `components/cotizador/{cotizacion-pdf,orden-compra-pdf}.tsx`, `cotizaciones/borrador/page.tsx`,
+  `cotizaciones/[id]/page.tsx`. tsc limpio.
+
+### 2026-06-04 — Regla de negocio: IVA por sede (cualquier país), reemplaza "exportación sin IVA"
+- **Cambio confirmado con el dueño:** el IVA se aplica según el `iva_pct` que el distribuidor
+  configura por sede, en CUALQUIER país (Colombia y exportación por igual; `iva_pct = 0` → sin IVA).
+  Ya NO existe "solo Colombia lleva IVA". Reemplaza `DISENO_SISTEMA.md §2`.
+- **Motor (`packages/core/motor-calculo.ts`):** una línea — `ivaAplicado = esColombia && u.iva > 0`
+  → `ivaAplicado = u.iva > 0`. **La moneda/conversión a USD NO se tocó** (sigue dependiendo del país).
+  La rama Colombia es idéntica (el caso **1.562.495 no se movió**). Único comportamiento que cambia:
+  exportación con `iva_pct > 0` ahora SÍ cobra IVA.
+- **Test (`packages/core`):** el Caso 3 (antes "exportación USA sin IVA → 328,26 USD") se reemplazó por
+  exportación **Venezuela / IVA sede 16% / USD** → `precio_sin_iva` 328,26 (cadena pre-IVA idéntica),
+  `iva_monto` 52,52, `precio_final` **380,78 USD**. `npm test` en `packages/core`: **6/6 verde**
+  (1.562.495 y los otros 3 caminos Colombia intactos; `filtrarPorRol` intacto).
+- **Docs:** actualizados `DISENO_SISTEMA.md` (§1 sedes y §2 motor), `CLAUDE.md`, este doc (tabla de
+  validación) y `CASOS_PRUEBA_MOTOR.md`. La copia histórica `docs/_referencia_codigo/motor_calculo.ts`
+  se dejó con nota "(regla superada 2026-06-04)".
+- **Cotizaciones guardadas:** NO se alteran — el `resultado` se guarda como números congelados; el cambio
+  solo afecta cotizaciones **nuevas** o **recalculadas** ("Actualizar precios"). Las de exportación viejas
+  siguen sin IVA tal como se guardaron. (Nota: `reconstruirResultadoEspecial` en las vistas detalle conserva
+  la regla vieja para reconstruir desgloses de especiales históricos — correcto por fidelidad; deuda de
+  lógica duplicada.)
+- **UI:** etiqueta engañosa "Total con IVA" → **"Total final"** en borrador y detalles de cotización
+  (`cotizaciones/borrador`, `cotizaciones/[id]`, `admin/cotizaciones/[distribuidorId]/[id]`).
+- **Operativo:** el motor solo cobra IVA en exportación si la sede tiene `iva_pct > 0` configurado; el default
+  al crear sede sigue sembrando 0 en export (por decisión: el distribuidor configura el real). Verificar las
+  sedes de exportación reales (ej. Venezuela) tras el cambio.
+- **PENDIENTE (siguiente tanda):** arreglar el PDF (`cotizacion-pdf.tsx`) — moneda USD + IVA reales del
+  snapshot ("IVA 19%" y `formatCOP` hoy hardcodeados). NO se tocó en esta tanda.
+- Archivos: `packages/core/src/motor-calculo.ts`, `packages/core/src/__tests__/motor-calculo.test.ts`,
+  `docs/{DISENO_SISTEMA,ESTADO_ACTUAL,_referencia_codigo/CASOS_PRUEBA_MOTOR,_referencia_codigo/motor_calculo}`,
+  `CLAUDE.md`, `cotizaciones/borrador/page.tsx`, `cotizaciones/[id]/page.tsx`, `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
+
+### 2026-06-04 — Seguridad: `delben_facturacion` veía el dashboard del super_admin con precios de venta
+- **Síntoma:** facturación caía en `/admin` (dashboard super_admin) y veía "Volumen cotizado" (~$332M),
+  "Cotizaciones recientes" con montos por proyecto/cliente y accesos rápidos de admin. Esos montos son
+  **precio de venta al cliente final** (`totales.total` = Σ `precio_final_unitario`), dato prohibido para
+  ese rol (regla de oro #2).
+- **Causa raíz (3 capas):** (A) la home redirige a facturación a `/admin`; (B) `admin/page.tsx` y
+  `admin/cotizaciones/page.tsx` no gateaban por rol; (C) **la regla del `collectionGroup('cotizaciones')`
+  incluía `esFacturacionDelben()`** → el backend entregaba el doc completo (con precio de venta). Falla de
+  backend, no solo UI. El cambio de hoy (dar lectura de `distribuidores` a facturación) **destapó** la fuga:
+  antes, el `Promise.all` del dashboard rechazaba al pedir `distribuidores` (denegado) y enmascaraba los
+  datos; al permitir `distribuidores`, resolvió y los montos se renderizaron.
+- **Arreglo B (backend, fuga real):** se quitó `esFacturacionDelben()` de los 3 reads de cotizaciones en
+  `firestore.rules` (collectionGroup + cotizaciones legacy + cotizaciones anidadas en proyectos). Facturación
+  ya no lee cotizaciones de distribuidores ni por SDK ni por URL. **Se conservó** su acceso a valoraciones,
+  distribuidores (selector de sede) y sedes/historial.
+- **Arreglo A (UI/routing):** `admin/page.tsx` y `admin/cotizaciones/page.tsx` ramifican por rol; para
+  facturación **no se llama** a `getCotizacionesTodas()` (evita el permission-denied que volvería a romper el
+  `Promise.all` en silencio) y se redirige a `/admin/valoraciones`.
+- **Pendiente operativo:** desplegar reglas — `firebase deploy --only firestore:rules` (lo corre el dueño).
+- **Estructural:** esto cierra la mitad **facturación↔precio de venta** del problema de fondo. La otra mitad
+  (**deuda §1: `distribuidor_comercial`↔`costo_delben`**) sigue **abierta** y comparte la misma causa raíz:
+  snapshot de cotización monolítico (costo + venta en un doc legible entero) con separación solo visual. La
+  solución sistémica de ambas es la **Opción C** (separar campos costo/venta en otro doc/colección, o servir
+  cálculos por endpoint que filtre por rol como `/api/catalogo`).
+- Archivos: `firestore.rules`, `app/(portal)/admin/page.tsx`, `app/(portal)/admin/cotizaciones/page.tsx`.
+
+### 2026-06-04 — Valoraciones: campo "N.º de OP" (Orden de Producción)
+- Nuevo campo `numero_op` en las valoraciones internas de `delben_facturacion`: texto libre
+  alfanumérico, uno por valoración, lo escribe facturación. **Obligatorio al crear** (validación
+  Zod en `/admin/valoraciones/nueva`), **opcional en el tipo** (`ValoracionDoc.numero_op?: string`)
+  para no romper la lectura de valoraciones guardadas antes de esto (las viejas no lo tienen y abren
+  sin problema). Dato interno de referencia: **NO va en ningún PDF**.
+- Flujo: viaja por `CotizacionInfo.numeroOp` (nueva → store → `guardarValoracion`); editable en el
+  borrador (la superficie de "Editar" que ya existía) vía nueva acción `actualizarNumeroOp`, y
+  persistido también por `actualizarValoracion`. Editar una valoración vieja permite backfillear su OP.
+  `reabrirValoracion` restaura el OP al editar.
+- Se muestra en la lista (`· OP …` bajo el cliente) y en el detalle (línea "OP:" en el encabezado).
+- No se tocó el motor ni la seguridad por rol (facturación escribiendo en su propio flujo; no expone nada).
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `lib/firestore/valoraciones.ts`,
+  `app/(portal)/admin/valoraciones/{nueva,borrador,[id]}/page.tsx`, `app/(portal)/admin/valoraciones/page.tsx`.
 
 ### 2026-06-04 — Fix: `delben_facturacion` no veía selectores de distribuidor/sede al valorar
 - **Síntoma:** en `/admin/valoraciones/nueva`, facturación no veía el selector de distribuidor ni el de sede.

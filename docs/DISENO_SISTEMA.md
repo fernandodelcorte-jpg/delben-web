@@ -148,8 +148,11 @@ Se derivan del país, NO se eligen al cotizar:
 - **Cliente final** (cliente del distribuidor): el admin del distribuidor
   configura sus condiciones → determina IVA / exportación para la Capa Distribuidor.
 
-Colombia: COP con IVA (configurable, hoy 19%). Exportación: USD sin IVA, con
-tasa configurada por el super_admin (con histórico).
+Colombia: COP. Exportación: USD, con tasa configurada por el super_admin (con
+histórico). El **IVA se aplica según el `iva_pct` configurado por la sede en
+CUALQUIER país** (Colombia y exportación por igual); `iva_pct = 0` → sin IVA.
+La moneda sí depende del país; el IVA no. (Regla actualizada 2026-06-04; antes
+"exportación sin IVA".)
 
 ## Sedes (multi-sede por distribuidor)
 
@@ -167,7 +170,8 @@ Decisiones cerradas:
 2. **Un usuario puede pertenecer a una, varias o todas las sedes** de su
    distribuidor (`sedes_asignadas[]` + `todas_las_sedes`).
 3. **País, moneda e IVA se derivan de la SEDE** (no del distribuidor): Colombia →
-   COP con IVA; USA/Venezuela → USD exportación sin IVA.
+   COP; USA/Venezuela → USD (exportación). El IVA se aplica según el `iva_pct`
+   de la sede en cualquier país (0 = sin IVA); la moneda sí depende del país.
 4. **Reparto de configuración por sede:**
    - **Capa Delben** (descuentos muebles/herrajes, servicios, gestión comercial):
      la define el **super_admin** al crear/editar la sede.
@@ -240,9 +244,9 @@ PRECIO BASE (de la lista de Excel, en COP)
        subtotal2 = COSTO_DELBEN × (1 + grupo2)
     6. utilidad = MARGIN:
        precio_sin_iva = subtotal2 ÷ (1 − utilidad%)
-    7. IVA (ÚLTIMO paso):
-       Colombia    → PRECIO_FINAL = precio_sin_iva × (1 + iva%)
-       Exportación → PRECIO_FINAL = precio_sin_iva  (sin IVA)
+    7. IVA (ÚLTIMO paso) — según iva% de la sede, en CUALQUIER país:
+       iva% > 0  → PRECIO_FINAL = precio_sin_iva × (1 + iva%)
+       iva% = 0  → PRECIO_FINAL = precio_sin_iva  (sin IVA)
 ```
 
 ## Punto clave: dos "margin"
@@ -264,8 +268,10 @@ ese % pero es menos.
 | Utilidad 25% (margin) | ÷ 0.75 | 1.313.021 |
 | IVA 19% Colombia | × 1.19 | **1.562.495** ← precio cliente |
 
-Exportación (sin IVA) = 1.313.021. Utilidad real comprobada = 25% (confirma
-que es margin, no markup). Los 8 puntos de verificación pasaron.
+El precio sin IVA = 1.313.021 (esta cotización es Colombia con IVA 19% → 1.562.495).
+Para una sede sin IVA (`iva_pct = 0`) el precio final sería el sin IVA. Utilidad real
+comprobada = 25% (confirma que es margin, no markup). Los 8 puntos de verificación pasaron.
+(Nota 2026-06-04: el IVA ya no depende del país sino del `iva_pct` de la sede.)
 
 ## ⚠️ Tu tarea crítica antes de construir alrededor
 

@@ -62,15 +62,24 @@ describe('Caso 2 — tradicional / mueble / Colombia', () => {
 })
 
 // ----------------------------------------------------------
-// Caso 3 — exportación / USA / sin IVA / USD
+// Caso 3 — exportación / Venezuela / CON IVA de sede (16%) / USD
+// Regla nueva (2026-06-04): el IVA se aplica según el iva_pct configurado por
+// la sede en CUALQUIER país (ya NO "exportación sin IVA"). La conversión a USD
+// queda intacta. La cadena pre-IVA es idéntica a la del antiguo Caso 3:
+// precio_sin_iva = 328,26 USD; con IVA 16% → 380,78 USD.
 // ----------------------------------------------------------
-describe('Caso 3 — exportación / USA / sin IVA / USD', () => {
-  it('convierte a USD, suprime IVA y produce ≈ 328,26 USD', () => {
-    const r = calcularItem({ ...BASE, pais_cliente_final: 'USA' })
+describe('Caso 3 — exportación / Venezuela / con IVA de sede 16% / USD', () => {
+  it('convierte a USD y aplica el IVA de la sede (16%): 328,26 → ≈ 380,78 USD', () => {
+    const r = calcularItem({
+      ...BASE,
+      universo: { ...U, iva: 16 },
+      pais_cliente_final: 'Venezuela',
+    })
     expect(r.moneda).toBe('USD')
-    expect(r.iva_aplicado).toBe(false)
-    expect(r.iva_monto).toBe(0)
-    expect(r.precio_final_unitario).toBeCloseTo(328.26, 1)
+    expect(r.iva_aplicado).toBe(true)
+    expect(r.precio_sin_iva).toBeCloseTo(328.26, 1)
+    expect(r.iva_monto).toBeCloseTo(52.52, 1)
+    expect(r.precio_final_unitario).toBeCloseTo(380.78, 1)
   })
 })
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
@@ -25,7 +26,8 @@ type Stats = {
 }
 
 export default function AdminDashboardPage() {
-  const { usuario } = useAuth()
+  const { usuario, rol, cargando: cargandoAuth } = useAuth()
+  const router = useRouter()
   const [stats, setStats] = useState<Stats | null>(null)
   const [cotizacionesRecientes, setCotizacionesRecientes] = useState<Cotizacion[]>([])
   const [distribuidores, setDistribuidores] = useState<Distribuidor[]>([])
@@ -35,7 +37,17 @@ export default function AdminDashboardPage() {
   const hora = new Date().getHours()
   const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches'
 
+  // Este dashboard global es SOLO para super_admin. delben_facturacion no debe ver
+  // volumen cotizado ni cotizaciones de distribuidores (precio de venta — regla #2),
+  // y con las reglas actuales getCotizacionesTodas() le daría permission-denied
+  // (que haría rechazar el Promise.all en silencio). Por eso: para facturación NO
+  // se hace ninguna llamada y se redirige a su home real (valoraciones).
   useEffect(() => {
+    if (cargandoAuth) return
+    if (rol !== 'super_admin') {
+      if (rol === 'delben_facturacion') router.replace('/admin/valoraciones')
+      return
+    }
     Promise.all([
       getDistribuidores(),
       getCotizacionesTodas(),
@@ -51,11 +63,21 @@ export default function AdminDashboardPage() {
         volumenTotal: cots.reduce((s, c) => s + c.totales.total, 0),
       })
     }).finally(() => setCargando(false))
-  }, [])
+  }, [cargandoAuth, rol, router])
 
   const mapaDistribuidor = Object.fromEntries(distribuidores.map((d) => [d.id, d]))
 
   const nombreUsuario = usuario?.email?.split('@')[0] ?? ''
+
+  // Mientras carga el rol, o si NO es super_admin (facturación se está redirigiendo
+  // a /admin/valoraciones), no renderizamos el dashboard global ni su data.
+  if (cargandoAuth || rol !== 'super_admin') {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-stone-200 border-t-stone-700" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">

@@ -18,7 +18,9 @@
  *   grupo2 = transporte+instalación+imprevistos (SUMAN)
  *   subtotal2 = costoDelben × (1 + grupo2)
  *   utilidad = MARGIN: precioSinIva = subtotal2 / (1 - utilidad)
- *   IVA (último): Colombia × (1+iva); Exportación sin IVA
+ *   IVA (último): se aplica u.iva del universo de la sede en CUALQUIER país
+ *     (Colombia y exportación por igual); iva 0 = sin IVA. La MONEDA sí depende
+ *     del país (Colombia COP, exportación USD con conversión por tasa).
  *
  * SEGURIDAD: el costo Delben y los pasos A/B nunca deben enviarse
  * al rol distribuidor_comercial. Ejecutar en servidor y devolver,
@@ -178,7 +180,9 @@ export function calcularItem(input: ItemInput): ResultadoCalculo {
   if (u.utilidad >= 100) throw new Error('Utilidad % inválida')
   const precioSinIva = subtotal2 / (1 - u.utilidad / 100)
 
-  const ivaAplicado = esColombia && u.iva > 0
+  // IVA por sede: se aplica el u.iva configurado en CUALQUIER país (Colombia y
+  // exportación por igual). iva 0 = sin IVA. La moneda/conversión sí dependen del país.
+  const ivaAplicado = u.iva > 0
   const precioFinal = ivaAplicado ? precioSinIva * (1 + u.iva / 100) : precioSinIva
   const ivaMonto = ivaAplicado ? precioFinal - precioSinIva : 0
 

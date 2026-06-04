@@ -87,10 +87,10 @@ Dos capas, todo SECUENCIAL:
   es MARGIN: ÷(1−%)).
 - **Capa Distribuidor** (→ precio cliente final): transporte+instalación+
   imprevistos se SUMAN → utilidad MARGIN ÷(1−%) → IVA último
-  (Colombia con IVA; exportación sin IVA).
+  (según el `iva_pct` de la sede, en CUALQUIER país; 0 = sin IVA).
 
-Moneda e IVA se derivan del país: el distribuidor lo configura el super_admin;
-el cliente final lo configura el admin del distribuidor.
+La MONEDA se deriva del país (Colombia COP, exportación USD). El IVA NO: se aplica
+según el `iva_pct` configurado por la sede (regla 2026-06-04; antes "exportación sin IVA").
 
 ## Roles
 

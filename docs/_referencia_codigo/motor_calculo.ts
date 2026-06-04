@@ -19,6 +19,9 @@
  *   subtotal2 = costoDelben × (1 + grupo2)
  *   utilidad = MARGIN: precioSinIva = subtotal2 / (1 - utilidad)
  *   IVA (último): Colombia × (1+iva); Exportación sin IVA
+ *   ⚠️ REGLA SUPERADA (2026-06-04): el motor vivo (packages/core) ahora aplica el
+ *      IVA según el iva_pct de la sede en CUALQUIER país. Esta copia de referencia
+ *      se conserva como registro histórico del diseño original; no refleja la regla actual.
  *
  * SEGURIDAD: el costo Delben y los pasos A/B nunca deben enviarse
  * al rol distribuidor_comercial. Esta función debe ejecutarse en

@@ -89,6 +89,11 @@ export default function ValoracionDetallePage() {
           <p className="text-sm text-stone-500 mt-0.5">
             {valoracion.distribuidor_nombre} · {valoracion.clienteNombre}
           </p>
+          {valoracion.numero_op && (
+            <p className="text-xs text-stone-500 mt-1">
+              OP: <span className="font-semibold text-stone-700 tabular-nums">{valoracion.numero_op}</span>
+            </p>
+          )}
           <p className="text-xs text-stone-400 mt-1">{formatFecha(valoracion.createdAt)}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

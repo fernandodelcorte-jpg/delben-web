@@ -40,6 +40,7 @@ const pct = z.coerce.number().min(0).max(100)
 
 const schemaSede = z.object({
   nombre: z.string().min(2, 'Mínimo 2 caracteres'),
+  sigla: z.string().trim().max(8, 'Máximo 8 caracteres').optional(),
   pais: z.string().min(2, 'Requerido'),
   ciudad: z.string().min(2, 'Requerido'),
   acceso_tradicional: z.boolean(),
@@ -56,6 +57,7 @@ type FormSede = z.infer<typeof schemaSede>
 
 const SEDE_DEFAULTS: FormSede = {
   nombre: '',
+  sigla: '',
   pais: 'Colombia',
   ciudad: '',
   acceso_tradicional: true,
@@ -124,6 +126,10 @@ export default function DetalleDistribuidorPage() {
   const [mostrarFormUsuario, setMostrarFormUsuario] = useState(false)
   const [creandoUsuario, setCreandoUsuario] = useState(false)
   const [errorUsuario, setErrorUsuario] = useState<string | null>(null)
+  // Sigla del distribuidor (para el N.º consecutivo de cotización).
+  const [siglaDist, setSiglaDist] = useState('')
+  const [guardandoSigla, setGuardandoSigla] = useState(false)
+  const [siglaOk, setSiglaOk] = useState(false)
 
   const formSede = useForm<FormSede>({
     resolver: zodResolver(schemaSede),
@@ -143,6 +149,7 @@ export default function DetalleDistribuidorPage() {
     ])
       .then(([dist, seds, usrs]) => {
         setDistribuidor(dist)
+        setSiglaDist(dist?.sigla ?? '')
         setSedes(seds)
         setUsuarios(usrs)
         // Una sola sede → se abre expandida (no tiene sentido colapsar lo único que hay).
@@ -151,6 +158,22 @@ export default function DetalleDistribuidorPage() {
       .finally(() => setCargando(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  async function handleGuardarSiglaDist() {
+    if (!distribuidor) return
+    setGuardandoSigla(true)
+    setSiglaOk(false)
+    try {
+      const sigla = siglaDist.trim().toUpperCase()
+      await actualizarDistribuidor(id, { sigla })
+      setDistribuidor({ ...distribuidor, sigla })
+      setSiglaDist(sigla)
+      setSiglaOk(true)
+      setTimeout(() => setSiglaOk(false), 3000)
+    } finally {
+      setGuardandoSigla(false)
+    }
+  }
 
   async function toggleActivo() {
     if (!distribuidor) return
@@ -188,6 +211,7 @@ export default function DetalleDistribuidorPage() {
     setGuardadoOk(false)
     formSede.reset({
       nombre: sede.nombre,
+      sigla: sede.sigla ?? '',
       pais: sede.pais,
       ciudad: sede.ciudad,
       acceso_tradicional: sede.acceso_tradicional,
@@ -231,11 +255,14 @@ export default function DetalleDistribuidorPage() {
         servicios,
       }
 
+      const sigla = data.sigla?.trim().toUpperCase()
+
       if (sedeEditando) {
         // Editar: NO se toca el universo (lo configura el distribuidor_admin).
         await Promise.all([
           actualizarSede(id, sedeEditando.id, {
             nombre: data.nombre,
+            ...(sigla ? { sigla } : {}),
             pais: data.pais,
             ciudad: data.ciudad,
             acceso_tradicional: data.acceso_tradicional,
@@ -249,6 +276,7 @@ export default function DetalleDistribuidorPage() {
         // derivado del país. El distribuidor_admin lo completa en su panel.
         const sedeId = await crearSede(id, {
           nombre: data.nombre,
+          ...(sigla ? { sigla } : {}),
           pais: data.pais,
           ciudad: data.ciudad,
           acceso_tradicional: data.acceso_tradicional,
@@ -366,6 +394,37 @@ export default function DetalleDistribuidorPage() {
           {distribuidor.activo ? 'Activo' : 'Inactivo'}
         </button>
       </div>
+
+      {/* Sigla del distribuidor (para el N.º consecutivo de cotización) */}
+      <section className="rounded-xl border border-stone-200 bg-white p-6">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+              Sigla del distribuidor
+            </label>
+            <p className="text-xs text-stone-400 mb-2">
+              Va en el número de cotización: <span className="font-mono">SIGLA-SEDE-AÑO-####</span> (ej. PIE-BOG-2026-0001).
+            </p>
+            <input
+              value={siglaDist}
+              onChange={(e) => setSiglaDist(e.target.value)}
+              placeholder="Ej. PIE"
+              maxLength={8}
+              className="w-40 rounded-lg border border-stone-200 px-3 py-2 text-sm uppercase outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            {siglaOk && <span className="text-xs font-medium text-green-600">Guardada ✓</span>}
+            <button
+              onClick={handleGuardarSiglaDist}
+              disabled={guardandoSigla}
+              className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-50 transition-colors"
+            >
+              {guardandoSigla ? 'Guardando…' : 'Guardar sigla'}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* Sedes */}
       <section className="rounded-xl border border-stone-200 bg-white p-6">
@@ -771,6 +830,7 @@ function CamposSedeForm({ form }: { form: ReturnType<typeof useForm<FormSede>> }
       {/* Identidad */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <CampoTexto label="Nombre de la sede" campo="nombre" form={form} placeholder="Bogotá" />
+        <CampoTexto label="Sigla (N.º cotización)" campo="sigla" form={form} placeholder="BOG" />
         <CampoTexto label="País" campo="pais" form={form} placeholder="Colombia" />
         <CampoTexto label="Ciudad" campo="ciudad" form={form} placeholder="Bogotá" />
       </div>
@@ -826,7 +886,7 @@ function CampoTexto({
   placeholder,
 }: {
   label: string
-  campo: 'nombre' | 'pais' | 'ciudad'
+  campo: 'nombre' | 'sigla' | 'pais' | 'ciudad'
   form: ReturnType<typeof useForm<FormSede>>
   placeholder?: string
 }) {

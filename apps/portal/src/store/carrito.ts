@@ -104,6 +104,9 @@ export type CotizacionInfo = {
   categoriaNombre: string
   transporteFijo: number
   instalacionFija: number
+  // Número de OP — solo aplica a valoraciones internas (delben_facturacion).
+  // Las cotizaciones no lo usan.
+  numeroOp?: string
   // Proyecto / versión (opcionales — cotizaciones sin proyecto no los tienen)
   proyectoId?: string
   espacioNombre?: string
@@ -137,6 +140,7 @@ type CarritoState = {
   setTasaUsd: (tasa: number) => void
   iniciarCotizacion: (info: Omit<CotizacionInfo, 'fecha'>, distribuidor: Distribuidor | null, sede: Sede | null) => void
   actualizarCostosProyecto: (transporteFijo: number, instalacionFija: number) => void
+  actualizarNumeroOp: (numeroOp: string) => void
   abrirBuscador: () => void
   cerrarBuscador: () => void
   seleccionarModulo: (modulo: Modulo) => void
@@ -389,6 +393,13 @@ export const useCarrito = create<CarritoState>()(
         : null,
     })),
 
+  actualizarNumeroOp: (numeroOp) =>
+    set((state) => ({
+      cotizacionInfo: state.cotizacionInfo
+        ? { ...state.cotizacionInfo, numeroOp }
+        : null,
+    })),
+
   abrirBuscador: () => set({ pantallaActiva: 'buscador' }),
   cerrarBuscador: () => set({ pantallaActiva: 'carrito' }),
 
@@ -633,6 +644,7 @@ export const useCarrito = create<CarritoState>()(
       categoriaNombre: '',
       transporteFijo: valoracion.totales.transporteFijo ?? 0,
       instalacionFija: valoracion.totales.instalacionFija ?? 0,
+      numeroOp: valoracion.numero_op,
     }
 
     const items: ItemCarrito[] = valoracion.items.map((snap) => ({

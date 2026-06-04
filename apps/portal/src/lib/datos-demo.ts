@@ -259,3 +259,11 @@ export function acabadosDe(subcategoriaId: string): Acabado[] {
 export function formatCOP(n: number): string {
   return '$' + Math.round(n).toLocaleString('es-CO')
 }
+
+// Formatea según la moneda real de la cotización (COP sin decimales; USD con 2).
+export function formatMoneda(n: number, moneda: 'COP' | 'USD'): string {
+  if (moneda === 'USD') {
+    return 'US$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  return formatCOP(n)
+}

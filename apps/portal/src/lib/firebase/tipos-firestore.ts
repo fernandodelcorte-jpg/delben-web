@@ -122,6 +122,10 @@ export interface UniversoModalidad {
 // El distribuidor queda identitario: las condiciones de cálculo viven en la sede.
 export interface DistribuidorDoc {
   nombre: string
+  // Sigla para el número consecutivo de cotización (ej. "PIE"). La define el
+  // super_admin. Opcional para no romper distribuidores existentes; OBLIGATORIA
+  // para poder guardar una cotización (se valida en la transacción de guardado).
+  sigla?: string
   logo_url?: string | null
   activo: boolean
   created_at: number
@@ -133,6 +137,9 @@ export interface DistribuidorDoc {
 // IVA se derivan de la sede.
 export interface SedeDoc {
   nombre: string // ej. "Bogotá", "Miami", "Caracas"
+  // Sigla de la sede para el número consecutivo (ej. "BOG"). La define el super_admin.
+  // Opcional (sedes existentes no la tienen); obligatoria para guardar cotización.
+  sigla?: string
   pais: string
   ciudad: string
   acceso_tradicional: boolean
@@ -380,6 +387,11 @@ export interface ValoracionDoc {
   distribuidor_nombre: string
   clienteNombre: string
   proyectoNombre: string
+  // Número de Orden de Producción (interno Delben). Texto libre alfanumérico, uno
+  // por valoración, lo escribe facturación. Obligatorio al crear (validado en el
+  // formulario), pero OPCIONAL en el tipo para no romper valoraciones guardadas
+  // antes de esta funcionalidad (no lo tienen). Dato interno: NO va en PDFs.
+  numero_op?: string
   modalidad: 'tradicional' | 'desarmado'
   items: ItemCotizacionSnapshot[]
   itemsHerraje: ItemHerraCotizacionSnapshot[]
@@ -422,6 +434,12 @@ export interface CotizacionDoc {
   modalidad: 'tradicional' | 'desarmado'
   fecha: number
   estado: 'borrador' | 'enviada' | 'aceptada'
+  // Número consecutivo (SIGLA_DIST-SIGLA_SEDE-AÑO-####). Se asigna en el primer
+  // guardarCotizacion vía transacción. Opcional: las cotizaciones guardadas antes
+  // de esta funcionalidad NO lo tienen (no se renumeran).
+  numero_consecutivo?: string
+  numero_seq?: number
+  numero_anio?: number
   // Campos de proyecto/versión (opcionales — cotizaciones antiguas no los tienen)
   proyecto_id?: string
   espacio_nombre?: string
@@ -437,3 +455,12 @@ export interface CotizacionDoc {
 }
 
 export type Cotizacion = CotizacionDoc & { id: string }
+
+// Contador del consecutivo de cotización, por distribuidor + sede + año.
+// Vive en distribuidores/{id}/sedes/{sedeId}/contadores/{anio}. `ultimo` es el
+// último número asignado; sube de 1 en 1 (la regla de Firestore lo blinda).
+export interface ContadorDoc {
+  ultimo: number
+  anio: number
+  updatedAt: number
+}

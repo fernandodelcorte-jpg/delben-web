@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CircleNotch, MagnifyingGlass, X } from '@phosphor-icons/react'
+import { useAuth } from '@/components/providers/auth-provider'
 import { getCotizacionesTodas } from '@/lib/firestore/cotizaciones'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
 import { formatCOP } from '@/lib/datos-demo'
@@ -28,20 +29,29 @@ function formatFecha(ts: number) {
 
 export default function AdminCotizacionesPage() {
   const router = useRouter()
+  const { rol, cargando: cargandoAuth } = useAuth()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [distribuidores, setDistribuidores] = useState<Distribuidor[]>([])
   const [cargando, setCargando] = useState(true)
   const [filtroDistribuidor, setFiltroDistribuidor] = useState<string>('todos')
   const [busqueda, setBusqueda] = useState('')
 
+  // Vista global de cotizaciones: SOLO super_admin. delben_facturacion no debe
+  // verlas (precio de venta — regla #2) ni por URL; además getCotizacionesTodas()
+  // le daría permission-denied. No se hace ninguna llamada para ese rol.
   useEffect(() => {
+    if (cargandoAuth) return
+    if (rol !== 'super_admin') {
+      router.replace('/admin/valoraciones')
+      return
+    }
     Promise.all([getCotizacionesTodas(), getDistribuidores()])
       .then(([cots, dists]) => {
         setCotizaciones(cots)
         setDistribuidores(dists)
       })
       .finally(() => setCargando(false))
-  }, [])
+  }, [cargandoAuth, rol, router])
 
   const mapaDistribuidor = Object.fromEntries(distribuidores.map((d) => [d.id, d]))
 
@@ -63,6 +73,15 @@ export default function AdminCotizacionesPage() {
   function limpiarFiltros() {
     setFiltroDistribuidor('todos')
     setBusqueda('')
+  }
+
+  // No renderizar la lista a roles que no sean super_admin (facturación se redirige).
+  if (cargandoAuth || rol !== 'super_admin') {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <CircleNotch size={20} className="animate-spin text-stone-300" />
+      </div>
+    )
   }
 
   return (

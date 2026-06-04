@@ -30,6 +30,7 @@ export default function ValoracionBorradorPage() {
   const cambiarCantidadItem = useCarrito((s) => s.cambiarCantidadItem)
   const cambiarCantidadHerraje = useCarrito((s) => s.cambiarCantidadHerraje)
   const guardarValoracion = useCarrito((s) => s.guardarValoracion)
+  const actualizarNumeroOp = useCarrito((s) => s.actualizarNumeroOp)
   const setCampanas = useCarrito((s) => s.setCampanas)
   const setTasaUsd = useCarrito((s) => s.setTasaUsd)
   const itemsEspeciales = useCarrito((s) => s.itemsEspeciales)
@@ -141,6 +142,20 @@ export default function ValoracionBorradorPage() {
 
       {/* Contenido */}
       <div className="mx-auto max-w-4xl px-6 py-8">
+        {/* Número de OP (interno Delben) — editable durante la valoración */}
+        <div className="mb-8 rounded-xl border border-stone-200 bg-white px-5 py-4">
+          <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+            N.º de OP
+          </label>
+          <input
+            value={cotizacionInfo.numeroOp ?? ''}
+            onChange={(e) => actualizarNumeroOp(e.target.value)}
+            placeholder="Ej. BOG-1042"
+            className="w-full max-w-xs rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm placeholder:text-stone-400 outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100 transition-all tabular-nums"
+          />
+          <p className="mt-1.5 text-xs text-stone-400">Orden de Producción interna. Solo referencia; no aparece en el PDF.</p>
+        </div>
+
         {/* Módulos */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-stone-900 tracking-tight">Módulos</h2>

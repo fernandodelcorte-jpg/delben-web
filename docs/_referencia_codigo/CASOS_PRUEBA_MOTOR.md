@@ -43,15 +43,20 @@ Esperado:
 - costo_delben = 788.298
 - precio_final_unitario = **1.450.889**
 
-## Caso 3 — exportación / USA / sin IVA / USD
+## Caso 3 — exportación / Venezuela / con IVA de sede 16% / USD
+
+> Regla actualizada 2026-06-04: el IVA se aplica según el `iva_pct` de la sede en
+> CUALQUIER país (ya NO "exportación sin IVA"). La conversión a USD no cambia.
 
 Entrada: precio_base_cop 1.000.000, modelo 'desarmado',
-pais_cliente_final 'USA', tasa_usd 4000.
+pais_cliente_final 'Venezuela', tasa_usd 4000, universo.iva 16.
 
 Esperado:
 - moneda = 'USD'
-- iva_aplicado = false
-- precio_final_unitario ≈ **328,26 USD** (tolerancia 0,5 por redondeo)
+- iva_aplicado = true
+- precio_sin_iva ≈ **328,26 USD** (cadena pre-IVA idéntica al caso anterior)
+- iva_monto ≈ **52,52 USD**
+- precio_final_unitario ≈ **380,78 USD** (= 328,26 × 1,16; tolerancia 0,5 por redondeo)
 
 ## Caso 4 — magenta (+12% recargo) / desarmado / cocina / Colombia
 

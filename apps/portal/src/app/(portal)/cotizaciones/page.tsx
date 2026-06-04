@@ -726,6 +726,9 @@ function VersionFila({ cotizacion: c }: { cotizacion: Cotizacion }) {
               <span className={['rounded-full px-2 py-0.5 text-xs font-semibold', estado.clases].join(' ')}>
                 {estado.label}
               </span>
+              {c.numero_consecutivo && (
+                <span className="text-xs font-mono font-semibold text-stone-500">{c.numero_consecutivo}</span>
+              )}
               <span className="text-xs text-stone-400">
                 {nModulos} módulo{nModulos !== 1 ? 's' : ''}
                 {nHerrajes > 0 ? ` · ${nHerrajes} herraje${nHerrajes !== 1 ? 's' : ''}` : ''}

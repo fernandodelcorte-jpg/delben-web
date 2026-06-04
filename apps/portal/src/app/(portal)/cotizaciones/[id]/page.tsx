@@ -223,6 +223,11 @@ function CotizacionDetalleContent() {
     cotizacion.itemsHerraje.length > 0 ||
     itemsEspecialesSnap.length > 0
 
+  // Moneda real del snapshot (USD en exportación); el motor ya la fijó por ítem.
+  const monedaPdf: 'COP' | 'USD' =
+    cotizacion.items[0]?.resultado.moneda ??
+    cotizacion.itemsHerraje[0]?.resultado.moneda ??
+    'COP'
   const infoParaPDF = {
     clienteNombre: cotizacion.clienteNombre,
     clienteDireccion: cotizacion.clienteDireccion,
@@ -231,6 +236,8 @@ function CotizacionDetalleContent() {
     categoriaNombre: cotizacion.categoriaNombre,
     modalidad: cotizacion.modalidad,
     fecha: new Date(cotizacion.fecha),
+    moneda: monedaPdf,
+    distribuidorNombre: distribuidor?.nombre,
     transporteFijo: cotizacion.totales.transporteFijo,
     instalacionFija: cotizacion.totales.instalacionFija,
     logoDistribuidorUrl: logoDistribuidorData,
@@ -292,6 +299,9 @@ function CotizacionDetalleContent() {
               >
                 <p className="text-xs text-stone-400 truncate">
                   {cotizacion.clienteNombre} · {fecha}
+                  {cotizacion.numero_consecutivo ? (
+                    <span className="ml-1.5 font-mono font-semibold text-stone-600">· {cotizacion.numero_consecutivo}</span>
+                  ) : null}
                 </p>
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-stone-900 truncate">
                   {cotizacion.proyectoNombre}
@@ -503,7 +513,7 @@ function CotizacionDetalleContent() {
                 )}
               </div>
               <div className="text-right">
-                <p className="text-xs text-stone-400 mb-1">Total con IVA</p>
+                <p className="text-xs text-stone-400 mb-1">Total final</p>
                 <p className="text-2xl font-bold text-stone-900 tabular-nums">
                   {formatCOP(cotizacion.totales.total)}
                 </p>

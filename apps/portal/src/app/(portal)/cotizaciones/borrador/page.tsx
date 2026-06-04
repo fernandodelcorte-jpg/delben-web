@@ -11,6 +11,7 @@ import { useAuth } from '@/components/providers/auth-provider'
 import { getCampanasActivas } from '@/lib/firestore/campanas'
 import { getTasaUsdActual, getLogoDelben } from '@/lib/firestore/config'
 import { getDistribuidor } from '@/lib/firestore/distribuidores'
+import { SiglaFaltanteError } from '@/lib/firestore/cotizaciones'
 import { BuscadorModulos } from '@/components/cotizador/buscador-modulos'
 import { FichaModulo } from '@/components/cotizador/ficha-modulo'
 import { ModuloImagen } from '@/components/cotizador/modulo-imagen'
@@ -94,6 +95,9 @@ export default function BorradorPage() {
   }
 
   const puedeVerCosto = rol !== 'distribuidor_comercial'
+  // Moneda del PDF: COP en Colombia, USD en exportación (se deriva del país de la sede).
+  const monedaPdf: 'COP' | 'USD' =
+    sedeData && sedeData.pais.trim().toLowerCase() !== 'colombia' ? 'USD' : 'COP'
 
   useEffect(() => {
     if (!cotizacionInfo) {
@@ -165,8 +169,11 @@ export default function BorradorPage() {
       // fallback que escanea todo el tenant.
       const pid = cotizacionInfo?.proyectoId
       router.push(`/cotizaciones/${id}${pid ? `?pid=${pid}` : ''}`)
-    } catch {
-      setErrorGuardar('Error al guardar. Intenta de nuevo.')
+    } catch (e) {
+      // Sigla faltante: mensaje específico (el comercial no puede arreglarlo solo).
+      setErrorGuardar(
+        e instanceof SiglaFaltanteError ? e.message : 'Error al guardar. Intenta de nuevo.',
+      )
       setGuardando(false)
     }
   }
@@ -385,6 +392,8 @@ export default function BorradorPage() {
                   info={cotizacionInfoToInfoPDF(cotizacionInfo, {
                     logoDistribuidorUrl: logoDistribuidorData,
                     logoDelbenUrl: logoDelbenData,
+                    moneda: monedaPdf,
+                    distribuidorNombre: distribuidorData?.nombre,
                   })}
                   items={items.map(itemCarritoToPDF)}
                   herrajesSueltos={itemsHerraje.map(herrajeCarritoToPDF)}
@@ -395,6 +404,8 @@ export default function BorradorPage() {
                     info={cotizacionInfoToInfoPDF(cotizacionInfo, {
                       logoDistribuidorUrl: logoDistribuidorData,
                       logoDelbenUrl: logoDelbenData,
+                      moneda: monedaPdf,
+                      distribuidorNombre: distribuidorData?.nombre,
                     })}
                     items={items.map(itemCarritoToPDF)}
                     herrajesSueltos={itemsHerraje.map(herrajeCarritoToPDF)}
@@ -420,7 +431,7 @@ export default function BorradorPage() {
               </div>
 
               <div className="text-right">
-                <p className="text-xs text-stone-400 mb-1">Total con IVA</p>
+                <p className="text-xs text-stone-400 mb-1">Total final</p>
                 <p className="text-2xl font-bold text-stone-900 tabular-nums">
                   {formatCOP(total)}
                 </p>

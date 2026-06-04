@@ -162,7 +162,10 @@ export default function ValoracionesPage() {
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-stone-800 truncate">{v.proyectoNombre}</p>
-                <p className="text-xs text-stone-400 truncate">{v.clienteNombre}</p>
+                <p className="text-xs text-stone-400 truncate">
+                  {v.clienteNombre}
+                  {v.numero_op && <span className="text-stone-500"> · OP {v.numero_op}</span>}
+                </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">

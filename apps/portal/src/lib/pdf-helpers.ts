@@ -48,6 +48,7 @@ export type HerrajePDF = {
   nombre: string
   cantidad: number
   precioSubtotal: number
+  ivaSubtotal: number   // IVA del renglón (precio cliente): iva_monto × cantidad
   costoSubtotal: number
 }
 
@@ -58,6 +59,7 @@ export type EspecialPDF = {
   cantidad: number
   // Capa Distribuidor (precio cliente)
   precioSubtotal: number
+  ivaSubtotal: number   // IVA del renglón (0 si el especial viejo no guardó resultado)
   // Capa Delben (no mostrar a distribuidor_comercial)
   costoSubtotal: number
   observaciones: string
@@ -72,7 +74,8 @@ export type ItemPDF = {
   cantidad: number
   // Capa Distribuidor
   precioSinIva: number
-  ivaMonto: number
+  ivaMonto: number       // por unidad
+  ivaSubtotal: number    // del renglón: iva_monto × cantidad
   precioUnitario: number
   precioSubtotal: number
   // Capa Delben (no mostrar a distribuidor_comercial)
@@ -90,6 +93,12 @@ export type InfoPDF = {
   categoriaNombre?: string
   modalidad: 'tradicional' | 'desarmado'
   fecha: Date
+  // Moneda real de la cotización (COP Colombia, USD exportación). El IVA % se
+  // deriva en el PDF de los renglones (ivaSubtotal / sin IVA), no del país.
+  moneda: 'COP' | 'USD'
+  // Para que la cotización al cliente muestre el nombre del distribuidor (no Delben)
+  // cuando no hay logo.
+  distribuidorNombre?: string
   transporteFijo?: number
   instalacionFija?: number
   logoDistribuidorUrl?: string | null
@@ -130,6 +139,7 @@ export function itemCarritoToPDF(item: ItemCarrito): ItemPDF {
     cantidad: item.config.cantidad,
     precioSinIva: item.resultado.precio_sin_iva,
     ivaMonto: item.resultado.iva_monto,
+    ivaSubtotal: item.resultado.iva_monto * item.config.cantidad,
     precioUnitario: item.resultado.precio_final_unitario,
     precioSubtotal: item.resultado.subtotal_linea,
     costoUnitario: item.resultado.costo_delben,
@@ -139,6 +149,7 @@ export function itemCarritoToPDF(item: ItemCarrito): ItemPDF {
       nombre: h.accesorio.nombre,
       cantidad: h.cantidad,
       precioSubtotal: h.resultado.subtotal_linea,
+      ivaSubtotal: h.resultado.iva_monto * h.cantidad,
       costoSubtotal: h.resultado.costo_delben * h.cantidad,
     })),
   }
@@ -153,6 +164,7 @@ export function itemSnapshotToPDF(item: ItemCotizacionSnapshot): ItemPDF {
     cantidad: item.config.cantidad,
     precioSinIva: item.resultado.precio_sin_iva,
     ivaMonto: item.resultado.iva_monto,
+    ivaSubtotal: item.resultado.iva_monto * item.config.cantidad,
     precioUnitario: item.resultado.precio_final_unitario,
     precioSubtotal: item.resultado.subtotal_linea,
     costoUnitario: item.resultado.costo_delben,
@@ -162,6 +174,7 @@ export function itemSnapshotToPDF(item: ItemCotizacionSnapshot): ItemPDF {
       nombre: h.nombre,
       cantidad: h.cantidad,
       precioSubtotal: h.resultado.subtotal_linea,
+      ivaSubtotal: h.resultado.iva_monto * h.cantidad,
       costoSubtotal: h.resultado.costo_delben * h.cantidad,
     })),
   }
@@ -172,6 +185,7 @@ export function herrajeCarritoToPDF(item: ItemHerrajeCarrito): HerrajePDF {
     nombre: item.accesorio.nombre,
     cantidad: item.cantidad,
     precioSubtotal: item.resultado.subtotal_linea,
+    ivaSubtotal: item.resultado.iva_monto * item.cantidad,
     costoSubtotal: item.resultado.costo_delben * item.cantidad,
   }
 }
@@ -181,6 +195,7 @@ export function herrajeSnapshotToPDF(item: ItemHerraCotizacionSnapshot): Herraje
     nombre: item.nombre,
     cantidad: item.cantidad,
     precioSubtotal: item.resultado.subtotal_linea,
+    ivaSubtotal: item.resultado.iva_monto * item.cantidad,
     costoSubtotal: item.resultado.costo_delben * item.cantidad,
   }
 }
@@ -210,6 +225,8 @@ export function especialCarritoToPDF(item: ItemEspecial): EspecialPDF {
     configLinea: configLineaEspecial(item),
     cantidad: item.cantidad,
     precioSubtotal: item.precioClienteUnitario * item.cantidad,
+    // IVA del especial: del resultado del motor si existe (los viejos sin resultado → 0).
+    ivaSubtotal: item.resultado ? item.resultado.iva_monto * item.cantidad : 0,
     costoSubtotal: item.precioDelbenUnitario * item.cantidad,
     observaciones: item.observaciones,
     herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),
@@ -223,6 +240,7 @@ export function especialSnapshotToPDF(item: ItemEspecialSnapshot): EspecialPDF {
     configLinea: configLineaEspecial(item),
     cantidad: item.cantidad,
     precioSubtotal: item.precioClienteUnitario * item.cantidad,
+    ivaSubtotal: item.resultado ? item.resultado.iva_monto * item.cantidad : 0,
     costoSubtotal: item.precioDelbenUnitario * item.cantidad,
     observaciones: item.observaciones,
     herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),
@@ -231,7 +249,12 @@ export function especialSnapshotToPDF(item: ItemEspecialSnapshot): EspecialPDF {
 
 export function cotizacionInfoToInfoPDF(
   info: CotizacionInfo,
-  logos?: { logoDistribuidorUrl?: string | null; logoDelbenUrl?: string | null },
+  opts?: {
+    logoDistribuidorUrl?: string | null
+    logoDelbenUrl?: string | null
+    moneda?: 'COP' | 'USD'
+    distribuidorNombre?: string
+  },
 ): InfoPDF {
   return {
     clienteNombre: info.clienteNombre,
@@ -241,9 +264,11 @@ export function cotizacionInfoToInfoPDF(
     categoriaNombre: info.categoriaNombre,
     modalidad: info.modalidad,
     fecha: new Date(info.fecha),
+    moneda: opts?.moneda ?? 'COP',
+    distribuidorNombre: opts?.distribuidorNombre,
     transporteFijo: info.transporteFijo,
     instalacionFija: info.instalacionFija,
-    logoDistribuidorUrl: logos?.logoDistribuidorUrl,
-    logoDelbenUrl: logos?.logoDelbenUrl,
+    logoDistribuidorUrl: opts?.logoDistribuidorUrl,
+    logoDelbenUrl: opts?.logoDelbenUrl,
   }
 }

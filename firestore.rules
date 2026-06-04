@@ -179,8 +179,11 @@ service cloud.firestore {
     // Escritura se rige por las reglas anidadas específicas.
 
     match /{path=**}/cotizaciones/{cotizacionId} {
+      // delben_facturacion NO lee cotizaciones de distribuidores: trabaja solo con
+      // sus valoraciones. El doc de cotización embebe precio de venta al cliente
+      // (totales.total, resultado.precio_final_unitario), prohibido para ese rol
+      // por la regla de oro #2. Separación REAL en backend (no solo UI).
       allow read: if esSuperAdmin()
-                  || esFacturacionDelben()
                   || (esRolDistribuidor()
                       && resource.data.distribuidor_id == miDistribuidorId()
                       && (miRol() == 'distribuidor_admin'
@@ -194,9 +197,14 @@ service cloud.firestore {
       // delben_facturacion necesita listar distribuidores para elegir uno en /admin/valoraciones/nueva;
       // el DistribuidorDoc es identitario (nombre, ciudad, país, logo) — sin precio de venta. La regla
       // de `sedes` ya incluía a facturación; esto completa el padre.
-      // Escritura: super_admin + distribuidor_admin de ESE tenant (editar universo)
+      // Escritura: crear/borrar solo super_admin. Actualizar: super_admin (todo) o
+      // distribuidor_admin (p. ej. su logo), PERO la `sigla` queda bloqueada para el
+      // admin (solo el super_admin la define — va en contratos vía el consecutivo).
       allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
-      allow write: if esSuperAdmin() || esAdminDeDistribuidor(distribuidorId);
+      allow create, delete: if esSuperAdmin();
+      allow update: if esSuperAdmin()
+                    || (esAdminDeDistribuidor(distribuidorId)
+                        && request.resource.data.get('sigla', '') == resource.data.get('sigla', ''));
 
       // ── Sedes: las condiciones de cálculo viven aquí ───────────────────────
       // Lectura: super_admin, delben_facturacion (elige sede al valorar) y el tenant.
@@ -218,19 +226,32 @@ service cloud.firestore {
                           && request.resource.data.descuento_herrajes_pct == resource.data.descuento_herrajes_pct
                           && request.resource.data.servicios == resource.data.servicios
                           && request.resource.data.activo == resource.data.activo
-                          && request.resource.data.created_at == resource.data.created_at);
+                          && request.resource.data.created_at == resource.data.created_at
+                          && request.resource.data.get('sigla', '') == resource.data.get('sigla', ''));
 
         // Historial de condiciones por sede: escritura solo super_admin.
         match /historial_condiciones/{histId} {
           allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
           allow write: if esSuperAdmin();
         }
+
+        // Contador del consecutivo de cotización (por sede + año). Lo incrementa
+        // quien puede crear cotizaciones en la sede. El constraint +1 blinda contra
+        // reinicios o saltos (evita duplicados/huecos aun ante un cliente malicioso).
+        match /contadores/{anio} {
+          allow read: if esSuperAdmin() || puedeCotizacionPorSede(distribuidorId, sedeId);
+          allow create: if (esSuperAdmin() || puedeCotizacionPorSede(distribuidorId, sedeId))
+                        && request.resource.data.ultimo == 1;
+          allow update: if (esSuperAdmin() || puedeCotizacionPorSede(distribuidorId, sedeId))
+                        && request.resource.data.ultimo == resource.data.ultimo + 1;
+        }
       }
 
       // Cotizaciones (path legacy): aislamiento por tenant + por sede.
       // create usa request.resource (aún no existe el doc); el resto usa resource.
       match /cotizaciones/{cotizacionId} {
-        allow read: if esSuperAdmin() || esFacturacionDelben()
+        // delben_facturacion NO lee cotizaciones de distribuidores (ver regla collectionGroup arriba).
+        allow read: if esSuperAdmin()
                     || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
         allow create: if esSuperAdmin()
                       || puedeCotizacionPorSede(distribuidorId, request.resource.data.get('sede_id', ''));
@@ -245,7 +266,8 @@ service cloud.firestore {
 
         // Cotizaciones anidadas dentro de proyectos: aislamiento por sede.
         match /cotizaciones/{cotizacionId} {
-          allow read: if esSuperAdmin() || esFacturacionDelben()
+          // delben_facturacion NO lee cotizaciones de distribuidores (ver regla collectionGroup arriba).
+          allow read: if esSuperAdmin()
                       || puedeCotizacionPorSede(distribuidorId, resource.data.get('sede_id', ''));
           allow create: if esSuperAdmin()
                         || puedeCotizacionPorSede(distribuidorId, request.resource.data.get('sede_id', ''));

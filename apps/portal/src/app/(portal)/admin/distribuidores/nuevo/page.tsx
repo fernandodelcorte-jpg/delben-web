@@ -9,6 +9,9 @@ import { crearDistribuidor } from '@/lib/firestore/distribuidores'
 
 const schema = z.object({
   nombre: z.string().min(2, 'Mínimo 2 caracteres'),
+  // Sigla para el consecutivo de cotización (ej. PIE). Opcional al crear; se puede
+  // completar luego en el detalle. Obligatoria para poder guardar cotizaciones.
+  sigla: z.string().trim().max(8, 'Máximo 8 caracteres').optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -31,13 +34,18 @@ export default function NuevoDistribuidorPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { nombre: '' } })
+  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { nombre: '', sigla: '' } })
 
   async function onSubmit(data: FormValues) {
     setGuardando(true)
     setErrorGuardado(null)
     try {
-      const nuevoId = await crearDistribuidor({ nombre: data.nombre, activo: true })
+      const sigla = data.sigla?.trim().toUpperCase()
+      const nuevoId = await crearDistribuidor({
+        nombre: data.nombre,
+        activo: true,
+        ...(sigla ? { sigla } : {}),
+      })
       // Las condiciones viven en las sedes: se crean desde el detalle.
       router.push(`/admin/distribuidores/${nuevoId}`)
     } catch {
@@ -76,6 +84,20 @@ export default function NuevoDistribuidorPage() {
             />
             {errors.nombre && (
               <p className="mt-1 text-xs text-red-600">{errors.nombre.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1.5">
+              Sigla <span className="text-stone-400 font-normal">(para el N.º de cotización, ej. PIE)</span>
+            </label>
+            <input
+              {...register('sigla')}
+              placeholder="Ej. PIE"
+              maxLength={8}
+              className={[inputCls(errors.sigla?.message), 'uppercase'].join(' ')}
+            />
+            {errors.sigla && (
+              <p className="mt-1 text-xs text-red-600">{errors.sigla.message}</p>
             )}
           </div>
         </section>

@@ -498,7 +498,7 @@ export default function AdminCotizacionDetallePage() {
           </div>
         )}
         <div className="border-t border-stone-200 pt-2 flex justify-between">
-          <span className="text-sm font-semibold text-stone-900">Total con IVA</span>
+          <span className="text-sm font-semibold text-stone-900">Total final</span>
           <span className="text-lg font-bold text-stone-900 tabular-nums">{formatCOP(cotizacion.totales.total)}</span>
         </div>
       </div>

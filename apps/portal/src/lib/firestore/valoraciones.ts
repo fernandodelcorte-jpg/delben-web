@@ -111,6 +111,8 @@ export async function guardarValoracion(
     distribuidor_nombre: distribuidorNombre,
     clienteNombre: info.clienteNombre,
     proyectoNombre: info.proyectoNombre,
+    // Firestore rechaza undefined: solo se escribe si viene (obligatorio en creación).
+    ...(info.numeroOp ? { numero_op: info.numeroOp } : {}),
     modalidad: info.modalidad,
     items: serializarItems(items),
     itemsHerraje: serializarItemsHerraje(itemsHerraje),
@@ -136,6 +138,7 @@ export async function actualizarValoracion(
   await updateDoc(doc(db, 'valoraciones', id), {
     clienteNombre: info.clienteNombre,
     proyectoNombre: info.proyectoNombre,
+    ...(info.numeroOp ? { numero_op: info.numeroOp } : {}),
     modalidad: info.modalidad,
     items: serializarItems(items),
     itemsHerraje: serializarItemsHerraje(itemsHerraje),

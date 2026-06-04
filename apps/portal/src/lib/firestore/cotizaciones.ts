@@ -1,11 +1,11 @@
 import {
   collection,
   collectionGroup,
-  addDoc,
   getDocs,
   doc,
   getDoc,
   updateDoc,
+  runTransaction,
   query,
   where,
 } from 'firebase/firestore'
@@ -13,11 +13,26 @@ import { db } from '@/lib/firebase/client'
 import type {
   CotizacionDoc,
   Cotizacion,
+  DistribuidorDoc,
+  SedeDoc,
+  ContadorDoc,
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
   ItemEspecialSnapshot,
   TotalesCotizacion,
 } from '@/lib/firebase/tipos-firestore'
+
+// Se lanza cuando el distribuidor o la sede no tienen sigla configurada: sin sigla
+// no se puede formar el número consecutivo, así que NO se guarda (ni se consume número).
+export class SiglaFaltanteError extends Error {
+  constructor() {
+    super(
+      'El distribuidor o la sede no tienen sigla configurada (necesaria para el número de cotización). ' +
+        'Pide al super_admin de Delben que la configure antes de guardar.',
+    )
+    this.name = 'SiglaFaltanteError'
+  }
+}
 import type { ItemCarrito, ItemHerrajeCarrito, ItemEspecial, CotizacionInfo } from '@/store/carrito'
 
 // ─── Path helper ──────────────────────────────────────────────────────────────
@@ -112,11 +127,14 @@ export async function guardarCotizacion(
   totales: TotalesCotizacion,
 ): Promise<string> {
   if (!info.proyectoId) throw new Error('proyectoId requerido para guardar una cotización')
+  const proyectoId = info.proyectoId
+  const sedeId = info.sedeId
 
   const ahora = Date.now()
+  const anio = new Date().getFullYear()
   const data: CotizacionDoc = {
     distribuidor_id: distribuidorId,
-    sede_id: info.sedeId,
+    sede_id: sedeId,
     clienteNombre: info.clienteNombre,
     ...(info.clienteDireccion ? { clienteDireccion: info.clienteDireccion } : {}),
     proyectoNombre: info.proyectoNombre,
@@ -125,7 +143,7 @@ export async function guardarCotizacion(
     modalidad: info.modalidad,
     fecha: new Date(info.fecha).getTime(),
     estado: 'borrador',
-    proyecto_id: info.proyectoId,
+    proyecto_id: proyectoId,
     espacio_nombre: info.espacioNombre,
     version: info.version,
     items: serializarItems(items),
@@ -136,11 +154,41 @@ export async function guardarCotizacion(
     createdAt: ahora,
     updatedAt: ahora,
   }
-  const ref = await addDoc(
-    collection(db, cotizacionPath(distribuidorId, info.proyectoId)),
-    data,
-  )
-  return ref.id
+
+  // ── Número consecutivo: asignación atómica ──────────────────────────────────
+  // El contador (distribuidores/{id}/sedes/{sedeId}/contadores/{anio}) y el doc de
+  // cotización se escriben en UNA transacción → sin duplicados (Firestore reintenta
+  // ante concurrencia) ni huecos (todo o nada). Las siglas se validan aquí dentro:
+  // si faltan, se aborta sin consumir número.
+  const cotRef = doc(collection(db, cotizacionPath(distribuidorId, proyectoId)))
+  const contadorRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}/contadores/${anio}`)
+  const distRef = doc(db, 'distribuidores', distribuidorId)
+  const sedeRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}`)
+
+  await runTransaction(db, async (tx) => {
+    // Todas las LECTURAS antes de cualquier escritura (requisito de Firestore).
+    const distSnap = await tx.get(distRef)
+    const sedeSnap = await tx.get(sedeRef)
+    const contSnap = await tx.get(contadorRef)
+
+    const siglaDist = (distSnap.data() as DistribuidorDoc | undefined)?.sigla?.trim()
+    const siglaSede = (sedeSnap.data() as SedeDoc | undefined)?.sigla?.trim()
+    if (!siglaDist || !siglaSede) throw new SiglaFaltanteError()
+
+    const ultimo = contSnap.exists() ? (contSnap.data() as ContadorDoc).ultimo : 0
+    const nuevo = ultimo + 1
+    const numero = `${siglaDist}-${siglaSede}-${anio}-${String(nuevo).padStart(4, '0')}`
+
+    tx.set(contadorRef, { ultimo: nuevo, anio, updatedAt: ahora }, { merge: true })
+    tx.set(cotRef, {
+      ...data,
+      numero_consecutivo: numero,
+      numero_seq: nuevo,
+      numero_anio: anio,
+    })
+  })
+
+  return cotRef.id
 }
 
 export async function actualizarCotizacion(
