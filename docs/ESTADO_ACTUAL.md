@@ -730,6 +730,16 @@ que excluyan al comercial, o servir los cálculos por un endpoint que filtre ant
 de responder (como ya hace `/api/catalogo`). El catálogo de consulta ya sigue el
 patrón correcto; las cotizaciones aún no.
 
+**Caso inverso relacionado (valoraciones de `delben_facturacion`):** la regla de oro
+dice que facturación ve costo Delben pero **nunca** precio de venta. La UI del borrador
+de valoración lo respeta (solo muestra `costo_delben`/`costo_tras_descuentos`). Pero el
+motor calcula `precio_final_unitario` y `guardarValoracion` lo **persiste dentro de
+`resultado`** en el doc de la valoración; no se muestra, pero el dato de venta queda
+almacenado y sería alcanzable por facturación si algún día se expone `resultado` crudo.
+Misma clase de problema que arriba (campos sensibles dentro de `resultado` del snapshot).
+**No se arregla ahora**; mitigación futura: no persistir los campos de venta en
+valoraciones, o separarlos. Detectado al arreglar el bug de selectores (2026-06-04).
+
 ### 2. Inconsistencia de roles documentación ↔ código
 `delben_comercial` aparece en `CLAUDE.md` y `DISENO_SISTEMA.md`, pero el código
 tiene **5 roles** (`packages/firebase/src/roles.ts`), sin ese rol. Decidir si se
@@ -809,6 +819,21 @@ server-side por categoría, #7 TanStack Query. Herramienta de medición reproduc
 en `apps/portal/bench/` (no se incluye en el build; bundle vía esbuild).
 Archivos: `store/carrito.ts`, `lib/firestore/modulos.ts`,
 `cotizaciones/[id]/page.tsx`, `cotizaciones/borrador/page.tsx`, `apps/portal/bench/*`.
+
+### 2026-06-04 — Fix: `delben_facturacion` no veía selectores de distribuidor/sede al valorar
+- **Síntoma:** en `/admin/valoraciones/nueva`, facturación no veía el selector de distribuidor ni el de sede.
+- **Causa raíz:** al introducir sedes (2026-06-02) se agregó `esFacturacionDelben()` a la lectura de
+  `sedes` en `firestore.rules`, pero **no** a la del padre `distribuidores`. `getDistribuidores()` (list query)
+  quedaba en permission-denied para facturación → lista vacía → sin distribuidor seleccionable, el selector de
+  sede (gated por el distribuidor) nunca aparecía. Agravado por falta de `.catch` en la página (fallo mudo).
+- **Arreglo:** (1) `firestore.rules` — `distribuidores` read ahora incluye `esFacturacionDelben()` (el doc es
+  identitario, sin precio de venta; completa lo que ya tenía `sedes`). (2) `valoraciones/nueva/page.tsx` —
+  `.catch` + banner de error y estado vacío (el fallo deja de ser mudo).
+- **Pendiente operativo:** desplegar reglas — `firebase deploy --only firestore:rules` (lo corre el dueño).
+- **Regla de oro:** el borrador de valoración solo muestra costo Delben (no precio de venta); el arreglo no
+  expone precios. Matiz registrado en deuda técnica §1: `precio_final_unitario` se persiste en `resultado`
+  de las valoraciones (no se muestra, pero queda almacenado) — no se arregla ahora.
+- Archivos: `firestore.rules`, `app/(portal)/admin/valoraciones/nueva/page.tsx`.
 
 ### 2026-06-03 — Consolidación de la documentación
 - Se unificaron los documentos del repo para reducir desorden: el changelog del

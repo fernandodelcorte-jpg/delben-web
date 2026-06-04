@@ -190,9 +190,12 @@ service cloud.firestore {
     // ── Distribuidores: aislamiento estricto por tenant ───────────────────────
 
     match /distribuidores/{distribuidorId} {
-      // Lectura: super_admin + cualquier usuario del tenant
+      // Lectura: super_admin + delben_facturacion (lista distribuidores al valorar) + el tenant.
+      // delben_facturacion necesita listar distribuidores para elegir uno en /admin/valoraciones/nueva;
+      // el DistribuidorDoc es identitario (nombre, ciudad, país, logo) — sin precio de venta. La regla
+      // de `sedes` ya incluía a facturación; esto completa el padre.
       // Escritura: super_admin + distribuidor_admin de ESE tenant (editar universo)
-      allow read: if esSuperAdmin() || esDeDistribuidor(distribuidorId);
+      allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
       allow write: if esSuperAdmin() || esAdminDeDistribuidor(distribuidorId);
 
       // ── Sedes: las condiciones de cálculo viven aquí ───────────────────────

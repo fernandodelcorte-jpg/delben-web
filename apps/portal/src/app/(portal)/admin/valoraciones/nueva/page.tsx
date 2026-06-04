@@ -27,13 +27,23 @@ export default function NuevaValoracionPage() {
   const iniciarCotizacion = useCarrito((s) => s.iniciarCotizacion)
   const [distribuidores, setDistribuidores] = useState<Distribuidor[]>([])
   const [cargando, setCargando] = useState(true)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
   // Sedes habilitadas del distribuidor seleccionado (misma regla que el cotizador).
   const [sedes, setSedes] = useState<Sede[]>([])
   const [cargandoSedes, setCargandoSedes] = useState(false)
 
   useEffect(() => {
     getDistribuidores()
-      .then(setDistribuidores)
+      .then((ds) => {
+        setDistribuidores(ds)
+        setErrorCarga(null)
+      })
+      .catch(() => {
+        // Sin .catch el fallo era mudo: la lista quedaba vacía y no se mostraba
+        // ningún selector. Mostramos el motivo en su lugar.
+        setDistribuidores([])
+        setErrorCarga('No se pudieron cargar los distribuidores. Puede ser un problema de permisos; contacta al administrador.')
+      })
       .finally(() => setCargando(false))
   }, [])
 
@@ -116,7 +126,21 @@ export default function NuevaValoracionPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Error de carga (p. ej. permisos) o lista vacía — antes era un fallo mudo */}
+            {errorCarga ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 flex items-start gap-2">
+                <Warning size={16} weight="fill" className="text-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-stone-700">{errorCarga}</p>
+              </div>
+            ) : distribuidores.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
+                <Warning size={16} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-stone-600">No hay distribuidores disponibles.</p>
+              </div>
+            ) : null}
+
             {/* Distribuidor */}
+            {distribuidores.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-2">
                 Distribuidor
@@ -148,6 +172,7 @@ export default function NuevaValoracionPage() {
                 <p className="mt-1.5 text-xs text-red-600">{errors.distribuidorId.message}</p>
               )}
             </div>
+            )}
 
             {/* Sede (solo habilitadas del distribuidor elegido) */}
             {distribuidorIdSel && (
