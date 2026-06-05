@@ -845,6 +845,44 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-05 — Resiliencia: desacoplar el número consecutivo del guardado (Opción B)
+**Causa del incidente**: guardar una cotización fallaba para TODOS con "Error al guardar".
+Raíz: el guardado escribía el contador del consecutivo en la MISMA transacción que el doc,
+y el permiso del contador (`match /contadores/{anio}`) entró en el commit `2959145`, que
+**no se había desplegado a Firebase** (las reglas se despliegan aparte del app, que Netlify
+sí auto-desplegó). Sin esa regla en producción, Firestore denegaba la escritura del contador
+→ la transacción entera fallaba → nadie podía guardar. (No era sigla: el único distribuidor,
+DCA, y sus 3 sedes tienen sigla.)
+
+**Arreglo (decisión del dueño: "guardar siempre")**: se desacopló numerar de guardar en
+`lib/firestore/cotizaciones.ts`.
+- `guardarCotizacion` ahora **escribe el doc primero** (`setDoc`, esencial — usa la regla de
+  cotización que ya existía desde antes del consecutivo) y luego asigna el número en una
+  operación APARTE y **best-effort** (try/catch): si falla (reglas no desplegadas, sigla,
+  permiso), la cotización YA quedó guardada y el número queda **pendiente**.
+- Nueva `asignarNumeroConsecutivo(distId, proyectoId, cotId)`: idempotente (aborta si ya tiene
+  número), atómica (contador +1 y número del doc en una transacción → sin duplicados ni huecos),
+  deriva el año de `createdAt`. Lanza si no se puede numerar; el llamador decide si es error o
+  "pendiente".
+- `getCotizacion` **auto-sana**: al abrir una cotización sin número, intenta asignarlo
+  (best-effort). Así, una vez desplegadas las reglas, las pendientes se numeran solas al verlas.
+
+**Efecto**: numerar o un permiso de contador desactualizado ya **no pueden** impedir que un
+comercial/costos/admin guarde. "Error al guardar" solo puede aparecer ahora por un permiso
+GENUINO (p. ej. comercial sin sede asignada), no por la numeración.
+
+**Trade-off aceptado**: bajo fallo de numeración, los números se asignan por orden de
+asignación (al verlas), no estrictamente cronológico por creación → puede haber huecos o
+desorden raros. El dueño priorizó "guardar nunca falla" sobre numeración perfecta.
+
+**Pendiente operativo (paso 0, aún válido)**: publicar `firestore.rules` en producción (Firebase
+Console → Firestore → Rules → Publish) para que el número se asigne al instante; sin eso, con el
+app nuevo el guardado funciona pero los números quedan pendientes hasta abrir cada cotización.
+
+**Verificación**: `tsc` del portal limpio (sin `any`); `packages/core` 6/6 (motor intacto).
+**Pendiente C (futuro)**: guardado por endpoint servidor (Admin SDK) que además cierre la fuga
+de costo Delben al comercial (deuda §1/§10).
+
 ### 2026-06-05 — Backfill de números consecutivos para las cotizaciones viejas de DCA
 Las 11 cotizaciones de Del Corte Angarita (`o29oR2xWsChtrYwyGNGd`) guardadas antes del
 consecutivo no tenían `numero_consecutivo`. Se numeraron con Admin SDK (ignora Security

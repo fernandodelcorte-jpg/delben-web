@@ -4,6 +4,7 @@ import {
   getDocs,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   runTransaction,
   query,
@@ -131,7 +132,6 @@ export async function guardarCotizacion(
   const sedeId = info.sedeId
 
   const ahora = Date.now()
-  const anio = new Date().getFullYear()
   const data: CotizacionDoc = {
     distribuidor_id: distribuidorId,
     sede_id: sedeId,
@@ -155,18 +155,60 @@ export async function guardarCotizacion(
     updatedAt: ahora,
   }
 
-  // ── Número consecutivo: asignación atómica ──────────────────────────────────
-  // El contador (distribuidores/{id}/sedes/{sedeId}/contadores/{anio}) y el doc de
-  // cotización se escriben en UNA transacción → sin duplicados (Firestore reintenta
-  // ante concurrencia) ni huecos (todo o nada). Las siglas se validan aquí dentro:
-  // si faltan, se aborta sin consumir número.
+  // ── Guardar SIEMPRE primero (esencial) ──────────────────────────────────────
+  // La cotización se escribe de inmediato. Numerar es una operación APARTE y
+  // best-effort: un permiso del contador desactualizado (reglas no desplegadas),
+  // una sigla faltante o cualquier error de la numeración NO deben impedir que el
+  // comercial guarde su trabajo (decisión 2026-06-05 — "guardar siempre"). Si el
+  // número no se puede asignar ahora, la cotización queda guardada sin número y se
+  // le asigna después, al abrirla (getCotizacion auto-sana). Ver asignarNumeroConsecutivo.
   const cotRef = doc(collection(db, cotizacionPath(distribuidorId, proyectoId)))
-  const contadorRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}/contadores/${anio}`)
-  const distRef = doc(db, 'distribuidores', distribuidorId)
-  const sedeRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}`)
+  await setDoc(cotRef, data)
 
-  await runTransaction(db, async (tx) => {
+  try {
+    await asignarNumeroConsecutivo(distribuidorId, proyectoId, cotRef.id)
+  } catch (e) {
+    // No-op deliberado: la cotización YA quedó guardada. El número queda pendiente
+    // y se asignará en la próxima apertura. Solo se registra para diagnóstico.
+    console.warn('Cotización guardada sin número consecutivo (queda pendiente):', e)
+  }
+
+  return cotRef.id
+}
+
+// Asigna (idempotentemente) el número consecutivo a una cotización que aún no lo tiene.
+// Formato SIGLA_DIST-SIGLA_SEDE-AÑO-####. Atómica: el contador
+// (distribuidores/{id}/sedes/{sedeId}/contadores/{anio}) y el doc se actualizan en UNA
+// transacción → sin duplicados ni huecos. Idempotente: si la cotización ya tiene número,
+// no hace nada. LANZA si no se puede numerar (sin sede, siglas faltantes, permiso denegado);
+// el llamador decide si eso es un error o solo "queda pendiente" (best-effort).
+export async function asignarNumeroConsecutivo(
+  distribuidorId: string,
+  proyectoId: string,
+  cotizacionId: string,
+): Promise<string | null> {
+  const cotRef = doc(db, cotizacionPath(distribuidorId, proyectoId, cotizacionId))
+  const distRef = doc(db, 'distribuidores', distribuidorId)
+
+  return runTransaction(db, async (tx) => {
     // Todas las LECTURAS antes de cualquier escritura (requisito de Firestore).
+    const cotSnap = await tx.get(cotRef)
+    if (!cotSnap.exists()) return null // la cotización no existe: nada que numerar
+    const cot = cotSnap.data() as CotizacionDoc
+    if (cot.numero_consecutivo) return cot.numero_consecutivo // ya numerada → idempotente
+
+    const sedeId = cot.sede_id
+    if (!sedeId) throw new SiglaFaltanteError() // sin sede no hay sigla de sede para el formato
+
+    // El año se deriva de la fecha de creación de la cotización (no del momento de
+    // numerar): una pendiente numerada más tarde conserva el año en que se creó y
+    // casa con el contador de ese año.
+    const baseMs = typeof cot.createdAt === 'number' ? cot.createdAt : cot.fecha
+    const anio = new Date(typeof baseMs === 'number' ? baseMs : Date.now()).getFullYear()
+
+    const sedeRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}`)
+    const contadorRef = doc(db, `distribuidores/${distribuidorId}/sedes/${sedeId}/contadores/${anio}`)
+
     const distSnap = await tx.get(distRef)
     const sedeSnap = await tx.get(sedeRef)
     const contSnap = await tx.get(contadorRef)
@@ -179,16 +221,10 @@ export async function guardarCotizacion(
     const nuevo = ultimo + 1
     const numero = `${siglaDist}-${siglaSede}-${anio}-${String(nuevo).padStart(4, '0')}`
 
-    tx.set(contadorRef, { ultimo: nuevo, anio, updatedAt: ahora }, { merge: true })
-    tx.set(cotRef, {
-      ...data,
-      numero_consecutivo: numero,
-      numero_seq: nuevo,
-      numero_anio: anio,
-    })
+    tx.set(contadorRef, { ultimo: nuevo, anio, updatedAt: Date.now() }, { merge: true })
+    tx.update(cotRef, { numero_consecutivo: numero, numero_seq: nuevo, numero_anio: anio })
+    return numero
   })
-
-  return cotRef.id
 }
 
 export async function actualizarCotizacion(
@@ -268,7 +304,19 @@ export async function getCotizacion(
   if (proyectoId) {
     const snap = await getDoc(doc(db, cotizacionPath(distribuidorId, proyectoId, cotizacionId)))
     if (!snap.exists()) return null
-    return { id: snap.id, ...(snap.data() as CotizacionDoc) }
+    const cot: Cotizacion = { id: snap.id, ...(snap.data() as CotizacionDoc) }
+    // Auto-sana números pendientes: si la cotización quedó sin número (p. ej. se
+    // guardó cuando las reglas del contador no estaban desplegadas), intenta asignarlo
+    // ahora. Best-effort: si no se puede, se devuelve tal cual y se reintenta al abrirla.
+    if (!cot.numero_consecutivo && cot.sede_id) {
+      try {
+        const numero = await asignarNumeroConsecutivo(distribuidorId, proyectoId, cotizacionId)
+        if (numero) cot.numero_consecutivo = numero
+      } catch {
+        // queda pendiente
+      }
+    }
+    return cot
   }
   // Fallback: busca en todos los proyectos (menos eficiente, solo para legacy)
   const todas = await getCotizaciones(distribuidorId)
