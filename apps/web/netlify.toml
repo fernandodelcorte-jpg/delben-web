@@ -5,18 +5,23 @@
 # raíz, que pertenece al portal). Así ambos sitios conviven en el mismo monorepo
 # sin pisarse: el portal publica apps/portal/.next; la web publica apps/web/.next.
 #
-# Rutas relativas al base directory (apps/web).
+# El sitio tiene Base directory = / (raíz) y Package directory = apps/web. Por eso
+# Netlify resuelve las rutas de ESTE toml DESDE LA RAÍZ del repo, no desde apps/web:
+# por eso command y publish van expresados relativos a la raíz.
 #
-# IMPORTANTE: el comando NO es "npm run build" (eso ejecutaría `turbo build` de la
+# IMPORTANTE (command): NO es "npm run build" (eso ejecutaría `turbo build` de la
 # raíz, que construye TODO el monorepo —incluido @delben/portal—, y el portal
 # revienta sin sus env vars de Firebase). Filtramos con Turbo para construir SOLO
-# la web. `npx turbo` encuentra el turbo.json de la raíz y resuelve el grafo aunque
-# el comando corra desde apps/web; @delben/web no tiene deps internas, así que el
-# plan queda en un único paquete.
+# la web. `npx turbo` resuelve el grafo desde la raíz; @delben/web no tiene deps
+# internas, así que el plan queda en un único paquete.
+#
+# IMPORTANTE (publish): el output de Next queda en apps/web/.next (relativo a la
+# raíz). Con publish = ".next" Netlify lo buscaba en /opt/build/repo/.next y fallaba;
+# por eso debe ser la ruta completa desde la raíz: "apps/web/.next".
 
 [build]
   command = "npx turbo run build --filter=@delben/web"
-  publish = ".next"
+  publish = "apps/web/.next"
 
 [build.environment]
   NODE_VERSION = "20"
