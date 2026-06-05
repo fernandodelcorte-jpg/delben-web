@@ -50,6 +50,12 @@ const s = StyleSheet.create({
     fontSize: 7.5,
     color: '#78716c',
   },
+  docNumero: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#44403c',
+    marginBottom: 3,
+  },
   infoGrid: {
     flexDirection: 'row',
     gap: 24,
@@ -221,6 +227,9 @@ export function CotizacionPDF({ info, items, herrajesSueltos = [], especiales = 
           </View>
           <View style={s.headerRight}>
             <Text style={s.docTitle}>Cotización</Text>
+            {info.numeroConsecutivo ? (
+              <Text style={s.docNumero}>N.º {info.numeroConsecutivo}</Text>
+            ) : null}
             <Text style={s.docSub}>{fecha}</Text>
             <Text style={[s.docSub, { marginTop: 2 }]}>
               Modalidad: {info.modalidad === 'desarmado' ? 'Desarmado' : 'Tradicional'}

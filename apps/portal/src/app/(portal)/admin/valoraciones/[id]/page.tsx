@@ -8,6 +8,14 @@ import { getValoracion, marcarComoFacturada } from '@/lib/firestore/valoraciones
 import { getSede } from '@/lib/firestore/sedes'
 import { formatCOP } from '@/lib/datos-demo'
 import { useCarrito } from '@/store/carrito'
+import {
+  itemSnapshotToPDF,
+  herrajeSnapshotToPDF,
+  especialSnapshotToPDF,
+  type InfoPDF,
+} from '@/lib/pdf-helpers'
+import { ValoracionPDFButton } from '@/components/cotizador/valoracion-pdf-button'
+import { ValoracionExcelButton } from '@/components/cotizador/valoracion-excel-button'
 import type { Valoracion } from '@/lib/firebase/tipos-firestore'
 import type { ItemCotizacionSnapshot, ItemHerraCotizacionSnapshot } from '@/lib/firebase/tipos-firestore'
 
@@ -74,6 +82,24 @@ export default function ValoracionDetallePage() {
 
   const { totales } = valoracion
 
+  // Datos para PDF/Excel de la valoración: SOLO costo Delben (los conversores traen
+  // también campos de venta, pero el PDF de orden de compra y el Excel solo escriben costo).
+  const moneda: 'COP' | 'USD' =
+    valoracion.items[0]?.resultado.moneda ??
+    valoracion.itemsHerraje[0]?.resultado.moneda ??
+    'COP'
+  const infoParaPDF: InfoPDF = {
+    clienteNombre: valoracion.clienteNombre,
+    proyectoNombre: valoracion.proyectoNombre,
+    fecha: new Date(valoracion.createdAt),
+    modalidad: valoracion.modalidad,
+    moneda,
+    distribuidorNombre: valoracion.distribuidor_nombre,
+  }
+  const itemsPDF = valoracion.items.map(itemSnapshotToPDF)
+  const herrajesPDF = valoracion.itemsHerraje.map(herrajeSnapshotToPDF)
+  const especialesPDF = (valoracion.itemsEspeciales ?? []).map(especialSnapshotToPDF)
+
   return (
     <div className="space-y-8 max-w-4xl">
       {/* Cabecera */}
@@ -137,6 +163,25 @@ export default function ValoracionDetallePage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Descargas — documento interno de Delben: SOLO costo Delben, sin venta ni IVA */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <ValoracionPDFButton
+          info={infoParaPDF}
+          items={itemsPDF}
+          herrajesSueltos={herrajesPDF}
+          especiales={especialesPDF}
+          distribuidorNombre={valoracion.distribuidor_nombre}
+        />
+        <ValoracionExcelButton
+          info={infoParaPDF}
+          items={itemsPDF}
+          herrajesSueltos={herrajesPDF}
+          especiales={especialesPDF}
+          distribuidorNombre={valoracion.distribuidor_nombre}
+          numeroOp={valoracion.numero_op}
+        />
       </div>
 
       {/* Módulos */}

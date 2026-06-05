@@ -231,6 +231,7 @@ function CotizacionDetalleContent() {
   const infoParaPDF = {
     clienteNombre: cotizacion.clienteNombre,
     clienteDireccion: cotizacion.clienteDireccion,
+    numeroConsecutivo: cotizacion.numero_consecutivo,
     proyectoNombre: cotizacion.proyectoNombre,
     espacioNombre: cotizacion.espacio_nombre,
     categoriaNombre: cotizacion.categoriaNombre,

@@ -217,9 +217,13 @@ type Props = {
   herrajesSueltos: HerrajePDF[]
   especiales?: EspecialPDF[]
   distribuidorNombre?: string
+  // Título del documento. Por defecto "Orden de Compra" (el doc que el distribuidor
+  // emite a Delben). La valoración interna de Delben reusa este mismo layout (costo
+  // Delben, sin venta, sin IVA) pasando titulo="Valoración".
+  titulo?: string
 }
 
-export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], distribuidorNombre }: Props) {
+export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], distribuidorNombre, titulo = 'Orden de Compra' }: Props) {
   const fecha = info.fecha.toLocaleDateString('es-CO', {
     year: 'numeric',
     month: 'long',
@@ -265,7 +269,7 @@ export function OrdenCompraPDF({ info, items, herrajesSueltos, especiales = [], 
 
           {/* Derecha: título + fecha + badge */}
           <View style={s.headerRight}>
-            <Text style={s.docTitle}>Orden de Compra</Text>
+            <Text style={s.docTitle}>{titulo}</Text>
             <Text style={s.docSub}>{fecha}</Text>
             <Text style={[s.docSub, { marginTop: 2 }]}>
               Modalidad: {info.modalidad === 'desarmado' ? 'Desarmado' : 'Tradicional'}

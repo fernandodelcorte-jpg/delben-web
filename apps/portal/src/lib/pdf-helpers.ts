@@ -88,6 +88,9 @@ export type ItemPDF = {
 export type InfoPDF = {
   clienteNombre: string
   clienteDireccion?: string
+  // Número consecutivo de la cotización (SIGLA_DIST-SIGLA_SEDE-AÑO-####). Solo está
+  // presente en cotizaciones ya guardadas; en el borrador (preview) aún no existe.
+  numeroConsecutivo?: string
   proyectoNombre: string
   espacioNombre?: string
   categoriaNombre?: string
@@ -254,11 +257,13 @@ export function cotizacionInfoToInfoPDF(
     logoDelbenUrl?: string | null
     moneda?: 'COP' | 'USD'
     distribuidorNombre?: string
+    numeroConsecutivo?: string
   },
 ): InfoPDF {
   return {
     clienteNombre: info.clienteNombre,
     clienteDireccion: info.clienteDireccion,
+    numeroConsecutivo: opts?.numeroConsecutivo,
     proyectoNombre: info.proyectoNombre,
     espacioNombre: info.espacioNombre,
     categoriaNombre: info.categoriaNombre,

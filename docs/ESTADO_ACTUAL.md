@@ -10,43 +10,52 @@
 > - **Bitácora cronológica** — registro inverso de cambios, fecha a fecha.
 >   Agregar una entrada aquí al cerrar cada trabajo importante.
 
-Última actualización: 2026-06-04 — ver **Estado de despliegue** abajo. Sesión de hoy
-(mucho código, deploy parcial): seguridad por rol, IVA por sede, PDFs, consecutivo.
+Última actualización: 2026-06-05 — ver **Estado de despliegue** abajo. Hoy: incidente del
+guardado (reglas del contador no desplegadas) → reglas publicadas a mano + Opción B (desacople
+del número, commit `94f66a1`, falta push). Sesión 2026-06-04: seguridad por rol, IVA por sede,
+PDFs, consecutivo, backfill de números viejos.
 
 ---
 
-## Estado de despliegue — 2026-06-04 ⚠️ LEER ANTES DE TOCAR
+## Estado de despliegue — 2026-06-05 ⚠️ LEER ANTES DE TOCAR
 
-> **"Implementado" ≠ "desplegado".** Casi todo lo de hoy se hizo en sesión de código; el
-> deploy a producción es aparte y **NO está completo**. Los ítems marcados `[confirmar]`
-> dependen de lo que el dueño efectivamente desplegó/verificó — ajustar al confirmarlo.
+> **"Implementado" ≠ "desplegado".** El deploy a producción es aparte (reglas a mano en la
+> consola; app por push a `main` → Netlify auto-construye). Actualizado tras el incidente del
+> guardado del 2026-06-05 (ver bitácora).
 
-### (1) Desplegado y verificado en producción
-- `[confirmar con el dueño]` — qué quedó realmente desplegado y verificado hoy.
+### (1) Desplegado en producción
+- **Reglas de Firestore (TODO `firestore.rules`)** — el dueño las publicó **manualmente** en
+  Firebase Console el **2026-06-05**. Incluye: contador del consecutivo (`match /contadores/{anio}`),
+  **corte de la fuga de precio de venta a `delben_facturacion`** (quitado `esFacturacionDelben()`
+  del `collectionGroup` + gate del dashboard), field-lock de `sigla`, lectura de `distribuidores`
+  por facturación. → La fuga a facturación queda cerrada en backend; el contador ya tiene permiso.
+- **App (Netlify): consecutivo + motor IVA por sede + tanda de PDFs YA estaban en producción**
+  (push previo a `main`). El incidente del guardado lo confirmó: el app nuevo escribía el contador
+  pero las reglas aún no estaban → fallo. Ya resuelto al publicar las reglas.
+- `[confirmar con el dueño]` que la gente **ya guarda sin error** tras publicar las reglas (esperado: sí).
 
-### (2) Desplegado hoy, pendiente de configuración operativa
-- **Reglas de seguridad de `delben_facturacion`** `[confirmar deploy]`: lectura de
-  `distribuidores` (selector de sede al valorar) y **corte del acceso a cotizaciones de
-  distribuidores** (quitado `esFacturacionDelben()` del `collectionGroup` + gate del dashboard).
-  Si se desplegaron las reglas, la fuga de precio de venta a facturación está cerrada en backend.
+### (2) Desplegado, pendiente de configuración operativa
+- **`iva_pct` en sedes de exportación (Venezuela)**: el motor IVA por sede está en prod, pero el
+  default de export siembra 0 → **sin configurar `iva_pct` no se cobra IVA al exterior**. Pendiente.
+- **Siglas**: el único distribuidor activo (Del Corte Angarita) y sus 3 sedes (COL/VEN/CVEN) **ya
+  tienen sigla** — no hay faltantes hoy. Configurar siglas al dar de alta nuevos distribuidores/sedes
+  (sin sigla, el número queda **pendiente**, ya no bloquea el guardado — ver Opción B en bitácora).
 
-### (3) Implementado en código, NO desplegado
-- **⛔ Consecutivo de cotización — IMPLEMENTADO, NO DESPLEGADO.** Completo en código (transacción
-  `runTransaction` + contador con constraint +1 en reglas + field-lock de siglas + UI de siglas +
-  número en detalle/lista). **Su deploy DEPENDE de tres cosas:**
-  1. **Agregar el número al PDF** (`cotizacion-pdf.tsx`) — aún NO está; es requisito antes de desplegar.
-  2. **Configurar las siglas de TODOS los distribuidores y sedes activos.** Hoy **solo se puso
-     Del Corte Angarita**; faltan los demás. Sin sigla, guardar lanza `SiglaFaltanteError`.
-  3. **Orden obligatorio del deploy: reglas → siglas → app.** Las reglas del contador deben estar
-     desplegadas ANTES que el app (si no, el guardado falla al escribir el contador). Las siglas
-     deben existir ANTES de que los comerciales guarden.
-- **Motor de IVA por sede** (reemplaza "exportación sin IVA"; `packages/core`, 6/6 tests verde) +
-  **tanda de PDFs** (moneda/IVA reales, totales Opción A, pie sin Delben, marca del distribuidor;
-  orden de compra sin IVA): implementados, **pendientes de deploy**. **Tras desplegar el motor**, hay
-  que **configurar `iva_pct` en las sedes de exportación** (ej. Venezuela) para que cobren IVA — hoy
-  el default de export sigue sembrando 0, así que sin esa config no se cobra IVA al exterior.
-- **Resto de la sesión** (rendimiento del carrito, catálogo `modulos_busqueda` —requiere reimport—,
-  campo "N.º de OP" en valoraciones): también en código, **sin desplegar** salvo indicación del dueño.
+### (3) Desplegado por push a `main` del 2026-06-05 (Netlify auto-build)
+- **Opción B — desacople del número consecutivo del guardado** (commit `94f66a1`): guardar nunca lo
+  bloquea numerar. Hace el sistema robusto ante futuros desfases reglas↔app.
+- **Número de consecutivo en el PDF de la cotización** (`cotizacion-pdf.tsx`): "N.º
+  SIGLA-SIGLA-AÑO-####" bajo el título. Por decisión del dueño NO va en la orden de compra a Delben.
+- **Descargas de la valoración: PDF + Excel** (solo costo Delben). Nueva dependencia `exceljs` en
+  `apps/portal`. Verificado por el dueño en local antes del push.
+
+### (4) Pendiente
+- **Configuración operativa**: `iva_pct` en sedes de exportación (ver (2)); siglas al alta de nuevos
+  distribuidores/sedes.
+- **Resto de la sesión 2026-06-04** (rendimiento del carrito, catálogo `modulos_busqueda`
+  —requiere reimport—, campo "N.º de OP" en valoraciones): estado de deploy a confirmar con el dueño.
+- **Opción C (deuda §1/§10)**: la venta sigue llegando a facturación dentro de `resultado`; el fix de
+  fondo es servir cálculos por endpoint que filtre por rol.
 
 ---
 
@@ -814,9 +823,8 @@ son recuperables; hay que rehacerlos.
 - ✅ **GitHub**: conectado, `origin/main` con el trabajo pusheado.
 
 ### 8. Pendientes funcionales abiertos (de la sesión 2026-06-04)
-- **Número de consecutivo en el PDF**: el `numero_consecutivo` se guarda y se muestra en
-  detalle/lista, pero **falta mostrarlo en `cotizacion-pdf.tsx`** (y dónde aplique). Es
-  **requisito** para desplegar el consecutivo (ver "Estado de despliegue").
+- ✅ **Número de consecutivo en el PDF** — RESUELTO 2026-06-05: se muestra en `cotizacion-pdf.tsx`
+  (cotización al cliente). Por decisión del dueño NO va en la orden de compra a Delben.
 - **Saludo con nombre**: el saludo del home/dashboard debe usar el **nombre real** del usuario,
   no el prefijo del email u otro placeholder.
 - **Mueble especial en pesos en pantalla**: revisar que el mueble especial se muestre/ingrese
@@ -844,6 +852,39 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-06-05 — Descargas de la valoración: PDF + Excel (solo costo Delben)
+El detalle de valoración (`admin/valoraciones/[id]/page.tsx`) no tenía forma de descargar nada.
+Se agregaron dos botones: **Valoración PDF** y **Valoración Excel (.xlsx)**. Decisión del dueño:
+**solo costo Delben**, nunca precio de venta al cliente ni IVA (regla de oro #2 — facturación no
+ve la venta).
+- **PDF**: reusa `OrdenCompraPDF` (que ya muestra costo Delben, sin venta, sin IVA) parametrizado
+  con un nuevo prop `titulo` (default "Orden de Compra" → aquí "Valoración"). Nuevo
+  `components/cotizador/valoracion-pdf-button.tsx`. Verificado que el layout NO renderiza ninguna
+  columna de venta/IVA (solo comentarios lo mencionan).
+- **Excel**: nuevo `components/cotizador/valoracion-excel-button.tsx`. **Se agregó `exceljs`** al
+  `apps/portal` (aprobación de stack del dueño). exceljs se importa de forma diferida (solo al
+  hacer clic) para no inflar el bundle. Columnas EXCLUSIVAMENTE de costo (Ítem, Código,
+  Configuración, Cant., Costo unit., Costo subtotal) + metadatos + total costo Delben; formato de
+  número por moneda (COP/USD).
+- Datos vía los conversores existentes de `pdf-helpers.ts` (`itemSnapshotToPDF`, etc.). Los tipos
+  *PDF traen también venta, pero PDF y Excel solo leen los campos de costo.
+- ⚠️ Recordatorio §1/§10: el doc de valoración que llega al cliente **todavía contiene** la venta
+  en `resultado` (el detalle hasta muestra "Total con IVA" = venta). El fix de fondo (no enviar la
+  venta a facturación) sigue siendo Opción C (endpoint que filtre por rol). Estas descargas NO
+  empeoran eso: solo escriben costo.
+- Archivos: `orden-compra-pdf.tsx` (prop `titulo`), `valoracion-pdf-button.tsx` (nuevo),
+  `valoracion-excel-button.tsx` (nuevo), `admin/valoraciones/[id]/page.tsx` (barra de descargas),
+  `apps/portal/package.json` (`exceljs`). `tsc` limpio; motor intacto.
+
+### 2026-06-05 — Número de consecutivo en el PDF de la cotización (cierra deuda §8)
+El `numero_consecutivo` se guardaba y se veía en pantalla, pero NO en el PDF. Ahora se muestra
+"N.º SIGLA_DIST-SIGLA_SEDE-AÑO-####" bajo el título "Cotización". `InfoPDF.numeroConsecutivo?`
+(opcional; el borrador/preview no lo trae porque aún no está numerado); el detalle
+(`cotizaciones/[id]/page.tsx`) lo pasa desde `cotizacion.numero_consecutivo`. Archivos:
+`lib/pdf-helpers.ts`, `components/cotizador/cotizacion-pdf.tsx`, `cotizaciones/[id]/page.tsx`.
+Por decisión del dueño NO va en la orden de compra a Delben, solo en la cotización al cliente.
+`tsc` limpio; motor intacto.
 
 ### 2026-06-05 — Resiliencia: desacoplar el número consecutivo del guardado (Opción B)
 **Causa del incidente**: guardar una cotización fallaba para TODOS con "Error al guardar".
@@ -875,9 +916,13 @@ GENUINO (p. ej. comercial sin sede asignada), no por la numeración.
 asignación (al verlas), no estrictamente cronológico por creación → puede haber huecos o
 desorden raros. El dueño priorizó "guardar nunca falla" sobre numeración perfecta.
 
-**Pendiente operativo (paso 0, aún válido)**: publicar `firestore.rules` en producción (Firebase
-Console → Firestore → Rules → Publish) para que el número se asigne al instante; sin eso, con el
-app nuevo el guardado funciona pero los números quedan pendientes hasta abrir cada cotización.
+**Paso 0 (HECHO 2026-06-05)**: el dueño publicó `firestore.rules` a mano en Firebase Console →
+el contador ya tiene permiso y el número se asigna al instante. (Sin esto, con el app nuevo el
+guardado igual funcionaría pero los números quedarían pendientes hasta abrir cada cotización.)
+
+**Despliegue del arreglo**: commit `94f66a1`, **pusheado a `main` el 2026-06-05** junto con el número
+en el PDF y las descargas de la valoración → Netlify auto-build. (Antes del push, el app en prod
+tenía el guardado acoplado pero ya no fallaba porque las reglas del contador estaban desplegadas.)
 
 **Verificación**: `tsc` del portal limpio (sin `any`); `packages/core` 6/6 (motor intacto).
 **Pendiente C (futuro)**: guardado por endpoint servidor (Admin SDK) que además cierre la fuga
