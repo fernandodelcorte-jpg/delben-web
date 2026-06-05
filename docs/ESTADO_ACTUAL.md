@@ -10,8 +10,43 @@
 > - **Bitácora cronológica** — registro inverso de cambios, fecha a fecha.
 >   Agregar una entrada aquí al cerrar cada trabajo importante.
 
-Última actualización: 2026-06-03 — consolidación de documentación. Trabajo previo:
-sedes por distribuidor + catálogo de consulta de precios (2026-06-02).
+Última actualización: 2026-06-04 — ver **Estado de despliegue** abajo. Sesión de hoy
+(mucho código, deploy parcial): seguridad por rol, IVA por sede, PDFs, consecutivo.
+
+---
+
+## Estado de despliegue — 2026-06-04 ⚠️ LEER ANTES DE TOCAR
+
+> **"Implementado" ≠ "desplegado".** Casi todo lo de hoy se hizo en sesión de código; el
+> deploy a producción es aparte y **NO está completo**. Los ítems marcados `[confirmar]`
+> dependen de lo que el dueño efectivamente desplegó/verificó — ajustar al confirmarlo.
+
+### (1) Desplegado y verificado en producción
+- `[confirmar con el dueño]` — qué quedó realmente desplegado y verificado hoy.
+
+### (2) Desplegado hoy, pendiente de configuración operativa
+- **Reglas de seguridad de `delben_facturacion`** `[confirmar deploy]`: lectura de
+  `distribuidores` (selector de sede al valorar) y **corte del acceso a cotizaciones de
+  distribuidores** (quitado `esFacturacionDelben()` del `collectionGroup` + gate del dashboard).
+  Si se desplegaron las reglas, la fuga de precio de venta a facturación está cerrada en backend.
+
+### (3) Implementado en código, NO desplegado
+- **⛔ Consecutivo de cotización — IMPLEMENTADO, NO DESPLEGADO.** Completo en código (transacción
+  `runTransaction` + contador con constraint +1 en reglas + field-lock de siglas + UI de siglas +
+  número en detalle/lista). **Su deploy DEPENDE de tres cosas:**
+  1. **Agregar el número al PDF** (`cotizacion-pdf.tsx`) — aún NO está; es requisito antes de desplegar.
+  2. **Configurar las siglas de TODOS los distribuidores y sedes activos.** Hoy **solo se puso
+     Del Corte Angarita**; faltan los demás. Sin sigla, guardar lanza `SiglaFaltanteError`.
+  3. **Orden obligatorio del deploy: reglas → siglas → app.** Las reglas del contador deben estar
+     desplegadas ANTES que el app (si no, el guardado falla al escribir el contador). Las siglas
+     deben existir ANTES de que los comerciales guarden.
+- **Motor de IVA por sede** (reemplaza "exportación sin IVA"; `packages/core`, 6/6 tests verde) +
+  **tanda de PDFs** (moneda/IVA reales, totales Opción A, pie sin Delben, marca del distribuidor;
+  orden de compra sin IVA): implementados, **pendientes de deploy**. **Tras desplegar el motor**, hay
+  que **configurar `iva_pct` en las sedes de exportación** (ej. Venezuela) para que cobren IVA — hoy
+  el default de export sigue sembrando 0, así que sin esa config no se cobra IVA al exterior.
+- **Resto de la sesión** (rendimiento del carrito, catálogo `modulos_busqueda` —requiere reimport—,
+  campo "N.º de OP" en valoraciones): también en código, **sin desplegar** salvo indicación del dueño.
 
 ---
 
@@ -778,6 +813,30 @@ son recuperables; hay que rehacerlos.
   desde Firebase Console (no tiene datos de precios asociados).
 - ✅ **GitHub**: conectado, `origin/main` con el trabajo pusheado.
 
+### 8. Pendientes funcionales abiertos (de la sesión 2026-06-04)
+- **Número de consecutivo en el PDF**: el `numero_consecutivo` se guarda y se muestra en
+  detalle/lista, pero **falta mostrarlo en `cotizacion-pdf.tsx`** (y dónde aplique). Es
+  **requisito** para desplegar el consecutivo (ver "Estado de despliegue").
+- **Saludo con nombre**: el saludo del home/dashboard debe usar el **nombre real** del usuario,
+  no el prefijo del email u otro placeholder.
+- **Mueble especial en pesos en pantalla**: revisar que el mueble especial se muestre/ingrese
+  en **pesos** en la pantalla (hoy no es consistente). Solo display/entrada; no toca el motor.
+- **Configurar `iva_pct` en sedes de exportación** tras desplegar el motor de IVA (ver despliegue).
+- **Configurar siglas** de todos los distribuidores/sedes activos (hoy solo Del Corte Angarita).
+
+### 9. Permisos del `distribuidor_admin`
+Revisar y acotar el alcance de lo que el `distribuidor_admin` puede escribir/editar. Hoy escribe
+el doc del distribuidor (p. ej. su logo en `/configuracion`), por lo que la `sigla` se protegió con
+**field-lock** (solo super_admin la cambia) en vez de restringir todo el doc. Verificar que no haya
+otros campos sensibles que el admin pueda tocar y que el conjunto de permisos sea el deseado.
+
+### 10. Seguridad §1 sigue abierta: `distribuidor_comercial` ↔ `costo_delben`
+La mitad **facturación↔precio de venta** se cerró el 2026-06-04 (ver §1). La mitad
+**`distribuidor_comercial` alcanza el `costo_delben`** del snapshot de cotización **sigue abierta**,
+con la misma causa raíz (snapshot monolítico legible entero; `filtrarPorRol` solo en UI). Solución
+sistémica común (Opción C): separar costo/venta en otro doc/colección o servir por endpoint que
+filtre por rol. Ver §1 y bitácora 2026-06-04.
+
 ---
 
 ## Bitácora cronológica
@@ -785,6 +844,30 @@ son recuperables; hay que rehacerlos.
 > Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-06-05 — Backfill de números consecutivos para las cotizaciones viejas de DCA
+Las 11 cotizaciones de Del Corte Angarita (`o29oR2xWsChtrYwyGNGd`) guardadas antes del
+consecutivo no tenían `numero_consecutivo`. Se numeraron con Admin SDK (ignora Security
+Rules, correcto para un script de una vez). Decisiones del dueño: las 7 sin `sede_id`
+(anteriores a sedes) son todas de Colombia → se les asignó `sede_id = pD2WuYjnQpYYCQ8FTc0a`;
+todas con formato uniforme `DCA-COL-2026-####`; orden cronológico ascendente por `createdAt`.
+
+- **Diagnóstico previo** (`tests/catalogo/diagnostico-consecutivos.mjs`, SOLO LECTURA):
+  recorre `collectionGroup('cotizaciones')` y reporta con/sin número, agrupación por
+  distribuidor/sede, casos sin `sede_id`, estado de siglas y contadores, rangos de `numero_seq`
+  y de fechas. Reutilizable para futuros backfills.
+- **Backfill** (`tests/catalogo/backfill-consecutivos.mjs`, dry-run por defecto, `--write` para
+  aplicar): asignó `DCA-COL-2026-0001…0011` (siglas LEÍDAS del doc dist/sede, no hardcodeadas;
+  aborta si no coinciden con DCA/COL). Resultado: 7 viejas → 0001–0007 (+ `sede_id`), 4 con sede
+  → 0008–0011. Escritura todo-o-nada en un batch (11 updates + contador). Idempotente
+  (segunda corrida: 0 a numerar). Aborta si el contador ya tuviera `ultimo > 0`.
+- **Contador** `distribuidores/o29oR2xWsChtrYwyGNGd/sedes/pD2WuYjnQpYYCQ8FTc0a/contadores/2026`
+  creado con `ultimo = 11`. La próxima cotización nueva por el SDK cliente escribirá 11→12
+  (paso +1), cumpliendo el constraint de `firestore.rules`. No se tocó el motor, ni las reglas,
+  ni `guardarCotizacion`.
+
+> Pendiente relacionado (deuda §8): el número de consecutivo aún NO se muestra en el PDF
+> (`cotizacion-pdf.tsx`), requisito previo al deploy del consecutivo.
 
 ### 2026-06-04 — Rendimiento: primera tanda (throttle persist, caché herrajes, waterfall, memo)
 Cuatro mejoras de rendimiento del cotizador, sin tocar el motor (`packages/core`)
