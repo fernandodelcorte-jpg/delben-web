@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Curvas de easing — heredadas del portal (Emil Kowalski) */
+  --ease-out-fuerte: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Un único lavado cálido muy tenue: limpieza de showroom sin frialdad */
+    background-image: radial-gradient(
+      70rem 45rem at 88% -12%,
+      oklch(0.94 0.02 55 / 0.45),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+
+  /* Selección con el acento caoba */
+  ::selection {
+    background-color: oklch(0.54 0.15 45 / 0.16);
+  }
+
+  :focus-visible {
+    outline: 2px solid oklch(0.54 0.15 45);
+    outline-offset: 3px;
+    border-radius: 3px;
+  }
+}
+
+@layer utilities {
+  /* Grano fino sobre toda la página — calidez de impresión, no plano digital */
+  .grano::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Rejilla arquitectónica sutil — estructura visible como motivo */
+  .rejilla {
+    background-image:
+      linear-gradient(to right, oklch(0.4 0.02 50 / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.4 0.02 50 / 0.07) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
+  }
+  .rejilla-oscura {
+    background-image:
+      linear-gradient(to right, oklch(0.8 0.02 60 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.8 0.02 60 / 0.06) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
+  }
+
+  /* Línea fina caoba como recurso de acento */
+  .regla-caoba {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      oklch(0.54 0.15 45 / 0.6),
+      oklch(0.54 0.15 45 / 0)
+    );
+  }
+
+  /* Reveal al hacer scroll — estado inicial oculto, .visible lo anima */
+  .reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition:
+      opacity 0.9s var(--ease-editorial),
+      transform 0.9s var(--ease-editorial);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Sin JS, el contenido siempre es visible (progressive enhancement) */
+.no-js .reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/* Respeto total a quien pide menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}

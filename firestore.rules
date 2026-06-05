@@ -198,13 +198,15 @@ service cloud.firestore {
       // el DistribuidorDoc es identitario (nombre, ciudad, país, logo) — sin precio de venta. La regla
       // de `sedes` ya incluía a facturación; esto completa el padre.
       // Escritura: crear/borrar solo super_admin. Actualizar: super_admin (todo) o
-      // distribuidor_admin (p. ej. su logo), PERO la `sigla` queda bloqueada para el
-      // admin (solo el super_admin la define — va en contratos vía el consecutivo).
+      // distribuidor_admin (p. ej. su logo), PERO la `sigla` y `mostrar_en_web`
+      // quedan bloqueadas para el admin (solo el super_admin las define: la sigla va
+      // en contratos vía el consecutivo; la visibilidad pública es decisión de Delben).
       allow read: if esSuperAdmin() || esFacturacionDelben() || esDeDistribuidor(distribuidorId);
       allow create, delete: if esSuperAdmin();
       allow update: if esSuperAdmin()
                     || (esAdminDeDistribuidor(distribuidorId)
-                        && request.resource.data.get('sigla', '') == resource.data.get('sigla', ''));
+                        && request.resource.data.get('sigla', '') == resource.data.get('sigla', '')
+                        && request.resource.data.get('mostrar_en_web', false) == resource.data.get('mostrar_en_web', false));
 
       // ── Sedes: las condiciones de cálculo viven aquí ───────────────────────
       // Lectura: super_admin, delben_facturacion (elige sede al valorar) y el tenant.
@@ -227,7 +229,8 @@ service cloud.firestore {
                           && request.resource.data.servicios == resource.data.servicios
                           && request.resource.data.activo == resource.data.activo
                           && request.resource.data.created_at == resource.data.created_at
-                          && request.resource.data.get('sigla', '') == resource.data.get('sigla', ''));
+                          && request.resource.data.get('sigla', '') == resource.data.get('sigla', '')
+                          && request.resource.data.get('mostrar_en_web', false) == resource.data.get('mostrar_en_web', false));
 
         // Historial de condiciones por sede: escritura solo super_admin.
         match /historial_condiciones/{histId} {

@@ -1,0 +1,19 @@
+# Netlify — sitio independiente de la WEB institucional (apps/web).
+#
+# Este sitio es DISTINTO al del portal. En el panel de Netlify se configura su
+# "Base directory" = apps/web; entonces Netlify lee ESTE netlify.toml (no el de la
+# raíz, que pertenece al portal). Así ambos sitios conviven en el mismo monorepo
+# sin pisarse: el portal publica apps/portal/.next; la web publica apps/web/.next.
+#
+# Rutas relativas al base directory (apps/web).
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

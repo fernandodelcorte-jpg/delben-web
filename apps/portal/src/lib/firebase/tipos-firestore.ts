@@ -127,6 +127,9 @@ export interface DistribuidorDoc {
   // para poder guardar una cotización (se valida en la transacción de guardado).
   sigla?: string
   logo_url?: string | null
+  // Visibilidad en la web institucional ("Nuestra red"). Solo el super_admin la
+  // enciende. Opcional; ausente = false → nada se publica hasta encenderlo.
+  mostrar_en_web?: boolean
   activo: boolean
   created_at: number
 }
@@ -160,6 +163,9 @@ export interface SedeDoc {
     desarmado?: UniversoModalidad
     tradicional?: UniversoModalidad
   }
+  // Visibilidad de esta sede en la web institucional ("Nuestra red"). Solo el
+  // super_admin la enciende. Opcional; ausente = false → la sede no se publica.
+  mostrar_en_web?: boolean
   activo: boolean
   created_at: number
 }

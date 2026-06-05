@@ -112,6 +112,7 @@ export default function DetalleDistribuidorPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [cargando, setCargando] = useState(true)
   const [actualizando, setActualizando] = useState(false)
+  const [actualizandoWeb, setActualizandoWeb] = useState(false)
 
   // Sede: una tarjeta-acordeón por sede. sedeEditando = la tarjeta abierta (editar);
   // creandoSede = el formulario separado de "Nueva sede". Mutuamente excluyentes.
@@ -184,6 +185,28 @@ export default function DetalleDistribuidorPage() {
     } finally {
       setActualizando(false)
     }
+  }
+
+  // Visibilidad en la web pública. Solo el super_admin (la UI ya se oculta para
+  // otros roles y las Security Rules bloquean el campo para el distribuidor_admin).
+  async function toggleMostrarWebDistribuidor() {
+    if (!distribuidor) return
+    setActualizandoWeb(true)
+    try {
+      const nuevo = !distribuidor.mostrar_en_web
+      await actualizarDistribuidor(id, { mostrar_en_web: nuevo })
+      setDistribuidor({ ...distribuidor, mostrar_en_web: nuevo })
+    } finally {
+      setActualizandoWeb(false)
+    }
+  }
+
+  async function toggleMostrarWebSede(sede: Sede) {
+    const nuevo = !sede.mostrar_en_web
+    await actualizarSede(id, sede.id, { mostrar_en_web: nuevo })
+    setSedes((prev) =>
+      prev.map((s) => (s.id === sede.id ? { ...s, mostrar_en_web: nuevo } : s)),
+    )
   }
 
   function abrirNuevaSede() {
@@ -426,6 +449,41 @@ export default function DetalleDistribuidorPage() {
         </div>
       </section>
 
+      {/* Visibilidad en la web pública — control exclusivo del super_admin */}
+      {esSuperAdmin && (
+        <section className="rounded-xl border border-stone-200 bg-white p-6">
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wider">
+                Visibilidad en la web
+              </h2>
+              <p className="text-xs text-stone-400 mt-1.5 max-w-md">
+                Si se enciende, este distribuidor aparece en la sección «Nuestra red» del sitio
+                público. Requiere tener logo y estar activo. Cada sede se controla por separado
+                (abajo, en cada tarjeta de sede).
+              </p>
+              {distribuidor.mostrar_en_web && !distribuidor.logo_url && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Está encendido pero el distribuidor no tiene logo: no se mostrará hasta cargarlo.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={toggleMostrarWebDistribuidor}
+              disabled={actualizandoWeb}
+              className={[
+                'rounded-full px-3.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
+                distribuidor.mostrar_en_web
+                  ? 'bg-caoba-50 text-caoba-700 hover:bg-caoba-100'
+                  : 'bg-stone-100 text-stone-500 hover:bg-stone-200',
+              ].join(' ')}
+            >
+              {distribuidor.mostrar_en_web ? 'Mostrar en la web' : 'Oculto en la web'}
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Sedes */}
       <section className="rounded-xl border border-stone-200 bg-white p-6">
         <div className="flex items-center justify-between mb-5">
@@ -481,6 +539,21 @@ export default function DetalleDistribuidorPage() {
                       </div>
                     </button>
                     <div className="flex items-center gap-2 shrink-0">
+                      {esSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => toggleMostrarWebSede(sede)}
+                          title="Mostrar esta sede en la web"
+                          className={[
+                            'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+                            sede.mostrar_en_web
+                              ? 'bg-caoba-50 text-caoba-700 hover:bg-caoba-100'
+                              : 'bg-stone-100 text-stone-400 hover:bg-stone-200',
+                          ].join(' ')}
+                        >
+                          {sede.mostrar_en_web ? 'En web' : 'Oculta en web'}
+                        </button>
+                      )}
                       <BadgeEstadoSede sede={sede} />
                       <button
                         type="button"
