@@ -64,6 +64,7 @@ export default function Inicio() {
           label="foto: cocina a sangre — showroom"
           tone="oscuro"
           overlay
+          mobileMinimal
           className="animate-subir-aparecer h-[86vh] min-h-[34rem] w-full"
         >
           <div className="mx-auto flex h-full max-w-editorial flex-col justify-between px-6 py-8 lg:px-10 lg:py-10">
@@ -81,13 +82,13 @@ export default function Inicio() {
                 style={delay(220)}
               >
                 <span className="h-px w-8 bg-caoba-400" />
-                Manufactura propia · desde 2007
+                Manufactura exclusiva · desde 2007
               </p>
               <h1
-                className="animate-subir-aparecer mt-5 text-3xl font-medium leading-[1.1] tracking-tight text-stone-50 sm:text-4xl lg:text-5xl"
+                className="animate-subir-aparecer mt-5 text-3xl font-medium leading-[1.15] tracking-tight text-stone-50 sm:text-4xl sm:leading-[1.1] lg:text-5xl"
                 style={delay(320)}
               >
-                Carpintería arquitectónica, de principio a fin{' '}
+                Carpintería arquitectónica, de principio a fin, elaboramos todo{' '}
                 <span className="font-display font-normal italic text-caoba-200">
                   bajo un mismo techo.
                 </span>
@@ -96,8 +97,8 @@ export default function Inicio() {
                 className="animate-subir-aparecer mt-5 max-w-xl text-base leading-relaxed text-stone-200/85"
                 style={delay(420)}
               >
-                Diseño contemporáneo y manufactura propia para cocinas, closets y mobiliario del
-                hogar. Tres generaciones de oficio al servicio de sus distribuidores.
+                Diseño contemporáneo, manufactura exclusiva para cocinas, closets y mobiliario para
+                el hogar. Tres generaciones con oficio al servicio de nuestros aliados comerciales.
               </p>
               <div className="animate-subir-aparecer mt-8 flex flex-wrap items-center gap-4" style={delay(520)}>
                 <a
@@ -119,8 +120,9 @@ export default function Inicio() {
         </ImageWell>
       </section>
 
-      {/* ───────────────── Tira de materiales (estructura / ficha) ───────────────── */}
-      <section className="border-b border-stone-200 bg-stone-50">
+      {/* ───────────────── Tira de materiales (estructura / ficha) ─────────────────
+          Oculta en móvil (<sm): aligera el primer pliegue en pantallas angostas. */}
+      <section className="hidden border-b border-stone-200 bg-stone-50 sm:block">
         <div className="mx-auto max-w-editorial px-6 lg:px-10">
           <ul className="flex flex-wrap items-stretch divide-x divide-stone-200 border-x border-stone-200">
             <li className="flex items-center px-5 py-4 text-[0.7rem] uppercase tracking-[0.2em] text-caoba-700">

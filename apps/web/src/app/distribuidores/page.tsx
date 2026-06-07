@@ -13,10 +13,18 @@ export const metadata: Metadata = {
 }
 
 const apoyos = [
-  { titulo: 'Manuales de diseño', texto: 'Guías para diseñar bien, desde el primer trazo hasta la entrega.' },
+  { titulo: 'Manuales de diseño', texto: 'Guías para un buen diseño, desde el primer trazo hasta la instalación.' },
   { titulo: 'Portafolio amplio', texto: 'Todo el catálogo a su disposición, con acabados y combinaciones.' },
-  { titulo: 'Cotización en línea', texto: 'Cotice usted mismo a su cliente final, en el portal, cuando quiera.' },
-  { titulo: 'Capacitación', texto: 'Acompañamiento para que su equipo domine producto y herramienta.' },
+  {
+    titulo: 'Cotización en línea',
+    texto:
+      'Autonomía total para cotizar cualquier proyecto, gracias al software que entregamos a nuestros aliados comerciales.',
+  },
+  {
+    titulo: 'Acompañamiento',
+    texto:
+      'Contamos con un equipo de profesionales que acompañan en todos los procesos, a nuestros aliados. Generamos confianza en todas las etapas de la atención, diseño y cierre comercial.',
+  },
 ]
 
 export default function Distribuidores() {
@@ -32,7 +40,7 @@ export default function Distribuidores() {
             <span className="font-display font-normal italic text-caoba-200">con el respaldo de la fábrica.</span>
           </>
         }
-        subtitulo="Trabajamos a través de distribuidores autónomos. Usted vende y atiende a su cliente; nosotros fabricamos y lo respaldamos."
+        subtitulo="Trabajamos a través de aliados comerciales autónomos. Usted vende y atiende a su cliente; nosotros fabricamos y lo respaldamos."
       />
 
       {/* Modelo de autonomía */}
@@ -69,8 +77,7 @@ export default function Distribuidores() {
                 Relaciones que duran.
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-stone-600">
-                No buscamos una venta: buscamos un socio. Nuestra red crece con distribuidores que se
-                quedan, porque el respaldo se nota proyecto tras proyecto.
+                Forjamos relaciones que perduran con nuestros aliados y sus clientes.
               </p>
             </div>
           </Reveal>

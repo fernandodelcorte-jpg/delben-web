@@ -21,17 +21,17 @@ const hitos = [
   {
     anio: '2007',
     titulo: 'Nace Delben en Cúcuta',
-    texto: 'El oficio se vuelve empresa en la Zona Franca de Cúcuta, con manufactura propia.',
+    texto: 'El oficio se vuelve empresa en la Zona Franca de Cúcuta, con manufactura exclusiva.',
     foto: 'foto: planta en Cúcuta',
     tono: 'oscuro' as const,
   },
 ]
 
 const principios = [
-  { titulo: 'Manufactura propia', texto: 'Fabricamos en nuestra planta, con personal propio. No tercerizamos.' },
+  { titulo: 'Manufactura exclusiva', texto: 'Fabricamos en nuestra planta, con personal propio. No tercerizamos.' },
   { titulo: 'Precisión', texto: 'Acabados cuidados y ensamble de precisión en cada pieza.' },
-  { titulo: 'Honestidad', texto: 'Trabajo duro, responsable y honesto. Como siempre se ha hecho.' },
-  { titulo: 'Largo plazo', texto: 'Relaciones que duran, con nuestros distribuidores y sus clientes.' },
+  { titulo: 'Honestidad', texto: 'Cumplimos lo que prometemos, en cada entrega.' },
+  { titulo: 'Largo plazo', texto: 'Relaciones que duran, con nuestros aliados comerciales y sus clientes.' },
 ]
 
 export default function Nosotros() {
@@ -43,17 +43,25 @@ export default function Nosotros() {
         label="foto: familia en el taller"
         titulo={
           <>
-            Tres generaciones de oficio,{' '}
+            Tres generaciones con oficio,{' '}
             <span className="font-display font-normal italic text-caoba-200">una empresa hecha en Cúcuta.</span>
           </>
         }
-        subtitulo="La familia lleva en la carpintería desde 1976. En 2007 ese oficio se volvió empresa: nació Delben, en la Zona Franca de Cúcuta."
       />
 
       {/* Historia — dos hitos */}
       <section className="bg-stone-50">
         <div className="mx-auto max-w-editorial px-6 py-16 lg:px-10 lg:py-20">
           <EncabezadoSeccion eyebrow="Historia" titulo="De un oficio de familia a una empresa." aside="1976 → 2007" />
+
+          <Reveal className="mt-8 max-w-3xl">
+            <p className="text-base leading-relaxed text-stone-600 sm:text-lg">
+              La familia Del Corte, desde 1976 en la industria de la producción, completa ya tres
+              generaciones entregadas con pasión a la fabricación de mobiliario. Es así como nace en
+              el año 2007 Delben, en la Zona Franca de Cúcuta, Colombia.
+            </p>
+          </Reveal>
+
           <div className="mt-10 grid grid-cols-1 divide-y divide-stone-200 border-x border-b border-stone-200 md:grid-cols-2 md:divide-x md:divide-y-0">
             {hitos.map((h, i) => (
               <Reveal key={h.anio} delay={i * 120} className="flex flex-col p-5 lg:p-6">
@@ -72,22 +80,6 @@ export default function Nosotros() {
         </div>
       </section>
 
-      {/* Origen del nombre — banda sobre oscuro */}
-      <section className="bg-stone-900 text-stone-100">
-        <div className="mx-auto max-w-editorial px-6 py-20 lg:px-10 lg:py-28">
-          <Reveal className="mx-auto max-w-3xl text-center">
-            <p className="text-xs uppercase tracking-[0.22em] text-caoba-300">El nombre</p>
-            <p className="font-display mt-6 text-4xl font-light tracking-tight text-stone-50 sm:text-5xl">
-              Del<span className="text-caoba-400">·</span>ben
-            </p>
-            <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-stone-300">
-              El nombre une dos apellidos: <span className="text-stone-100">Del Corte</span> y{' '}
-              <span className="text-stone-100">Benedetti</span>. Dos familias, un mismo oficio.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
       {/* Tres generaciones — cita + imagen */}
       <section className="bg-stone-50">
         <div className="mx-auto max-w-editorial px-6 py-16 lg:px-10 lg:py-20">
@@ -95,8 +87,7 @@ export default function Nosotros() {
             <div className="flex flex-col justify-center p-8 lg:p-12">
               <p className="text-xs uppercase tracking-[0.22em] text-caoba-700">Tres generaciones</p>
               <blockquote className="font-display mt-5 text-xl font-light leading-snug text-stone-900 lg:text-2xl">
-                Somos una empresa familiar que ha pasado por tres generaciones comprometidas con el
-                trabajo duro, responsable y honesto.
+                Trabajo duro, responsable y honesto. Lo que siempre nos ha caracterizado.
               </blockquote>
               <p className="mt-6 text-xs uppercase tracking-[0.22em] text-stone-500">— Delben S.A.S.</p>
             </div>

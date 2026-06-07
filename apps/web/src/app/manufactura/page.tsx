@@ -124,8 +124,8 @@ export default function Manufactura() {
                 Revisamos en cada etapa.
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-stone-600">
-                La calidad no se revisa al final: se controla por etapas, del corte al acabado, para
-                que cada mueble salga como debe salir.
+                El control de la calidad no se deja para el final: se controla en cada etapa, desde la
+                compra de los insumos hasta el embalaje y despacho.
               </p>
             </div>
           </Reveal>
