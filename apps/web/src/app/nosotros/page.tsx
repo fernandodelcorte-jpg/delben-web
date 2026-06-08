@@ -16,6 +16,8 @@ const proceso = [
     titulo: 'Corte CNC',
     texto: 'Precisión de máquina en cada pieza, para un calce exacto en el ensamble.',
     foto: 'foto: router CNC en operación',
+    src: '/fotos/nosotros-cnc.jpg',
+    alt: 'Corte CNC en operación',
     tono: 'oscuro' as const,
   },
   {
@@ -23,6 +25,8 @@ const proceso = [
     titulo: 'Ensamble con tarugos',
     texto: 'Uniones con tarugos, sin tornillos a la vista: más limpio y más resistente.',
     foto: 'foto: ensamble con tarugos',
+    src: '/fotos/nosotros-tarugos.jpg',
+    alt: 'Ensamble con tarugos',
     tono: 'stone' as const,
   },
   {
@@ -30,6 +34,8 @@ const proceso = [
     titulo: 'Cantos enchapados',
     texto: 'Cantos enchapados para un acabado continuo, sellado y durable.',
     foto: 'foto: enchapado de cantos',
+    src: '/fotos/nosotros-cantos.jpg',
+    alt: 'Enchapado de cantos',
     tono: 'stone' as const,
   },
 ]
@@ -47,6 +53,9 @@ export default function Nosotros() {
         eyebrow="Nosotros"
         indice="Nosotros — 02"
         label="foto: planta de producción"
+        src="/fotos/nosotros-planta.jpg"
+        alt="Planta de producción Delben"
+        priority
         titulo={
           <>
             Producción propia.{' '}
@@ -77,7 +86,7 @@ export default function Nosotros() {
           <div className="mt-10 grid grid-cols-1 divide-y divide-stone-200 border-x border-b border-stone-200 md:grid-cols-3 md:divide-x md:divide-y-0">
             {proceso.map((p, i) => (
               <Reveal key={p.indice} delay={i * 110} className="flex flex-col p-5 lg:p-6">
-                <ImageWell label={p.foto} ratio="4 / 5" tone={p.tono} />
+                <ImageWell label={p.foto} src={p.src} alt={p.alt} ratio="4 / 5" tone={p.tono} />
                 <div className="mt-5 flex items-baseline gap-3">
                   <span className="font-display text-base text-caoba-600">{p.indice}</span>
                   <span className="regla-caoba mt-2 flex-1" />
@@ -127,6 +136,8 @@ export default function Nosotros() {
           <Reveal className="grid grid-cols-1 items-stretch border border-stone-200 md:grid-cols-2">
             <ImageWell
               label="foto: revisión de calidad"
+              src="/fotos/nosotros-calidad.jpg"
+              alt="Revisión de calidad"
               tone="stone"
               className="min-h-[20rem] border-b border-stone-200 md:border-b-0 md:border-r"
             />
@@ -147,19 +158,12 @@ export default function Nosotros() {
       {/* Cita de cierre — sello familiar */}
       <section className="bg-stone-50">
         <div className="mx-auto max-w-editorial px-6 pb-16 lg:px-10 lg:pb-24">
-          <Reveal className="grid grid-cols-1 items-stretch border border-stone-200 md:grid-cols-2">
-            <div className="flex flex-col justify-center p-8 lg:p-12">
-              <p className="text-xs uppercase tracking-[0.22em] text-caoba-700">Tres generaciones</p>
-              <blockquote className="font-display mt-5 text-xl font-light leading-snug text-stone-900 lg:text-2xl">
-                Trabajo duro, responsable y honesto. Lo que siempre nos ha caracterizado.
-              </blockquote>
-              <p className="mt-6 text-xs uppercase tracking-[0.22em] text-stone-500">— Delben S.A.S.</p>
-            </div>
-            <ImageWell
-              label="foto: tres generaciones"
-              tone="caoba"
-              className="min-h-[18rem] border-t border-stone-200 md:border-l md:border-t-0"
-            />
+          <Reveal className="border border-stone-200 px-8 py-14 text-center lg:px-12 lg:py-20">
+            <p className="text-xs uppercase tracking-[0.22em] text-caoba-700">Tres generaciones</p>
+            <blockquote className="font-display mx-auto mt-6 max-w-3xl text-2xl font-light leading-snug text-stone-900 lg:text-3xl">
+              Trabajo duro, responsable y honesto. Lo que siempre nos ha caracterizado.
+            </blockquote>
+            <p className="mt-8 text-xs uppercase tracking-[0.22em] text-stone-500">— Delben S.A.S.</p>
           </Reveal>
         </div>
       </section>

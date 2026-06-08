@@ -54,7 +54,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`no-js ${fraunces.variable} ${hanken.variable}`}>
+    <html lang="es" suppressHydrationWarning className={`no-js ${fraunces.variable} ${hanken.variable}`}>
       <body className="grano min-h-screen bg-stone-50 font-sans text-stone-800 antialiased">
         {/* Activa los reveals al cargar: sin JS, el contenido permanece visible */}
         <script

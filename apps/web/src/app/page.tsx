@@ -22,6 +22,8 @@ const sintesis = [
     texto:
       'Madera, laminados, metal, vidrio y pintura se transforman en nuestra planta, con personal propio. No tercerizamos.',
     foto: 'foto: planta de producción',
+    src: '/fotos/inicio-planta.jpg',
+    alt: 'Planta de producción Delben',
     tono: 'stone' as const,
     href: '/nosotros',
   },
@@ -31,6 +33,8 @@ const sintesis = [
     texto:
       'Combinamos una amplia variedad de acabados con estándares de ergonomía y funcionalidad.',
     foto: 'foto: cocina terminada',
+    src: '/fotos/inicio-cocina.jpg',
+    alt: 'Cocina terminada',
     tono: 'oscuro' as const,
     href: '/productos',
   },
@@ -39,6 +43,8 @@ const sintesis = [
     titulo: 'Pensado para el distribuidor',
     texto: 'Manuales de diseño, portafolio amplio y cotización en línea.',
     foto: 'foto: detalle de herraje',
+    src: '/fotos/inicio-herraje.jpg',
+    alt: 'Detalle de herraje',
     tono: 'stone' as const,
     href: '/distribuidores',
   },
@@ -62,6 +68,9 @@ export default function Inicio() {
       <section className="relative">
         <ImageWell
           label="foto: cocina a sangre — showroom"
+          src="/fotos/inicio-hero.jpg"
+          alt="Cocina Delben en showroom"
+          priority
           tone="oscuro"
           overlay
           mobileMinimal
@@ -157,7 +166,7 @@ export default function Inicio() {
             {sintesis.map((bloque, i) => (
               <Reveal key={bloque.indice} delay={i * 110}>
                 <Link href={bloque.href} className="group flex h-full flex-col p-5 lg:p-6">
-                  <ImageWell label={bloque.foto} ratio="4 / 5" tone={bloque.tono} />
+                  <ImageWell label={bloque.foto} src={bloque.src} alt={bloque.alt} ratio="4 / 5" tone={bloque.tono} />
                   <div className="mt-5 flex items-baseline gap-3">
                     <span className="font-display text-base text-caoba-600">{bloque.indice}</span>
                     <span className="regla-caoba mt-2 flex-1" />
@@ -182,6 +191,8 @@ export default function Inicio() {
         <Reveal>
           <ImageWell
             label="foto: showroom — pieza terminada"
+            src="/fotos/inicio-showcase.jpg"
+            alt="Pieza terminada en showroom"
             tone="stone"
             className="h-[58vh] min-h-[22rem] w-full"
           >
@@ -238,6 +249,8 @@ export default function Inicio() {
             </div>
             <ImageWell
               label="foto: taller — manos al oficio"
+              src="/fotos/inicio-taller.jpg"
+              alt="Manos trabajando en el taller"
               tone="caoba"
               className="min-h-[18rem] border-t border-stone-200 md:border-l md:border-t-0"
             />

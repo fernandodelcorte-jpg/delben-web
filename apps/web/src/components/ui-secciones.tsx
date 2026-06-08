@@ -16,6 +16,12 @@ type HeroPaginaProps = {
   tone?: 'stone' | 'caoba' | 'oscuro'
   /** Clases de altura del hero (a sangre). Más bajo que el Inicio. */
   alto?: string
+  /** Foto real de fondo (opcional). Sin ella, el hero queda como placeholder. */
+  src?: string
+  /** Texto alternativo de la foto. */
+  alt?: string
+  /** Carga prioritaria (para el hero, primero que se ve). */
+  priority?: boolean
 }
 
 /**
@@ -31,10 +37,13 @@ export function HeroPagina({
   label,
   tone = 'oscuro',
   alto = 'h-[60vh] min-h-[24rem]',
+  src,
+  alt,
+  priority = false,
 }: HeroPaginaProps) {
   return (
     <section className="relative">
-      <ImageWell label={label} tone={tone} overlay className={`animate-subir-aparecer w-full ${alto}`}>
+      <ImageWell label={label} src={src} alt={alt} priority={priority} tone={tone} overlay className={`animate-subir-aparecer w-full ${alto}`}>
         <div className="mx-auto flex h-full max-w-editorial flex-col justify-between px-6 py-8 lg:px-10 lg:py-10">
           <div
             className="animate-subir-aparecer flex items-center justify-between text-[0.7rem] uppercase tracking-[0.2em] text-stone-200/90"
