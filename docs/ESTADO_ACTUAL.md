@@ -853,6 +853,27 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-08 — Confirmado: faltan las 3 variables del Admin SDK en Netlify (portal)
+Revisadas las variables de entorno del sitio del portal en Netlify: solo están las **6
+`NEXT_PUBLIC_FIREBASE_*`** (config de cliente). **Faltan las 3 del Admin SDK**:
+`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`. Por eso `/api/red` devuelve
+**500 "Unable to detect a Project Id"**. Afecta también `/api/catalogo` y `/api/admin/reset-password`
+(mismo `lib/firebase/admin.ts`).
+- **Pendiente**: definir cómo inyectar las credenciales del Admin SDK en Netlify respetando la
+  política de la organización sobre claves de service account.
+- Mientras tanto, "Nuestra red" en la web cae a estado "Próximamente".
+
+### 2026-06-08 — Producción: endpoints Admin SDK fallan en Netlify por falta de credenciales
+Detectado en producción: los endpoints del portal que usan Firebase Admin SDK (`/api/red`, y
+probablemente `/api/catalogo` y `/api/admin/reset-password`) fallan con **"Unable to detect a
+Project Id"** porque faltan las credenciales del Admin SDK en las variables de entorno de Netlify
+(`FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY`). En local funciona vía
+ADC; en Netlify no hay ADC.
+- **Pendiente**: resolver la inyección de credenciales en Netlify, considerando la política de la
+  organización sobre claves de service account.
+- **Consecuencia visible**: la sección "Nuestra red" de la web institucional cae a su estado
+  "Próximamente".
+
 ### 2026-06-05 — Descargas de la valoración: PDF + Excel (solo costo Delben)
 El detalle de valoración (`admin/valoraciones/[id]/page.tsx`) no tenía forma de descargar nada.
 Se agregaron dos botones: **Valoración PDF** y **Valoración Excel (.xlsx)**. Decisión del dueño:
