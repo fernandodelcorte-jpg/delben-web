@@ -23,7 +23,7 @@ const sintesis = [
       'Madera, laminados, metal, vidrio y pintura se transforman en nuestra planta, con personal propio. No tercerizamos.',
     foto: 'foto: planta de producción',
     tono: 'stone' as const,
-    href: '/manufactura',
+    href: '/nosotros',
   },
   {
     indice: '02',

@@ -32,7 +32,7 @@ export default function Distribuidores() {
     <>
       <HeroPagina
         eyebrow="Distribuidores"
-        indice="Distribuidores — 06"
+        indice="Distribuidores — 04"
         label="foto: distribuidor con cliente"
         titulo={
           <>
@@ -77,7 +77,8 @@ export default function Distribuidores() {
                 Relaciones que duran.
               </h2>
               <p className="mt-4 text-sm leading-relaxed text-stone-600">
-                Forjamos relaciones que perduran con nuestros aliados y sus clientes.
+                Forjamos relaciones que perduran con nuestros aliados y sus clientes. Nuestro
+                mobiliario llega a proyectos residenciales y hoteleros a través de ellos.
               </p>
             </div>
           </Reveal>

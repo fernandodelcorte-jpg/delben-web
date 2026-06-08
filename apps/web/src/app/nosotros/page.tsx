@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Reveal } from '@/components/reveal'
 import { ImageWell } from '@/components/image-well'
 import { HeroPagina, EncabezadoSeccion } from '@/components/ui-secciones'
@@ -7,31 +6,38 @@ import { HeroPagina, EncabezadoSeccion } from '@/components/ui-secciones'
 export const metadata: Metadata = {
   title: 'Nosotros',
   description:
-    'La familia en la carpintería desde 1976. En 2007 nace Delben en Cúcuta. Tres generaciones de oficio.',
+    'Manufactura propia en la Zona Franca de Cúcuta: corte CNC, ensamble con tarugos, cantos enchapados y control de calidad por etapas. Tres generaciones de oficio.',
 }
 
-const hitos = [
+// Cómo fabricamos — los 3 pasos del proceso (traídos de la antigua Manufactura).
+const proceso = [
   {
-    anio: '1976',
-    titulo: 'La familia entra al oficio',
-    texto: 'El trabajo de la carpintería empieza en familia, mucho antes de que existiera la empresa.',
-    foto: 'foto: taller de los inicios',
+    indice: '01',
+    titulo: 'Corte CNC',
+    texto: 'Precisión de máquina en cada pieza, para un calce exacto en el ensamble.',
+    foto: 'foto: router CNC en operación',
+    tono: 'oscuro' as const,
+  },
+  {
+    indice: '02',
+    titulo: 'Ensamble con tarugos',
+    texto: 'Uniones con tarugos, sin tornillos a la vista: más limpio y más resistente.',
+    foto: 'foto: ensamble con tarugos',
     tono: 'stone' as const,
   },
   {
-    anio: '2007',
-    titulo: 'Nace Delben en Cúcuta',
-    texto: 'El oficio se vuelve empresa en la Zona Franca de Cúcuta, con manufactura exclusiva.',
-    foto: 'foto: planta en Cúcuta',
-    tono: 'oscuro' as const,
+    indice: '03',
+    titulo: 'Cantos enchapados',
+    texto: 'Cantos enchapados para un acabado continuo, sellado y durable.',
+    foto: 'foto: enchapado de cantos',
+    tono: 'stone' as const,
   },
 ]
 
-const principios = [
-  { titulo: 'Manufactura exclusiva', texto: 'Fabricamos en nuestra planta, con personal propio. No tercerizamos.' },
-  { titulo: 'Precisión', texto: 'Acabados cuidados y ensamble de precisión en cada pieza.' },
-  { titulo: 'Honestidad', texto: 'Cumplimos lo que prometemos, en cada entrega.' },
-  { titulo: 'Largo plazo', texto: 'Relaciones que duran, con nuestros aliados comerciales y sus clientes.' },
+const cifras = [
+  { valor: '1.500', unidad: 'm²', etiqueta: 'Planta de producción' },
+  { valor: '70', unidad: '', etiqueta: 'Colaboradores' },
+  { valor: '5', unidad: 'materiales', etiqueta: 'Madera · laminados · metal · vidrio · pintura' },
 ]
 
 export default function Nosotros() {
@@ -40,49 +46,107 @@ export default function Nosotros() {
       <HeroPagina
         eyebrow="Nosotros"
         indice="Nosotros — 02"
-        label="foto: familia en el taller"
+        label="foto: planta de producción"
         titulo={
           <>
-            Tres generaciones con oficio,{' '}
-            <span className="font-display font-normal italic text-caoba-200">una empresa hecha en Cúcuta.</span>
+            Producción propia.{' '}
+            <span className="font-display font-normal italic text-caoba-200">Control total.</span>
           </>
         }
+        subtitulo="Madera, laminados, metal, vidrio y pintura se transforman en nuestra planta, con personal propio. No tercerizamos."
       />
 
-      {/* Historia — dos hitos */}
+      {/* Historia — muy breve (un solo bloque de texto) */}
       <section className="bg-stone-50">
-        <div className="mx-auto max-w-editorial px-6 py-16 lg:px-10 lg:py-20">
-          <EncabezadoSeccion eyebrow="Historia" titulo="De un oficio de familia a una empresa." aside="1976 → 2007" />
-
+        <div className="mx-auto max-w-editorial px-6 py-14 lg:px-10 lg:py-16">
+          <EncabezadoSeccion eyebrow="Historia" titulo="De un oficio de familia a una empresa." />
           <Reveal className="mt-8 max-w-3xl">
             <p className="text-base leading-relaxed text-stone-600 sm:text-lg">
               La familia Del Corte, desde 1976 en la industria de la producción, completa ya tres
               generaciones entregadas con pasión a la fabricación de mobiliario. Es así como nace en
-              el año 2007 Delben, en la Zona Franca de Cúcuta, Colombia.
+              2007 Delben, en la Zona Franca de Cúcuta, Colombia.
             </p>
           </Reveal>
+        </div>
+      </section>
 
-          <div className="mt-10 grid grid-cols-1 divide-y divide-stone-200 border-x border-b border-stone-200 md:grid-cols-2 md:divide-x md:divide-y-0">
-            {hitos.map((h, i) => (
-              <Reveal key={h.anio} delay={i * 120} className="flex flex-col p-5 lg:p-6">
-                <ImageWell label={h.foto} ratio="16 / 11" tone={h.tono} />
+      {/* Cómo fabricamos — los 3 pasos */}
+      <section className="bg-stone-50">
+        <div className="mx-auto max-w-editorial px-6 pb-16 lg:px-10 lg:pb-20">
+          <EncabezadoSeccion eyebrow="Cómo fabricamos" titulo="De la pieza al mueble, con método." aside="03 pasos" />
+          <div className="mt-10 grid grid-cols-1 divide-y divide-stone-200 border-x border-b border-stone-200 md:grid-cols-3 md:divide-x md:divide-y-0">
+            {proceso.map((p, i) => (
+              <Reveal key={p.indice} delay={i * 110} className="flex flex-col p-5 lg:p-6">
+                <ImageWell label={p.foto} ratio="4 / 5" tone={p.tono} />
                 <div className="mt-5 flex items-baseline gap-3">
-                  <span className="font-display text-2xl font-light text-caoba-600">{h.anio}</span>
-                  <span className="regla-caoba mt-3 flex-1" />
+                  <span className="font-display text-base text-caoba-600">{p.indice}</span>
+                  <span className="regla-caoba mt-2 flex-1" />
                 </div>
                 <h3 className="mt-3 text-base font-semibold uppercase tracking-[0.04em] text-stone-900">
-                  {h.titulo}
+                  {p.titulo}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">{h.texto}</p>
+                <p className="mt-2 text-sm leading-relaxed text-stone-600">{p.texto}</p>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Tres generaciones — cita + imagen */}
+      {/* Capacidad industrial — banda de cifras */}
+      <section className="bg-stone-900 text-stone-100">
+        <div className="mx-auto max-w-editorial px-6 py-16 lg:px-10 lg:py-20">
+          <Reveal className="border-b border-stone-700 pb-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-caoba-300">Capacidad industrial</p>
+            <h2 className="mt-3 text-xl font-medium tracking-tight text-stone-50 sm:text-2xl">
+              Todo bajo un mismo techo.
+            </h2>
+          </Reveal>
+          <dl className="grid grid-cols-1 divide-stone-700 sm:grid-cols-3 sm:divide-x">
+            {cifras.map((c, i) => (
+              <Reveal key={c.etiqueta} delay={i * 90} as="div" className="py-8 sm:px-6 sm:first:pl-0">
+                <dt className="sr-only">{c.etiqueta}</dt>
+                <dd>
+                  <div className="font-display text-4xl font-light leading-none text-stone-50 lg:text-5xl">
+                    {c.valor}
+                    {c.unidad && <span className="ml-1 text-lg text-caoba-300 lg:text-xl">{c.unidad}</span>}
+                  </div>
+                  <div className="mt-4 h-px w-8 bg-caoba-500/60" />
+                  <p className="mt-4 text-[0.7rem] uppercase leading-relaxed tracking-[0.14em] text-stone-400">
+                    {c.etiqueta}
+                  </p>
+                </dd>
+              </Reveal>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      {/* Control de calidad */}
       <section className="bg-stone-50">
         <div className="mx-auto max-w-editorial px-6 py-16 lg:px-10 lg:py-20">
+          <Reveal className="grid grid-cols-1 items-stretch border border-stone-200 md:grid-cols-2">
+            <ImageWell
+              label="foto: revisión de calidad"
+              tone="stone"
+              className="min-h-[20rem] border-b border-stone-200 md:border-b-0 md:border-r"
+            />
+            <div className="flex flex-col justify-center p-8 lg:p-12">
+              <p className="text-xs uppercase tracking-[0.22em] text-caoba-700">Control de calidad</p>
+              <h2 className="mt-4 text-xl font-medium tracking-tight text-stone-900 sm:text-2xl">
+                Revisamos en cada etapa.
+              </h2>
+              <p className="mt-4 text-sm leading-relaxed text-stone-600">
+                El control de la calidad no se deja para el final: se controla en cada etapa, desde la
+                compra de los insumos hasta el embalaje y despacho.
+              </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Cita de cierre — sello familiar */}
+      <section className="bg-stone-50">
+        <div className="mx-auto max-w-editorial px-6 pb-16 lg:px-10 lg:pb-24">
           <Reveal className="grid grid-cols-1 items-stretch border border-stone-200 md:grid-cols-2">
             <div className="flex flex-col justify-center p-8 lg:p-12">
               <p className="text-xs uppercase tracking-[0.22em] text-caoba-700">Tres generaciones</p>
@@ -96,41 +160,6 @@ export default function Nosotros() {
               tone="caoba"
               className="min-h-[18rem] border-t border-stone-200 md:border-l md:border-t-0"
             />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* Lo que no negociamos */}
-      <section className="bg-stone-50">
-        <div className="mx-auto max-w-editorial px-6 pb-20 lg:px-10 lg:pb-28">
-          <EncabezadoSeccion eyebrow="Lo que no negociamos" titulo="Cuatro cosas que no cambian." aside="01 — 04" />
-          <div className="mt-10 grid grid-cols-1 gap-px border border-stone-200 bg-stone-200 sm:grid-cols-2 lg:grid-cols-4">
-            {principios.map((p, i) => (
-              <Reveal key={p.titulo} delay={i * 90} className="flex flex-col bg-stone-50 p-6">
-                <span className="font-display text-base text-caoba-600">0{i + 1}</span>
-                <span className="regla-caoba mt-2" />
-                <h3 className="mt-4 text-sm font-semibold uppercase tracking-[0.06em] text-stone-900">
-                  {p.titulo}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">{p.texto}</p>
-              </Reveal>
-            ))}
-          </div>
-
-          <Reveal className="mt-10 flex flex-wrap gap-4">
-            <Link
-              href="/manufactura"
-              className="inline-flex items-center gap-2 rounded-full bg-caoba-600 px-6 py-3 text-sm font-medium text-stone-50 transition-colors hover:bg-caoba-700"
-            >
-              Cómo fabricamos
-              <span aria-hidden>→</span>
-            </Link>
-            <Link
-              href="/productos"
-              className="inline-flex items-center gap-2 rounded-full border border-stone-300 px-6 py-3 text-sm font-medium text-stone-800 transition-colors hover:border-stone-900"
-            >
-              Ver el portafolio
-            </Link>
           </Reveal>
         </div>
       </section>

@@ -29,7 +29,7 @@ export default function Productos() {
     <>
       <HeroPagina
         eyebrow="Productos"
-        indice="Productos — 04"
+        indice="Productos — 03"
         label="foto: portafolio — pieza destacada"
         titulo={
           <>

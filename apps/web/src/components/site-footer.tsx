@@ -3,9 +3,7 @@ import { PORTAL_URL } from '@/lib/config'
 
 const PAGINAS = [
   ['Nosotros', '/nosotros'],
-  ['Manufactura', '/manufactura'],
   ['Productos', '/productos'],
-  ['Proyectos', '/proyectos'],
   ['Distribuidores', '/distribuidores'],
   ['Contacto', '/contacto'],
 ] as const

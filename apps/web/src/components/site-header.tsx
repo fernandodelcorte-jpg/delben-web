@@ -9,9 +9,7 @@ import { PORTAL_URL } from '@/lib/config'
 const NAV = [
   ['Inicio', '/'],
   ['Nosotros', '/nosotros'],
-  ['Manufactura', '/manufactura'],
   ['Productos', '/productos'],
-  ['Proyectos', '/proyectos'],
   ['Distribuidores', '/distribuidores'],
   ['Contacto', '/contacto'],
 ] as const

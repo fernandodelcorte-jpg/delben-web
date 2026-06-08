@@ -14,7 +14,7 @@ export default function Contacto() {
     <>
       <HeroPagina
         eyebrow="Contacto"
-        indice="Contacto — 07"
+        indice="Contacto — 05"
         label="foto: recepción / planta"
         alto="h-[50vh] min-h-[20rem]"
         titulo={
