@@ -18,7 +18,7 @@ import {
 import { ValoracionPDFButton } from '@/components/cotizador/valoracion-pdf-button'
 import { ValoracionExcelButton } from '@/components/cotizador/valoracion-excel-button'
 import type { Valoracion } from '@/lib/firebase/tipos-firestore'
-import type { ValoracionItemSnapshot, ValoracionItemHerrajeSnapshot } from '@/lib/firebase/tipos-firestore'
+import type { ValoracionItemSnapshot, ValoracionItemHerrajeSnapshot, ValoracionEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
 
 function formatFecha(ts: number) {
   return new Date(ts).toLocaleDateString('es-CO', {
@@ -95,10 +95,8 @@ export default function ValoracionDetallePage() {
     (s, it) => s + it.resultado.costo_delben * it.cantidad,
     0,
   )
-  const costoEspeciales = (valoracion.itemsEspeciales ?? []).reduce(
-    (s, e) => s + e.precioDelbenUnitario * e.cantidad,
-    0,
-  )
+  const especiales = valoracion.itemsEspeciales ?? []
+  const costoEspeciales = especiales.reduce((s, e) => s + e.precioDelbenUnitario * e.cantidad, 0)
   const totalCostoDelben = totalCostoDelbenDeValoracion(valoracion)
 
   // Datos para PDF/Excel de la valoración: SOLO costo Delben (conversores solo-costo).
@@ -116,7 +114,7 @@ export default function ValoracionDetallePage() {
   }
   const itemsPDF = valoracion.items.map(itemValoracionSnapshotToPDF)
   const herrajesPDF = valoracion.itemsHerraje.map(herrajeValoracionSnapshotToPDF)
-  const especialesPDF = (valoracion.itemsEspeciales ?? []).map(especialValoracionSnapshotToPDF)
+  const especialesPDF = especiales.map(especialValoracionSnapshotToPDF)
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -240,6 +238,20 @@ export default function ValoracionDetallePage() {
         </div>
       )}
 
+      {/* Muebles especiales */}
+      {especiales.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
+            Muebles especiales ({especiales.length})
+          </h2>
+          <div className="rounded-xl border border-stone-200 bg-white divide-y divide-stone-100 overflow-hidden">
+            {especiales.map((item, i) => (
+              <EspecialRow key={i} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Totales — documento interno: COSTO DELBEN antes de IVA (sin venta, sin IVA) */}
       <div className="rounded-xl border border-stone-200 bg-white p-6 space-y-3">
         <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
@@ -309,6 +321,25 @@ function HerrajeRow({ item }: { item: ValoracionItemHerrajeSnapshot }) {
       <div className="text-right">
         <p className="text-sm font-semibold text-stone-900 tabular-nums">
           {formatCOP(item.resultado.costo_delben * item.cantidad)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function EspecialRow({ item }: { item: ValoracionEspecialSnapshot }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-5 py-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-stone-800">{item.nombre}</p>
+        <p className="text-xs text-stone-400 mt-0.5">
+          {[item.tipoEstructuraNombre, item.tipoFachadaNombre, item.acabadoNombre].filter(Boolean).join(' · ')}
+          {item.cantidad > 1 && ` · ×${item.cantidad}`}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="text-sm font-semibold text-stone-900 tabular-nums">
+          {formatCOP(item.precioDelbenUnitario * item.cantidad)}
         </p>
       </div>
     </div>

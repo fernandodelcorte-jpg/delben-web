@@ -34,6 +34,9 @@ export default function Distribuidores() {
         eyebrow="Distribuidores"
         indice="Distribuidores — 04"
         label="foto: distribuidor con cliente"
+        src="/fotos/productos-acabados.jpg"
+        alt="Mobiliario Delben con el respaldo de la fábrica para sus aliados"
+        priority
         titulo={
           <>
             Su negocio,{' '}
@@ -68,6 +71,8 @@ export default function Distribuidores() {
           <Reveal className="grid grid-cols-1 items-stretch border border-stone-200 md:grid-cols-2">
             <ImageWell
               label="foto: equipo Delben"
+              src="/fotos/nosotros-cnc.jpg"
+              alt="Manufactura propia de Delben, respaldo de sus aliados comerciales"
               tone="caoba"
               className="min-h-[20rem] border-b border-stone-200 md:border-b-0 md:border-r"
             />

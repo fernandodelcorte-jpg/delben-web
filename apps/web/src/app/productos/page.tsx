@@ -12,16 +12,27 @@ export const metadata: Metadata = {
 
 // Estrella del portafolio: cocinas y closets, a gran tamaño.
 const estrella = [
-  { nombre: 'Cocinas', texto: 'El corazón de la casa.', foto: 'foto: cocina — galería' },
-  { nombre: 'Closets', texto: 'Orden hecho a la medida.', foto: 'foto: closet — galería' },
+  {
+    nombre: 'Cocinas',
+    texto: 'El corazón de la casa.',
+    foto: 'foto: cocina — galería',
+    src: '/fotos/productos-cocinas.jpg',
+    alt: 'Cocina integral fabricada por Delben',
+  },
+  {
+    nombre: 'Closets',
+    texto: 'Orden hecho a la medida.',
+    foto: 'foto: closet — galería',
+    src: '/fotos/productos-closets.jpg',
+    alt: 'Closet a la medida fabricado por Delben',
+  },
 ]
 
 // Resto del portafolio.
 const portafolio = [
-  { nombre: 'Baños', foto: 'foto: mueble de baño' },
-  { nombre: 'Entretenimiento', foto: 'foto: mueble de TV' },
-  { nombre: 'Zonas de ropas', foto: 'foto: zona de ropas' },
-  { nombre: 'Carpintería a medida', foto: 'foto: pieza a medida' },
+  { nombre: 'Baños', foto: 'foto: mueble de baño', src: '/fotos/productos-banos.jpg', alt: 'Mueble de baño Delben' },
+  { nombre: 'Entretenimiento', foto: 'foto: mueble de TV', src: '/fotos/productos-entretenimiento.jpg', alt: 'Mueble de entretenimiento para TV de Delben' },
+  { nombre: 'Carpintería a medida', foto: 'foto: pieza a medida', src: '/fotos/productos-carpinteria.jpg', alt: 'Pieza de carpintería a la medida de Delben' },
 ]
 
 export default function Productos() {
@@ -31,6 +42,9 @@ export default function Productos() {
         eyebrow="Productos"
         indice="Productos — 03"
         label="foto: portafolio — pieza destacada"
+        src="/fotos/productos-hero.jpg"
+        alt="Portafolio de mobiliario fabricado por Delben"
+        priority
         titulo={
           <>
             Cocinas y closets,{' '}
@@ -47,7 +61,7 @@ export default function Productos() {
           <div className="mt-10 grid grid-cols-1 gap-px border border-stone-200 bg-stone-200 md:grid-cols-2">
             {estrella.map((e, i) => (
               <Reveal key={e.nombre} delay={i * 120}>
-                <ImageWell label={e.foto} tone={i === 0 ? 'oscuro' : 'stone'} overlay className="h-[60vh] min-h-[24rem] w-full">
+                <ImageWell label={e.foto} src={e.src} alt={e.alt} tone={i === 0 ? 'oscuro' : 'stone'} overlay className="h-[60vh] min-h-[24rem] w-full">
                   <div className="flex h-full flex-col justify-end p-7 lg:p-8">
                     <p className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-caoba-300">
                       <span className="h-px w-6 bg-caoba-400" />
@@ -65,10 +79,10 @@ export default function Productos() {
       {/* Resto del portafolio */}
       <section className="bg-stone-50">
         <div className="mx-auto max-w-editorial px-6 pb-16 lg:px-10 lg:pb-20">
-          <div className="grid grid-cols-1 gap-px border border-stone-200 bg-stone-200 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-px border border-stone-200 bg-stone-200 sm:grid-cols-3">
             {portafolio.map((p, i) => (
               <Reveal key={p.nombre} delay={i * 90} className="bg-stone-50">
-                <ImageWell label={p.foto} ratio="4 / 5" tone="stone" />
+                <ImageWell label={p.foto} src={p.src} alt={p.alt} ratio="4 / 5" tone="stone" />
                 <p className="px-5 py-4 text-sm font-semibold uppercase tracking-[0.06em] text-stone-900">
                   {p.nombre}
                 </p>
@@ -94,6 +108,8 @@ export default function Productos() {
             </div>
             <ImageWell
               label="foto: muestrario de acabados"
+              src="/fotos/productos-acabados.jpg"
+              alt="Muestrario de acabados y combinaciones de Delben"
               tone="caoba"
               className="min-h-[20rem] border-t border-stone-200 md:border-l md:border-t-0"
             />
