@@ -9,11 +9,12 @@ import {
   SERVICIOS_DELBEN_DEMO,
   UNIVERSO_DEMO,
 } from '@/lib/datos-demo'
-import type { Accesorio, Cotizacion, Distribuidor, Sede, Modulo, Subcategoria, Valoracion, TotalesCotizacion, ItemEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
+import type { Accesorio, Cotizacion, Distribuidor, Sede, Modulo, Subcategoria, Valoracion, TotalesCotizacion, ValoracionTotales, ItemEspecialSnapshot, ValoracionEspecialSnapshot } from '@/lib/firebase/tipos-firestore'
 import { getUniversoParaModalidad } from '@/lib/firebase/tipos-firestore'
 import {
   guardarCotizacion as _guardarCotizacion,
   actualizarCotizacion as _actualizarCotizacion,
+  getSiguienteVersion as _getSiguienteVersion,
 } from '@/lib/firestore/cotizaciones'
 import {
   guardarValoracion as _guardarValoracion,
@@ -167,7 +168,8 @@ type CarritoState = {
   guardarValoracion: (distribuidorId: string, distribuidorNombre: string, userId: string) => Promise<string>
   reabrirBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
   reabrirValoracion: (valoracion: Valoracion, sede: Sede | null) => void
-  copiarBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
+  copiarBorrador: (cotizacion: Cotizacion, sede: Sede | null, nuevoNombre?: string) => Promise<void>
+  copiarValoracion: (valoracion: Valoracion, sede: Sede | null, nuevoNombre?: string) => void
   cargarBorrador: (payload: {
     cotizacionInfo: CotizacionInfo
     cotizacionGuardadaId: string | null
@@ -248,8 +250,36 @@ export function calcularTotalesCotizacion(
   }
 }
 
+// ─── Total canónico de la VALORACIÓN ──────────────────────────────────────────
+// Costo Delben ANTES de IVA (sin venta, sin utilidad, sin IVA). Es la suma de
+// costo_delben de módulos + herrajes asociados + herrajes sueltos + el costo
+// (precioDelbenUnitario) de los especiales. NO incluye transporte/instalación
+// fijos (son capa distribuidor, no costo Delben). Misma fórmula que el "Precio
+// Delben al distribuidor" del borrador de valoración.
+export function calcularTotalCostoDelben(
+  items: ItemCarrito[],
+  itemsHerraje: ItemHerrajeCarrito[],
+  itemsEspeciales: ItemEspecial[],
+): number {
+  const modulos = items.reduce((s, i) => s + i.resultado.costo_delben * i.config.cantidad, 0)
+  const herrajesAsociados = items.reduce(
+    (s, i) => s + i.herrajesAsociados.reduce((hs, h) => hs + h.resultado.costo_delben * h.cantidad, 0),
+    0,
+  )
+  const herrajes = itemsHerraje.reduce((s, i) => s + i.resultado.costo_delben * i.cantidad, 0)
+  const especiales = itemsEspeciales.reduce((s, i) => s + i.precioDelbenUnitario * i.cantidad, 0)
+  return modulos + herrajesAsociados + herrajes + especiales
+}
+
 // Reconstruye un ItemEspecial (del carrito) desde su snapshot de Firestore.
-export function buildEspecialDesdeSnapshot(snap: ItemEspecialSnapshot): ItemEspecial {
+// Acepta el snapshot de cotización (con venta) o el de valoración (solo-costo,
+// sin precioClienteUnitario ni resultado). En valoración la venta no se usa:
+// precioClienteUnitario cae a 0 (placeholder en memoria; no se vuelve a persistir).
+export function buildEspecialDesdeSnapshot(
+  snap: ItemEspecialSnapshot | ValoracionEspecialSnapshot,
+): ItemEspecial {
+  const precioClienteUnitario = 'precioClienteUnitario' in snap ? snap.precioClienteUnitario : 0
+  const resultado = 'resultado' in snap ? snap.resultado : undefined
   return {
     id: crypto.randomUUID(),
     nombre: snap.nombre,
@@ -263,12 +293,12 @@ export function buildEspecialDesdeSnapshot(snap: ItemEspecialSnapshot): ItemEspe
     profundidad: snap.profundidad,
     cantidad: snap.cantidad,
     precioDelbenUnitario: snap.precioDelbenUnitario,
-    precioClienteUnitario: snap.precioClienteUnitario,
+    precioClienteUnitario,
     observaciones: snap.observaciones,
     herrajes: snap.herrajes.map((h) => ({ ...h })),
     moduloReferenciaId: snap.moduloReferenciaId,
     moduloReferenciaNombre: snap.moduloReferenciaNombre,
-    ...(snap.resultado ? { resultado: snap.resultado as ResultadoCalculo } : {}),
+    ...(resultado ? { resultado: resultado as ResultadoCalculo } : {}),
   }
 }
 
@@ -615,13 +645,10 @@ export const useCarrito = create<CarritoState>()(
     const { cotizacionInfo, valoracionGuardadaId, items, itemsHerraje, itemsEspeciales } = get()
     if (!cotizacionInfo) throw new Error('Sin cotización activa')
 
-    const totales = calcularTotalesCotizacion(
-      items,
-      itemsHerraje,
-      itemsEspeciales,
-      cotizacionInfo.transporteFijo,
-      cotizacionInfo.instalacionFija,
-    )
+    // Total canónico de la valoración = COSTO DELBEN antes de IVA (no venta).
+    const totales: ValoracionTotales = {
+      totalCostoDelben: calcularTotalCostoDelben(items, itemsHerraje, itemsEspeciales),
+    }
 
     if (valoracionGuardadaId) {
       await _actualizarValoracion(valoracionGuardadaId, cotizacionInfo, items, itemsHerraje, itemsEspeciales, totales)
@@ -642,8 +669,9 @@ export const useCarrito = create<CarritoState>()(
       sedeId: valoracion.sede_id,
       categoriaId: '',
       categoriaNombre: '',
-      transporteFijo: valoracion.totales.transporteFijo ?? 0,
-      instalacionFija: valoracion.totales.instalacionFija ?? 0,
+      // La valoración (costo Delben) no maneja costos fijos de transporte/instalación.
+      transporteFijo: 0,
+      instalacionFija: 0,
       numeroOp: valoracion.numero_op,
     }
 
@@ -732,6 +760,121 @@ export const useCarrito = create<CarritoState>()(
       sedeData: sede,
       cotizacionGuardadaId: null,
       valoracionGuardadaId: valoracion.id,
+      items,
+      itemsHerraje,
+      itemsEspeciales: (valoracion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot),
+      pantallaActiva: 'carrito',
+      moduloPendiente: null,
+      itemEditando: null,
+    })
+  },
+
+  copiarValoracion: (valoracion, sede, nuevoNombre) => {
+    // Copia para crear una valoración NUEVA: se fuerza doc nuevo
+    // (valoracionGuardadaId: null) y fecha de hoy. El numero_op NO se hereda
+    // (es identificador único de OP; facturación asigna uno nuevo) → queda vacío.
+    // El nombre de la copia se aplica al proyectoNombre (título en la lista de
+    // valoraciones). Fallback al original si llega vacío.
+    const proyectoNombre = nuevoNombre?.trim() || valoracion.proyectoNombre
+    const cotizacionInfo: CotizacionInfo = {
+      clienteNombre: valoracion.clienteNombre,
+      proyectoNombre,
+      modalidad: valoracion.modalidad,
+      fecha: new Date(),
+      sedeId: valoracion.sede_id,
+      categoriaId: '',
+      categoriaNombre: '',
+      // La valoración (costo Delben) no maneja costos fijos de transporte/instalación.
+      transporteFijo: 0,
+      instalacionFija: 0,
+      // numeroOp omitido a propósito: no se arrastra (queda vacío para una OP nueva).
+    }
+
+    const items: ItemCarrito[] = valoracion.items.map((snap) => ({
+      id: crypto.randomUUID(),
+      modulo: {
+        id: snap.modulo_id,
+        nombre: snap.modulo_nombre,
+        tipologia: snap.modulo_tipologia,
+        codigo_excel: '',
+        categoria_id: '',
+        altura: snap.config.altura,
+        profundidad: snap.config.profundidad,
+        imagen_nombre: null,
+        imagen_url: null,
+        search_keywords: [],
+        activo: true,
+      } satisfies Modulo,
+      config: {
+        tipoEstructuraId: snap.config.tipoEstructuraId ?? '',
+        tipoEstructuraNombre: snap.config.tipoEstructuraNombre,
+        tipoFachadaId: snap.config.tipoFachadaId ?? '',
+        tipoFachadaNombre: snap.config.tipoFachadaNombre,
+        subcategoriaId: snap.config.subcategoriaId ?? '',
+        subcategoriaNombre: snap.config.subcategoriaNombre,
+        acabadoId: snap.config.acabadoId ?? '',
+        acabadoNombre: snap.config.acabadoNombre,
+        acabadoEstructura: snap.config.acabadoEstructura,
+        colorVidrio: snap.config.colorVidrio,
+        colorMetal: snap.config.colorMetal,
+        altura: snap.config.altura,
+        profundidad: snap.config.profundidad,
+        cantidad: snap.config.cantidad,
+        observaciones: snap.config.observaciones,
+      },
+      subcategoria: {
+        id: snap.config.subcategoriaId ?? '',
+        tipo_fachada_id: snap.config.tipoFachadaId ?? '',
+        nombre: snap.config.subcategoriaNombre,
+        tipo_ajuste: 'ninguno',
+        ajuste_pct: 0,
+        es_premium: false,
+        activo: true,
+      } satisfies Subcategoria,
+      resultado: snap.resultado as ResultadoCalculo,
+      herrajesAsociados: snap.herrajesAsociados.map((h) => ({
+        accesorio: {
+          id: h.accesorio_id,
+          codigo: h.codigo,
+          nombre: h.nombre,
+          nombre_normalizado: h.nombre.toLowerCase(),
+          precio_tradicional_cop: null,
+          precio_desarmado_cop: null,
+          imagen_nombre: null,
+          imagen_url: null,
+          disponible_tradicional: true,
+          disponible_desarmado: true,
+          activo: true,
+        } satisfies Accesorio,
+        cantidad: h.cantidad,
+        resultado: h.resultado as ResultadoCalculo,
+      })),
+    }))
+
+    const itemsHerraje: ItemHerrajeCarrito[] = valoracion.itemsHerraje.map((snap) => ({
+      id: crypto.randomUUID(),
+      accesorio: {
+        id: snap.accesorio_id,
+        codigo: snap.codigo,
+        nombre: snap.nombre,
+        nombre_normalizado: snap.nombre.toLowerCase(),
+        precio_tradicional_cop: null,
+        precio_desarmado_cop: null,
+        imagen_nombre: null,
+        imagen_url: null,
+        disponible_tradicional: true,
+        disponible_desarmado: true,
+        activo: true,
+      } satisfies Accesorio,
+      cantidad: snap.cantidad,
+      resultado: snap.resultado as ResultadoCalculo,
+    }))
+
+    set({
+      cotizacionInfo,
+      sedeData: sede,
+      cotizacionGuardadaId: null,
+      valoracionGuardadaId: null,
       items,
       itemsHerraje,
       itemsEspeciales: (valoracion.itemsEspeciales ?? []).map(buildEspecialDesdeSnapshot),
@@ -851,7 +994,30 @@ export const useCarrito = create<CarritoState>()(
     })
   },
 
-  copiarBorrador: (cotizacion, sede) => {
+  copiarBorrador: async (cotizacion, sede, nuevoNombre) => {
+    // Nombre de la copia: en la lista, las cotizaciones de un proyecto se
+    // distinguen por su ESPACIO (cabecera de grupo). El nuevo nombre se aplica
+    // ahí. Fallback al original si llega vacío (nunca queda solo-undefined).
+    const espacioNombre = nuevoNombre?.trim() || cotizacion.espacio_nombre
+
+    // La copia es una NUEVA versión del espacio elegido: se calcula la siguiente
+    // versión (igual que el flujo de "nueva cotización") CONTRA ese nombre, para
+    // no colisionar. version NUNCA debe quedar undefined: Firestore lo rechaza al
+    // hacer setDoc en guardarCotizacion. Si no se puede consultar (sin
+    // proyecto/espacio o error de red), cae a un default válido.
+    let version = cotizacion.version ?? 1
+    if (cotizacion.proyecto_id && espacioNombre) {
+      try {
+        version = await _getSiguienteVersion(
+          cotizacion.distribuidor_id,
+          cotizacion.proyecto_id,
+          espacioNombre,
+        )
+      } catch {
+        // se conserva el default válido (no undefined)
+      }
+    }
+
     const cotizacionInfo: CotizacionInfo = {
       clienteNombre: cotizacion.clienteNombre,
       clienteDireccion: cotizacion.clienteDireccion,
@@ -864,7 +1030,8 @@ export const useCarrito = create<CarritoState>()(
       transporteFijo: cotizacion.totales.transporteFijo ?? 0,
       instalacionFija: cotizacion.totales.instalacionFija ?? 0,
       proyectoId: cotizacion.proyecto_id,
-      espacioNombre: cotizacion.espacio_nombre,
+      espacioNombre,
+      version,
     }
 
     const items: ItemCarrito[] = cotizacion.items.map((snap) => ({

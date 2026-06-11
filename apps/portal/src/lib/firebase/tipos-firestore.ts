@@ -386,6 +386,71 @@ export interface TotalesCotizacion {
 }
 
 // ─── Valoraciones internas (delben_facturacion) ───────────────────────────────
+//
+// Una valoración es un documento INTERNO de Delben: su total canónico es el COSTO
+// DELBEN ANTES DE IVA. Por la regla de oro #2 (y la deuda §1/§10), NUNCA persiste
+// precio de venta, utilidad ni IVA. Por eso usa tipos propios SOLO-COSTO (no los
+// snapshots compartidos con cotizaciones). El motor sigue calculando todo; aquí
+// solo se serializa la capa de costo.
+
+/** Resultado del motor recortado a la capa de COSTO (sin venta/IVA). */
+export interface ValoracionResultadoSnapshot {
+  moneda: 'COP' | 'USD'
+  costo_tras_descuentos: number
+  servicios_subtotal1: number
+  costo_delben: number
+  cantidad: number
+}
+
+export interface ValoracionHerrajeAsociadoSnapshot {
+  accesorio_id: string
+  codigo: number
+  nombre: string
+  cantidad: number
+  resultado: ValoracionResultadoSnapshot
+}
+
+export interface ValoracionItemSnapshot {
+  modulo_id: string
+  modulo_nombre: string
+  modulo_tipologia: string
+  // Misma forma de config que la cotización (sin duplicar la definición).
+  config: ItemCotizacionSnapshot['config']
+  resultado: ValoracionResultadoSnapshot
+  herrajesAsociados: ValoracionHerrajeAsociadoSnapshot[]
+}
+
+export interface ValoracionItemHerrajeSnapshot {
+  accesorio_id: string
+  codigo: number
+  nombre: string
+  cantidad: number
+  resultado: ValoracionResultadoSnapshot
+}
+
+export interface ValoracionEspecialSnapshot {
+  nombre: string
+  tipoEstructuraNombre: string
+  tipoFachadaNombre: string
+  acabadoNombre: string
+  acabadoEstructura: string | null
+  colorVidrio: string | null
+  ancho: number | null
+  alto: number
+  profundidad: number
+  cantidad: number
+  precioDelbenUnitario: number
+  observaciones: string
+  herrajes: HerrajeEspecialSnapshot[]
+  moduloReferenciaId?: string
+  moduloReferenciaNombre?: string
+  // SIN precioClienteUnitario ni `resultado` (venta): no se persiste venta.
+}
+
+/** Totales de valoración: SOLO el costo Delben canónico (antes de IVA). */
+export interface ValoracionTotales {
+  totalCostoDelben: number
+}
 
 export interface ValoracionDoc {
   distribuidor_id: string
@@ -399,10 +464,10 @@ export interface ValoracionDoc {
   // antes de esta funcionalidad (no lo tienen). Dato interno: NO va en PDFs.
   numero_op?: string
   modalidad: 'tradicional' | 'desarmado'
-  items: ItemCotizacionSnapshot[]
-  itemsHerraje: ItemHerraCotizacionSnapshot[]
-  itemsEspeciales?: ItemEspecialSnapshot[]
-  totales: TotalesCotizacion
+  items: ValoracionItemSnapshot[]
+  itemsHerraje: ValoracionItemHerrajeSnapshot[]
+  itemsEspeciales?: ValoracionEspecialSnapshot[]
+  totales: ValoracionTotales
   estado: 'borrador' | 'facturada'
   createdBy: string
   createdAt: number

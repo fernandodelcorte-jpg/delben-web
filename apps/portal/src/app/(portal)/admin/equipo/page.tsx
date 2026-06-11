@@ -9,6 +9,7 @@ import { getUsuariosDelben, crearUsuarioFirestore, toggleUsuarioActivo } from '@
 import { crearUsuarioAuth } from '@/lib/firebase/client'
 import { useAuth } from '@/components/providers/auth-provider'
 import { BotonResetPassword } from '@/components/admin/boton-reset-password'
+import { InputPassword } from '@/components/ui/input-password'
 import type { Usuario } from '@/lib/firebase/tipos-firestore'
 
 const schemaUsuario = z.object({
@@ -265,9 +266,8 @@ export default function EquipoDelbenPage() {
                   {/* Contraseña */}
                   <div>
                     <label className="block text-xs font-medium text-stone-600 mb-1">Contraseña temporal</label>
-                    <input
+                    <InputPassword
                       {...form.register('contrasena')}
-                      type="password"
                       placeholder="Mínimo 8 caracteres"
                       className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100"
                     />

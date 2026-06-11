@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Key, CircleNotch, CheckCircle, Warning, X } from '@phosphor-icons/react'
 import { restablecerContrasenaUsuario } from '@/lib/firebase/client'
+import { InputPassword } from '@/components/ui/input-password'
 
 const esquema = z.object({
   contrasena: z.string().min(6, 'Mínimo 6 caracteres'),
@@ -102,8 +103,7 @@ export function BotonResetPassword({ email }: { email: string }) {
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-2.5">
               <div>
-                <input
-                  type="password"
+                <InputPassword
                   autoComplete="new-password"
                   placeholder="Mínimo 6 caracteres"
                   {...register('contrasena')}

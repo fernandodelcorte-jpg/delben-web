@@ -20,7 +20,44 @@ function codigoError(err: unknown): string {
     : ''
 }
 
+/**
+ * ¿El fallo es de INICIALIZACIÓN/credenciales del Admin SDK (configuración del
+ * servidor) y no del llamante? En Netlify, sin las env vars del service account
+ * ni ADC, el SDK no puede resolver el project id y arroja "Unable to detect a
+ * Project Id" — error que aflora al primer uso (p. ej. verifyIdToken), no antes.
+ * Distinguirlo evita reportar un 401 "Token inválido" engañoso.
+ */
+function esErrorDeCredenciales(err: unknown): boolean {
+  const code = codigoError(err)
+  const msg = err instanceof Error ? err.message : String(err)
+  return (
+    code.startsWith('app/') ||
+    /unable to detect a project id/i.test(msg) ||
+    /could not (load|refresh) .*default credentials/i.test(msg) ||
+    /failed to (determine|detect).*project/i.test(msg) ||
+    /default credentials/i.test(msg)
+  )
+}
+
 export async function POST(request: NextRequest) {
+  // ───────────────────────────────────────────────────────────────────────
+  // CAPA 0 — Inicializar el Admin SDK. Si faltan las credenciales en el
+  // servidor (env vars del service account o ADC), el SDK no arranca: es un
+  // fallo de CONFIGURACIÓN, no del llamante → 503 (no 401/500 engañoso).
+  // ───────────────────────────────────────────────────────────────────────
+  let auth: ReturnType<typeof adminAuth>
+  let db: ReturnType<typeof adminDb>
+  try {
+    auth = adminAuth()
+    db = adminDb()
+  } catch (err) {
+    console.error('Admin SDK no inicializó (¿faltan credenciales en el servidor?):', err)
+    return NextResponse.json(
+      { error: 'Servicio no configurado: faltan credenciales del Admin SDK en el servidor.' },
+      { status: 503 },
+    )
+  }
+
   // ───────────────────────────────────────────────────────────────────────
   // CAPA 1 — Autenticar al llamante. Lo ÚNICO que se acepta del cliente es su
   // ID token; se verifica con el Admin SDK (firmado por Firebase, infalsificable).
@@ -34,8 +71,18 @@ export async function POST(request: NextRequest) {
 
   let uidLlamante: string
   try {
-    uidLlamante = (await adminAuth().verifyIdToken(token)).uid
-  } catch {
+    uidLlamante = (await auth.verifyIdToken(token)).uid
+  } catch (err) {
+    // El error de project id/credenciales puede aflorar aquí (init perezosa del
+    // SDK): se clasifica como 503, NO como token inválido.
+    if (esErrorDeCredenciales(err)) {
+      console.error('Admin SDK sin credenciales al verificar el token:', err)
+      return NextResponse.json(
+        { error: 'Servicio no configurado: faltan credenciales del Admin SDK en el servidor.' },
+        { status: 503 },
+      )
+    }
+    // Token realmente inválido/expirado: fallo del llamante → 401.
     return NextResponse.json({ error: 'Token inválido.' }, { status: 401 })
   }
 
@@ -44,7 +91,6 @@ export async function POST(request: NextRequest) {
   // (usuarios/{uid}), NO del claim del token: una degradación tiene efecto
   // inmediato sin esperar a que el token se refresque.
   // ───────────────────────────────────────────────────────────────────────
-  const db = adminDb()
   const llamanteSnap = await db.doc(`usuarios/${uidLlamante}`).get()
   if (!llamanteSnap.exists || llamanteSnap.data()?.['rol'] !== 'super_admin') {
     return NextResponse.json({ error: 'No autorizado.' }, { status: 403 })
@@ -75,7 +121,7 @@ export async function POST(request: NextRequest) {
   // ── Operación privilegiada: buscar el usuario y actualizar su contraseña. ──
   let usuario
   try {
-    usuario = await adminAuth().getUserByEmail(email)
+    usuario = await auth.getUserByEmail(email)
   } catch (err) {
     if (codigoError(err) === 'auth/user-not-found') {
       // El llamante es super_admin de confianza: el mensaje es explícito.
@@ -84,11 +130,13 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       )
     }
+    // Fallo inesperado: se loguea el error real en el servidor (sin filtrarlo al cliente).
+    console.error('Error al buscar el usuario para reset de contraseña:', err)
     return NextResponse.json({ error: 'No se pudo buscar el usuario.' }, { status: 500 })
   }
 
   try {
-    await adminAuth().updateUser(usuario.uid, { password: contrasena })
+    await auth.updateUser(usuario.uid, { password: contrasena })
   } catch (err) {
     if (codigoError(err) === 'auth/invalid-password') {
       return NextResponse.json(
@@ -96,6 +144,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+    // Fallo inesperado: se loguea el error real en el servidor (sin filtrarlo al cliente).
+    console.error('Error al actualizar la contraseña:', err)
     return NextResponse.json(
       { error: 'No se pudo actualizar la contraseña.' },
       { status: 500 },

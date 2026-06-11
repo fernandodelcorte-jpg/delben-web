@@ -66,6 +66,23 @@ export async function GET() {
     )
   } catch (e) {
     console.error('Error en /api/red:', e)
+    // Fallo de credenciales/inicialización del Admin SDK (falta el service account
+    // o ADC en el servidor) → 503 explícito, no un 500 genérico que oculta la causa.
+    const code =
+      e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : ''
+    const msg = e instanceof Error ? e.message : String(e)
+    if (
+      code.startsWith('app/') ||
+      /unable to detect a project id/i.test(msg) ||
+      /could not (load|refresh) .*default credentials/i.test(msg) ||
+      /failed to (determine|detect).*project/i.test(msg) ||
+      /default credentials/i.test(msg)
+    ) {
+      return NextResponse.json(
+        { error: 'Servicio no configurado: faltan credenciales del Admin SDK en el servidor.' },
+        { status: 503 },
+      )
+    }
     return NextResponse.json({ error: 'No disponible' }, { status: 500 })
   }
 }

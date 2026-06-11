@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { CircleNotch, MagnifyingGlass, Plus, X } from '@phosphor-icons/react'
-import { getValoraciones } from '@/lib/firestore/valoraciones'
+import { getValoraciones, totalCostoDelbenDeValoracion } from '@/lib/firestore/valoraciones'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
 import { formatCOP } from '@/lib/datos-demo'
 import type { Valoracion, Distribuidor } from '@/lib/firebase/tipos-firestore'
@@ -190,7 +190,7 @@ export default function ValoracionesPage() {
               </div>
 
               <div className="shrink-0 text-right w-36">
-                <p className="text-sm font-bold text-stone-900 tabular-nums">{formatCOP(v.totales.total)}</p>
+                <p className="text-sm font-bold text-stone-900 tabular-nums">{formatCOP(totalCostoDelbenDeValoracion(v))}</p>
                 <p className="text-xs text-stone-400">{formatFecha(v.createdAt)}</p>
               </div>
 

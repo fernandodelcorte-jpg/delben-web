@@ -853,6 +853,129 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-10 — Valoración: total canónico = COSTO DELBEN antes de IVA + deja de persistir venta (cierra §1/§10)
+Fallo (3) del diagnóstico. La valoración es interna de Delben: su total ahora es el **costo Delben antes
+de IVA** (sin venta, sin IVA), y el doc **deja de persistir el precio de venta** (regla de oro #2). Motor
+intacto (`tsc` limpio, 6/6 verde). NO se tocó el tipo compartido de cotizaciones ni sus lectores.
+
+- **Tipos solo-costo (opción 4b)** en `tipos-firestore.ts`: `ValoracionResultadoSnapshot` (moneda,
+  costo_tras_descuentos, servicios_subtotal1, costo_delben, cantidad), `ValoracionItemSnapshot`,
+  `ValoracionItemHerrajeSnapshot`, `ValoracionEspecialSnapshot` (conserva `precioDelbenUnitario`; sin
+  `precioClienteUnitario` ni `resultado`), y `ValoracionTotales { totalCostoDelben }`. `ValoracionDoc`
+  pasa a usarlos (no más `ItemCotizacionSnapshot`/`TotalesCotizacion` de venta).
+- **Total canónico**: nuevo `calcularTotalCostoDelben()` en `store/carrito.ts` (Σ costo_delben de módulos
+  + herrajes asociados + herrajes sueltos + Σ precioDelbenUnitario de especiales; **sin** transporte/
+  instalación fijos). `guardarValoracion` lo usa y guarda `totales = { totalCostoDelben }` (ya no depende
+  de `calcularTotalesCotizacion`, que es de venta).
+- **Escritura recortada (cierra §1/§10)**: los serializadores de `lib/firestore/valoraciones.ts`
+  construyen el `resultado` solo-costo, **omitiendo** (patrón omit, no undefined) `distribuidor_subtotal2`,
+  `precio_sin_iva`, `iva_aplicado`, `iva_monto`, `precio_final_unitario`, `subtotal_linea`, y
+  `precioClienteUnitario`/`resultado` en especiales. La venta **ya no sale del servidor** en valoraciones.
+- **UI migrada a costo (compat viejos+nuevos)**: lista, detalle y dashboard admin muestran
+  `totalCostoDelbenDeValoracion()` (usa el campo persistido; para docs viejos lo deriva de los costo_delben
+  del snapshot, nunca del `total` viejo). Detalle: titular **"Total costo Delben"**, subtotales en costo,
+  **fila de muebles especiales añadida** (antes se omitían y no cuadraban con el titular), filas de
+  transporte/instalación **eliminadas**, número grande por ítem/herraje en costo.
+- **PDF/Excel**: conversores solo-costo nuevos en `pdf-helpers.ts` (`itemValoracionSnapshotToPDF`, etc.,
+  venta en 0); `OrdenCompraPDF` y el Excel ya leían solo costo → su salida no cambia. No se degradó el lado
+  de cotización.
+- **Backfill** `scripts/backfill-valoraciones-costo.mjs` (Admin SDK/ADC, dry-run por defecto, `--write`):
+  recalcula `totalCostoDelben` desde los costo_delben ya persistidos (sin motor/catálogo), reescribe
+  `totales` y elimina la venta de cada `resultado` + `precioClienteUnitario`. **Pendiente de correr**: el
+  dry-run no pudo completarse en este entorno por ADC expirada (`invalid_rapt`); requiere
+  `gcloud auth application-default login` antes de ejecutarlo. NO se corrió `--write`.
+- Archivos: `lib/firebase/tipos-firestore.ts`, `store/carrito.ts`, `lib/firestore/valoraciones.ts`,
+  `lib/pdf-helpers.ts`, `app/(portal)/admin/valoraciones/page.tsx`, `app/(portal)/admin/valoraciones/[id]/page.tsx`,
+  `app/(portal)/admin/page.tsx`, `scripts/backfill-valoraciones-costo.mjs` (nuevo).
+- **Deuda §1/§10**: la mitad de valoraciones queda **cerrada** (no se persiste ni se muestra venta). Sigue
+  abierta la de `distribuidor_comercial` ↔ `costo_delben` en cotizaciones (snapshot monolítico) — sin cambios.
+
+### 2026-06-10 — Duplicar pide nombre de la copia (cotizaciones y valoraciones). `tsc` limpio, motor 6/6
+Antes, "Duplicar" creaba un registro con el mismo nombre → dos indistinguibles. Ahora pide el nombre de
+la copia ANTES de abrir el borrador. Mismo comportamiento en ambos flujos. Motor intacto.
+
+- **Componente nuevo `components/cotizador/boton-duplicar.tsx`**: botón "Duplicar" + popover con input
+  (patrón de `boton-reset-password.tsx`, acorde a DESIGN.md — caoba/stone, animación `aparecer`, no usa
+  `window.prompt`). Input **pre-relleno** con `"<nombre actual> (copia)"`, foco + selección al abrir.
+  Valida nombre no vacío (trim); si vacío, no deja confirmar. Cancelar/Escape/click-fuera cierra sin
+  duplicar. `onConfirmar(nombre)` recibe el nombre elegido (con fallback al original, nunca undefined).
+- **Qué campo es "el nombre" (confirmado por lectura, no asumido):**
+  - *Cotizaciones*: el **espacio** (`espacio_nombre`). En la lista, las cotizaciones de un proyecto se
+    agrupan y distinguen por la cabecera de espacio (la tarjeta usa el nombre del doc Proyecto, y el
+    `proyectoNombre` del doc cotización no se muestra ahí). Duplicar una legacy sin `proyecto_id` ya
+    fallaba en `guardarCotizacion` (requiere proyectoId), así que el caso real siempre tiene proyecto.
+  - *Valoraciones*: el `proyectoNombre` (título que muestra la lista de valoraciones).
+- **Store (`store/carrito.ts`)**: `copiarBorrador` y `copiarValoracion` reciben un 3er parámetro
+  opcional `nuevoNombre`. `copiarBorrador` lo aplica a `espacioNombre` y **recalcula la versión contra
+  ese nombre** (`getSiguienteVersion`); `copiarValoracion` lo aplica a `proyectoNombre`. Ambos con
+  fallback al original si llega vacío (no reintroduce el bug de undefined). No se tocó numeración real,
+  sede ni cálculo.
+- **UI**: el botón inline de Duplicar en `cotizaciones/[id]/page.tsx` y `admin/valoraciones/[id]/page.tsx`
+  se reemplazó por `<BotonDuplicar>`; routing al borrador idéntico al previo. Imports `Copy` y el
+  `handleDuplicar` de valoraciones quedaron sin uso y se eliminaron.
+- Archivos: `components/cotizador/boton-duplicar.tsx` (nuevo), `store/carrito.ts`,
+  `app/(portal)/cotizaciones/[id]/page.tsx`, `app/(portal)/admin/valoraciones/[id]/page.tsx`.
+
+### 2026-06-10 — Fix: duplicar cotización + duplicar valoración (nuevo). `tsc` limpio, motor 6/6
+Dos bugs preexistentes del diagnóstico (el (3), totales inconsistentes en valoraciones, queda PENDIENTE
+para otra tanda). Motor intacto.
+
+**Fallo (1) — duplicar cotización no dejaba guardar (campo `undefined`).** `copiarBorrador` armaba el
+`CotizacionInfo` **sin `version`**; al guardar, `guardarCotizacion` escribía `version: undefined` y
+Firestore (`getFirestore` sin `ignoreUndefinedProperties`) rechazaba el `setDoc`.
+- `store/carrito.ts`: `copiarBorrador` ahora es **async** y calcula la **siguiente versión** del espacio
+  con `getSiguienteVersion` (igual que el flujo de "nueva cotización"), con fallback a `version ?? 1` si
+  no hay proyecto/espacio o la consulta falla → `version` nunca queda `undefined`. La acción pasó de
+  `=> void` a `=> Promise<void>`; el botón Duplicar en `cotizaciones/[id]/page.tsx` ahora hace `await`.
+- `lib/firestore/cotizaciones.ts`: `guardarCotizacion` **omite** `espacio_nombre` y `version` cuando son
+  `undefined` (mismo patrón omit que `clienteDireccion`). Cubre el secundario: una cotización **legacy sin
+  `espacio_nombre`** ya no manda `undefined` a Firestore. NO se activó `ignoreUndefinedProperties` global
+  (el diagnóstico lo desaconseja).
+
+**Fallo (2) — duplicar valoración: no existía, se construyó.** No había `copiarValoracion`; valoraciones
+solo tenía `reabrirValoracion` (editar en sitio).
+- `store/carrito.ts`: nueva acción `copiarValoracion(valoracion, sede)` análoga a `copiarBorrador`: carga
+  la valoración en el borrador con `valoracionGuardadaId: null` (fuerza doc NUEVO al guardar) y
+  `fecha: new Date()`. **No hereda `numero_op`** (identificador único de OP: queda vacío para que
+  facturación asigne uno nuevo) — se omite para no arrastrar `undefined`.
+- `admin/valoraciones/[id]/page.tsx`: botón **Duplicar** (ícono `Copy`, disponible para cualquier estado),
+  mismo patrón visual/routing que el de cotizaciones; `handleDuplicar` carga la sede y enruta al borrador.
+  No toca la valoración original.
+- Archivos: `store/carrito.ts`, `lib/firestore/cotizaciones.ts`, `app/(portal)/cotizaciones/[id]/page.tsx`,
+  `app/(portal)/admin/valoraciones/[id]/page.tsx`.
+
+### 2026-06-10 — Visor de contraseña + error honesto en endpoints del Admin SDK
+Dos cambios pequeños e independientes; motor intacto (6/6 verde), `tsc` limpio.
+
+**1. Visor mostrar/ocultar en todos los campos de contraseña.** Nuevo componente reutilizable
+`components/ui/input-password.tsx` (`forwardRef`, compatible con `react-hook-form` vía spread de
+`register`): botón-ojo `Eye`/`EyeSlash` de Phosphor (16px, stone-400→stone-600), `absolute` dentro
+de wrapper `relative`, input con `pr-10`, `aria-label` "Mostrar/Ocultar contraseña", `tabIndex={-1}`.
+Estado de visibilidad local por instancia. Solo cambia la visibilidad; no toca envío ni validación.
+Aplicado en los 4 campos que no lo tenían: `components/admin/boton-reset-password.tsx` (modal
+"Restablecer contraseña"), `admin/distribuidores/[id]/page.tsx` (crear usuario),
+`admin/equipo/page.tsx` (crear usuario Delben), `configuracion/page.tsx` (crear usuario distribuidor).
+El `login-form.tsx` ya tenía el toggle inline: se migró al componente compartido para no duplicar.
+
+**2. Error honesto en `/api/admin/reset-password`.** Antes, la falta de credenciales del Admin SDK
+(en Netlify faltan `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY`, ver entradas 2026-06-08) afloraba
+en `verifyIdToken` y se reportaba como **401 "Token inválido"** engañoso. Ahora se distingue:
+inicialización del Admin SDK envuelta en su propio try/catch (CAPA 0) y clasificación del error de
+`verifyIdToken` con `esErrorDeCredenciales()` (detecta "Unable to detect a Project Id", default
+credentials, códigos `app/*`):
+- Credenciales/inicialización → **503** "Servicio no configurado: faltan credenciales del Admin SDK".
+- Token realmente inválido → **401** (sin cambios).
+- Fallos inesperados aguas abajo (buscar/actualizar usuario) → **500** con el error real logueado en
+  servidor (antes no se logueaba). La lógica de reseteo en sí NO cambió.
+El cliente (`restablecerContrasenaUsuario`) ya propaga `data.error`, así que el 503 llega a la UI.
+Mismo patrón aplicado a `/api/red` (503 ante credenciales, antes 500 genérico). `/api/catalogo` ya
+no existe en el código (solo se menciona en docs); no había nada que cambiar.
+- Archivos: `components/ui/input-password.tsx` (nuevo), `app/(auth)/login/login-form.tsx`,
+  `components/admin/boton-reset-password.tsx`, `admin/distribuidores/[id]/page.tsx`,
+  `admin/equipo/page.tsx`, `configuracion/page.tsx`, `api/admin/reset-password/route.ts`, `api/red/route.ts`.
+- ⚠️ Esto NO resuelve la causa raíz del reset de contraseñas: siguen faltando las credenciales del
+  Admin SDK en Netlify (deuda 2026-06-08). El cambio solo hace que el fallo sea diagnosticable.
+
 ### 2026-06-08 — Confirmado: faltan las 3 variables del Admin SDK en Netlify (portal)
 Revisadas las variables de entorno del sitio del portal en Netlify: solo están las **6
 `NEXT_PUBLIC_FIREBASE_*`** (config de cliente). **Faltan las 3 del Admin SDK**:

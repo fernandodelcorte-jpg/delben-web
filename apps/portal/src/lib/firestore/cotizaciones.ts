@@ -144,8 +144,11 @@ export async function guardarCotizacion(
     fecha: new Date(info.fecha).getTime(),
     estado: 'borrador',
     proyecto_id: proyectoId,
-    espacio_nombre: info.espacioNombre,
-    version: info.version,
+    // Campos opcionales: se OMITEN si no existen (Firestore rechaza `undefined`).
+    // Mismo patrón que clienteDireccion arriba. Una cotización legacy sin
+    // espacio_nombre, o sin versión, no debe bloquear el guardado (p. ej. al duplicar).
+    ...(info.espacioNombre ? { espacio_nombre: info.espacioNombre } : {}),
+    ...(info.version !== undefined ? { version: info.version } : {}),
     items: serializarItems(items),
     itemsHerraje: serializarItemsHerraje(itemsHerraje),
     itemsEspeciales: serializarEspeciales(itemsEspeciales),

@@ -4,20 +4,21 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { CircleNotch, PencilSimple, CheckCircle } from '@phosphor-icons/react'
-import { getValoracion, marcarComoFacturada } from '@/lib/firestore/valoraciones'
+import { getValoracion, marcarComoFacturada, totalCostoDelbenDeValoracion } from '@/lib/firestore/valoraciones'
 import { getSede } from '@/lib/firestore/sedes'
+import { BotonDuplicar } from '@/components/cotizador/boton-duplicar'
 import { formatCOP } from '@/lib/datos-demo'
 import { useCarrito } from '@/store/carrito'
 import {
-  itemSnapshotToPDF,
-  herrajeSnapshotToPDF,
-  especialSnapshotToPDF,
+  itemValoracionSnapshotToPDF,
+  herrajeValoracionSnapshotToPDF,
+  especialValoracionSnapshotToPDF,
   type InfoPDF,
 } from '@/lib/pdf-helpers'
 import { ValoracionPDFButton } from '@/components/cotizador/valoracion-pdf-button'
 import { ValoracionExcelButton } from '@/components/cotizador/valoracion-excel-button'
 import type { Valoracion } from '@/lib/firebase/tipos-firestore'
-import type { ItemCotizacionSnapshot, ItemHerraCotizacionSnapshot } from '@/lib/firebase/tipos-firestore'
+import type { ValoracionItemSnapshot, ValoracionItemHerrajeSnapshot } from '@/lib/firebase/tipos-firestore'
 
 function formatFecha(ts: number) {
   return new Date(ts).toLocaleDateString('es-CO', {
@@ -31,6 +32,7 @@ export default function ValoracionDetallePage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const reabrirValoracion = useCarrito((s) => s.reabrirValoracion)
+  const copiarValoracion = useCarrito((s) => s.copiarValoracion)
   const [valoracion, setValoracion] = useState<Valoracion | null>(null)
   const [cargando, setCargando] = useState(true)
   const [marcando, setMarcando] = useState(false)
@@ -80,10 +82,26 @@ export default function ValoracionDetallePage() {
     )
   }
 
-  const { totales } = valoracion
+  // Subtotales de COSTO Delben (la valoración es interna: nunca muestra venta/IVA).
+  const costoModulos = valoracion.items.reduce(
+    (s, it) => s + it.resultado.costo_delben * it.config.cantidad,
+    0,
+  )
+  const costoHerrajesAsociados = valoracion.items.reduce(
+    (s, it) => s + it.herrajesAsociados.reduce((hs, h) => hs + h.resultado.costo_delben * h.cantidad, 0),
+    0,
+  )
+  const costoHerrajesSueltos = valoracion.itemsHerraje.reduce(
+    (s, it) => s + it.resultado.costo_delben * it.cantidad,
+    0,
+  )
+  const costoEspeciales = (valoracion.itemsEspeciales ?? []).reduce(
+    (s, e) => s + e.precioDelbenUnitario * e.cantidad,
+    0,
+  )
+  const totalCostoDelben = totalCostoDelbenDeValoracion(valoracion)
 
-  // Datos para PDF/Excel de la valoración: SOLO costo Delben (los conversores traen
-  // también campos de venta, pero el PDF de orden de compra y el Excel solo escriben costo).
+  // Datos para PDF/Excel de la valoración: SOLO costo Delben (conversores solo-costo).
   const moneda: 'COP' | 'USD' =
     valoracion.items[0]?.resultado.moneda ??
     valoracion.itemsHerraje[0]?.resultado.moneda ??
@@ -96,9 +114,9 @@ export default function ValoracionDetallePage() {
     moneda,
     distribuidorNombre: valoracion.distribuidor_nombre,
   }
-  const itemsPDF = valoracion.items.map(itemSnapshotToPDF)
-  const herrajesPDF = valoracion.itemsHerraje.map(herrajeSnapshotToPDF)
-  const especialesPDF = (valoracion.itemsEspeciales ?? []).map(especialSnapshotToPDF)
+  const itemsPDF = valoracion.items.map(itemValoracionSnapshotToPDF)
+  const herrajesPDF = valoracion.itemsHerraje.map(herrajeValoracionSnapshotToPDF)
+  const especialesPDF = (valoracion.itemsEspeciales ?? []).map(especialValoracionSnapshotToPDF)
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -139,6 +157,16 @@ export default function ValoracionDetallePage() {
           >
             {valoracion.estado === 'facturada' ? 'Facturada' : 'Borrador'}
           </span>
+          {/* Duplicar — pide nombre de la copia; disponible para cualquier estado */}
+          <BotonDuplicar
+            nombreActual={valoracion.proyectoNombre}
+            onConfirmar={async (nombre) => {
+              // La sede viaja para que el motor use sus condiciones. No toca la original.
+              const sede = await getSede(valoracion.distribuidor_id, valoracion.sede_id).catch(() => null)
+              copiarValoracion(valoracion, sede, nombre)
+              router.push('/admin/valoraciones/borrador')
+            }}
+          />
           {valoracion.estado === 'borrador' && (
             <button
               onClick={handleEditar}
@@ -212,30 +240,31 @@ export default function ValoracionDetallePage() {
         </div>
       )}
 
-      {/* Totales */}
+      {/* Totales — documento interno: COSTO DELBEN antes de IVA (sin venta, sin IVA) */}
       <div className="rounded-xl border border-stone-200 bg-white p-6 space-y-3">
         <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
           Resumen económico
         </h2>
-        <FilaTotales label="Módulos" valor={totales.totalModulos} />
-        <FilaTotales label="Herrajes asociados" valor={totales.totalHerrajesAsociados} />
-        <FilaTotales label="Herrajes sueltos" valor={totales.totalHerrajes} />
-        {(totales.transporteFijo ?? 0) > 0 && (
-          <FilaTotales label="Transporte" valor={totales.transporteFijo!} />
+        {costoModulos > 0 && <FilaTotales label="Módulos" valor={costoModulos} />}
+        {costoHerrajesAsociados > 0 && (
+          <FilaTotales label="Herrajes asociados" valor={costoHerrajesAsociados} />
         )}
-        {(totales.instalacionFija ?? 0) > 0 && (
-          <FilaTotales label="Instalación" valor={totales.instalacionFija!} />
+        {costoHerrajesSueltos > 0 && (
+          <FilaTotales label="Herrajes sueltos" valor={costoHerrajesSueltos} />
+        )}
+        {costoEspeciales > 0 && (
+          <FilaTotales label="Muebles especiales" valor={costoEspeciales} />
         )}
         <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-stone-900">Total con IVA</p>
-          <p className="text-lg font-bold text-stone-900 tabular-nums">{formatCOP(totales.total)}</p>
+          <p className="text-sm font-semibold text-stone-900">Total costo Delben</p>
+          <p className="text-lg font-bold text-stone-900 tabular-nums">{formatCOP(totalCostoDelben)}</p>
         </div>
       </div>
     </div>
   )
 }
 
-function ItemRow({ item }: { item: ItemCotizacionSnapshot }) {
+function ItemRow({ item }: { item: ValoracionItemSnapshot }) {
   return (
     <div className="px-5 py-4">
       <div className="flex items-start justify-between gap-4">
@@ -248,10 +277,7 @@ function ItemRow({ item }: { item: ItemCotizacionSnapshot }) {
         </div>
         <div className="text-right shrink-0">
           <p className="text-sm font-semibold text-stone-900 tabular-nums">
-            {formatCOP(item.resultado.subtotal_linea)}
-          </p>
-          <p className="text-xs text-stone-400 tabular-nums">
-            costo: {formatCOP(item.resultado.costo_delben * item.config.cantidad)}
+            {formatCOP(item.resultado.costo_delben * item.config.cantidad)}
           </p>
         </div>
       </div>
@@ -263,7 +289,7 @@ function ItemRow({ item }: { item: ItemCotizacionSnapshot }) {
                 {h.nombre} <span className="text-stone-400">×{h.cantidad}</span>
               </span>
               <span className="text-stone-600 tabular-nums shrink-0">
-                {formatCOP(h.resultado.subtotal_linea)}
+                {formatCOP(h.resultado.costo_delben * h.cantidad)}
               </span>
             </div>
           ))}
@@ -273,7 +299,7 @@ function ItemRow({ item }: { item: ItemCotizacionSnapshot }) {
   )
 }
 
-function HerrajeRow({ item }: { item: ItemHerraCotizacionSnapshot }) {
+function HerrajeRow({ item }: { item: ValoracionItemHerrajeSnapshot }) {
   return (
     <div className="flex items-center justify-between px-5 py-3.5">
       <div>
@@ -282,10 +308,7 @@ function HerrajeRow({ item }: { item: ItemHerraCotizacionSnapshot }) {
       </div>
       <div className="text-right">
         <p className="text-sm font-semibold text-stone-900 tabular-nums">
-          {formatCOP(item.resultado.subtotal_linea)}
-        </p>
-        <p className="text-xs text-stone-400 tabular-nums">
-          costo: {formatCOP(item.resultado.costo_delben * item.cantidad)}
+          {formatCOP(item.resultado.costo_delben * item.cantidad)}
         </p>
       </div>
     </div>

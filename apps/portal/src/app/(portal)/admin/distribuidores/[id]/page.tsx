@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { CircleNotch, Check, Plus, MapPin, CaretDown, CaretUp } from '@phosphor-icons/react'
 import { useAuth } from '@/components/providers/auth-provider'
+import { InputPassword } from '@/components/ui/input-password'
 import {
   getDistribuidor,
   getUsuariosDistribuidor,
@@ -800,9 +801,8 @@ export default function DetalleDistribuidorPage() {
                 <label className="block text-xs font-medium text-stone-600 mb-1">
                   Contraseña temporal
                 </label>
-                <input
+                <InputPassword
                   {...formUsuario.register('contrasena')}
-                  type="password"
                   placeholder="Mínimo 8 caracteres"
                   className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-100"
                 />

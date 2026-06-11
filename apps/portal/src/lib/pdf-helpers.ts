@@ -9,6 +9,9 @@ import type {
   ItemCotizacionSnapshot,
   ItemHerraCotizacionSnapshot,
   ItemEspecialSnapshot,
+  ValoracionItemSnapshot,
+  ValoracionItemHerrajeSnapshot,
+  ValoracionEspecialSnapshot,
 } from '@/lib/firebase/tipos-firestore'
 
 // ─── Utilidad: convierte una URL remota a data URL (evita CORS en react-pdf) ──
@@ -244,6 +247,61 @@ export function especialSnapshotToPDF(item: ItemEspecialSnapshot): EspecialPDF {
     cantidad: item.cantidad,
     precioSubtotal: item.precioClienteUnitario * item.cantidad,
     ivaSubtotal: item.resultado ? item.resultado.iva_monto * item.cantidad : 0,
+    costoSubtotal: item.precioDelbenUnitario * item.cantidad,
+    observaciones: item.observaciones,
+    herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),
+  }
+}
+
+// ─── Conversores SOLO-COSTO para VALORACIÓN ───────────────────────────────────
+// Las valoraciones persisten solo costo (sin venta). El PDF (OrdenCompraPDF) y el
+// Excel de valoración leen EXCLUSIVAMENTE los campos de costo; los de venta se
+// rellenan en 0 (presentes por el tipo ItemPDF/HerrajePDF/EspecialPDF, pero no se
+// renderizan). No se degrada el lado de cotización (sus conversores siguen igual).
+
+export function itemValoracionSnapshotToPDF(item: ValoracionItemSnapshot): ItemPDF {
+  return {
+    id: item.modulo_id,
+    nombre: item.modulo_nombre,
+    codigoExcel: '',
+    configLinea: configLineaFromConfig(item.config),
+    cantidad: item.config.cantidad,
+    precioSinIva: 0,
+    ivaMonto: 0,
+    ivaSubtotal: 0,
+    precioUnitario: 0,
+    precioSubtotal: 0,
+    costoUnitario: item.resultado.costo_delben,
+    costoSubtotal: item.resultado.costo_delben * item.config.cantidad,
+    observaciones: item.config.observaciones,
+    herrajes: item.herrajesAsociados.map((h) => ({
+      nombre: h.nombre,
+      cantidad: h.cantidad,
+      precioSubtotal: 0,
+      ivaSubtotal: 0,
+      costoSubtotal: h.resultado.costo_delben * h.cantidad,
+    })),
+  }
+}
+
+export function herrajeValoracionSnapshotToPDF(item: ValoracionItemHerrajeSnapshot): HerrajePDF {
+  return {
+    nombre: item.nombre,
+    cantidad: item.cantidad,
+    precioSubtotal: 0,
+    ivaSubtotal: 0,
+    costoSubtotal: item.resultado.costo_delben * item.cantidad,
+  }
+}
+
+export function especialValoracionSnapshotToPDF(item: ValoracionEspecialSnapshot): EspecialPDF {
+  return {
+    id: crypto.randomUUID(),
+    nombre: item.nombre,
+    configLinea: configLineaEspecial(item),
+    cantidad: item.cantidad,
+    precioSubtotal: 0,
+    ivaSubtotal: 0,
     costoSubtotal: item.precioDelbenUnitario * item.cantidad,
     observaciones: item.observaciones,
     herrajes: item.herrajes.map((h) => ({ nombre: h.nombre, cantidad: h.cantidad })),

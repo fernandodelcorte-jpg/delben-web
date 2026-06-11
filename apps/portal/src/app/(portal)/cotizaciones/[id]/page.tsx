@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { CaretDown, CaretUp, CircleNotch, Copy, ArrowsClockwise, PencilSimple, Check, X } from '@phosphor-icons/react'
+import { CaretDown, CaretUp, CircleNotch, ArrowsClockwise, PencilSimple, Check, X } from '@phosphor-icons/react'
 import { useAuth } from '@/components/providers/auth-provider'
+import { BotonDuplicar } from '@/components/cotizador/boton-duplicar'
 import { useCarrito } from '@/store/carrito'
 import { getCotizacion, renombrarCotizacion } from '@/lib/firestore/cotizaciones'
 import { recalcularCotizacion } from '@/lib/firestore/recalcular'
@@ -331,17 +332,15 @@ function CotizacionDetalleContent() {
               {cotizacion.modalidad === 'desarmado' ? 'Desarmado' : 'Tradicional'}
             </span>
 
-            {/* Duplicar — disponible para cualquier estado */}
-            <button
-              onClick={() => {
-                copiarBorrador(cotizacion, sede)
+            {/* Duplicar — pide nombre de la copia; disponible para cualquier estado */}
+            <BotonDuplicar
+              nombreActual={cotizacion.espacio_nombre ?? cotizacion.proyectoNombre}
+              triggerClassName="tactil flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700 hover:border-stone-300 hover:bg-stone-50 transition-colors"
+              onConfirmar={async (nombre) => {
+                await copiarBorrador(cotizacion, sede, nombre)
                 router.push('/cotizaciones/borrador')
               }}
-              className="tactil flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700 hover:border-stone-300 hover:bg-stone-50 transition-colors"
-            >
-              <Copy size={13} weight="bold" />
-              Duplicar
-            </button>
+            />
 
             {/* Continuar editando — solo borradores */}
             {cotizacion.estado === 'borrador' && (

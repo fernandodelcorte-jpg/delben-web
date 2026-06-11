@@ -9,6 +9,7 @@ import { CircleNotch, PencilSimple, Check, X, UploadSimple, Image, MapPin, Caret
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase/client'
 import { useAuth } from '@/components/providers/auth-provider'
+import { InputPassword } from '@/components/ui/input-password'
 import {
   getDistribuidor,
   getUsuariosDistribuidor,
@@ -622,9 +623,8 @@ export default function ConfiguracionPage() {
                   <label className="block text-xs font-medium text-stone-600 mb-1">
                     Contraseña temporal
                   </label>
-                  <input
+                  <InputPassword
                     {...usuarioForm.register('contrasena')}
-                    type="password"
                     placeholder="Mínimo 8 caracteres"
                     className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400"
                   />

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useAuth } from '@/components/providers/auth-provider'
 import { getDistribuidores } from '@/lib/firestore/distribuidores'
 import { getCotizacionesTodas } from '@/lib/firestore/cotizaciones'
-import { getValoraciones } from '@/lib/firestore/valoraciones'
+import { getValoraciones, totalCostoDelbenDeValoracion } from '@/lib/firestore/valoraciones'
 import { formatCOP } from '@/lib/datos-demo'
 import type { Cotizacion, Valoracion, Distribuidor } from '@/lib/firebase/tipos-firestore'
 import { ArrowUpRight } from '@phosphor-icons/react'
@@ -216,7 +216,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-xs font-semibold text-stone-900 tabular-nums">
-                        {formatCOP(v.totales.total)}
+                        {formatCOP(totalCostoDelbenDeValoracion(v))}
                       </p>
                     </div>
                   </Link>
