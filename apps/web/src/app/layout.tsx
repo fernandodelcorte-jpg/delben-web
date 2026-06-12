@@ -24,6 +24,7 @@ import type { Metadata } from 'next'
 import { Fraunces, Hanken_Grotesk } from 'next/font/google'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { getLogoUrl } from '@/lib/logo'
 import './globals.css'
 
 const fraunces = Fraunces({
@@ -50,9 +51,19 @@ export const metadata: Metadata = {
   },
   description:
     'Diseño contemporáneo y manufactura propia para cocinas, closets y mobiliario del hogar. Tres generaciones de oficio.',
+  // Favicons estáticos generados desde el logo (ver scripts/generar-favicons.mjs).
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const logoUrl = await getLogoUrl()
+
   return (
     <html lang="es" suppressHydrationWarning className={`no-js ${fraunces.variable} ${hanken.variable}`}>
       <body className="grano min-h-screen bg-stone-50 font-sans text-stone-800 antialiased">
@@ -62,7 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: "document.documentElement.classList.remove('no-js')",
           }}
         />
-        <SiteHeader />
+        <SiteHeader logoUrl={logoUrl} />
         <main>{children}</main>
         <SiteFooter />
       </body>

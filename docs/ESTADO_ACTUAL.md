@@ -853,6 +853,34 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-12 — Logo de marca en el header de la web pública (server-side) + favicons estáticos
+La web institucional (apps/web) ya no toca Firestore solo vía el portal: ahora lee **directo** el
+logo de marca (`config/delben.logo_url`) **server-side**, y ambas apps tienen favicon. `tsc` limpio
+en apps/web y apps/portal. NO se tocó `packages/core` ni el motor.
+
+- **firestore.rules** — se abrió lectura **pública** SOLO del doc `config/delben` (nuevo `match
+  /config/delben` con `allow read: if true`, comentario "lectura pública: solo logo de marca, sin
+  datos sensibles"). Escritura sigue restringida a `esSuperAdmin()`. El resto de `/config/*` conserva
+  la lectura autenticada (el `match /config/{docId}` de siempre). Reglas se evalúan en OR, así que el
+  doc específico no relaja la escritura. **Falta desplegar a mano en Firebase Console.**
+- **apps/web/src/lib/firebase.ts** (nuevo) — init mínimo de Firebase para la web (solo `db`; sin
+  Auth/Storage/Admin). Reusa la config pública `NEXT_PUBLIC_FIREBASE_*` (las mismas del portal).
+  ⚠️ Hay que configurar esas env vars en el **sitio Netlify de la web** (hoy no las tiene).
+- **apps/web/src/lib/logo.ts** (nuevo) — `getLogoUrl()`: lee `config/delben.logo_url` server-side,
+  envuelto en `unstable_cache` con `revalidate: 3600` (1h). Si falla o viene vacío → `null` (fallback,
+  nunca rompe la página).
+- **apps/web/src/app/layout.tsx** — `RootLayout` ahora es `async`, hace `await getLogoUrl()` y pasa
+  `logoUrl` a `SiteHeader`. + `metadata.icons` (favicon.ico / icon-512 / apple-touch-icon).
+- **apps/web/src/components/site-header.tsx** — `SiteHeader({ logoUrl })` pinta `<img alt="Delben"
+  className="h-8 w-auto object-contain">` si hay logo; si no, el rótulo de texto "Delben". Mismo
+  tamaño/posición del diseño actual.
+- **apps/portal/src/app/layout.tsx** — + `metadata.icons` (mismos favicons).
+- **scripts/generar-favicons.mjs** (nuevo) — genera `favicon.ico` (16/32/48 PNG embebido),
+  `apple-touch-icon.png` (180), `icon-512.png`, logo negro centrado sobre fondo blanco con margen,
+  y los escribe en `public/` de web y portal. Uso: `node scripts/generar-favicons.mjs <URL-o-ruta>`.
+  Pipeline validado con sharp + empaquetado .ico (file → "3 icons"). **Pendiente:** correrlo con la
+  URL real del logo (no había credenciales locales para leer Firestore/Storage en esta sesión).
+
 ### 2026-06-10 — Valoración: total canónico = COSTO DELBEN antes de IVA + deja de persistir venta (cierra §1/§10)
 Fallo (3) del diagnóstico. La valoración es interna de Delben: su total ahora es el **costo Delben antes
 de IVA** (sin venta, sin IVA), y el doc **deja de persistir el precio de venta** (regla de oro #2). Motor

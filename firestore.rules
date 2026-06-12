@@ -151,6 +151,18 @@ service cloud.firestore {
     // Lectura: todos autenticados (PDF necesita la URL del logo).
     // Escritura: solo super_admin.
 
+    // Caso especial: el doc config/delben solo guarda la URL del logo de marca.
+    // La web institucional (apps/web) lo lee server-side SIN autenticarse para
+    // pintar el logo en su header. Por eso abrimos SOLO este doc a lectura pública;
+    // el resto de /config/* conserva la lectura autenticada de la regla de abajo.
+    // (Las reglas se evalúan en OR: ambos match cubren config/delben, así que la
+    // lectura pública aquí no relaja la escritura, que sigue restringida abajo.)
+    match /config/delben {
+      // lectura pública: solo logo de marca, sin datos sensibles
+      allow read: if true;
+      allow write: if esSuperAdmin();
+    }
+
     match /config/{docId} {
       allow read: if autenticado();
       allow write: if esSuperAdmin();

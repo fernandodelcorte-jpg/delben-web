@@ -14,7 +14,10 @@ const NAV = [
   ['Contacto', '/contacto'],
 ] as const
 
-export function SiteHeader() {
+// El logo se lee server-side (config/delben.logo_url) y llega como prop, así el
+// HTML ya viaja con el logo. Si es null (sin configurar o lectura fallida), el
+// header cae al rótulo de texto "Delben".
+export function SiteHeader({ logoUrl }: { logoUrl: string | null }) {
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
   const esActivo = (href: string) => pathname === href
@@ -25,9 +28,21 @@ export function SiteHeader() {
         <Link
           href="/"
           onClick={() => setAbierto(false)}
+          aria-label="Delben — inicio"
           className="font-sans text-sm font-semibold uppercase tracking-marca text-stone-900"
         >
-          Delben
+          {logoUrl ? (
+            // Logo horizontal ("db / del ben"); h-8 encaja en el header de h-16.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Delben"
+              className="h-8 w-auto object-contain"
+              draggable={false}
+            />
+          ) : (
+            'Delben'
+          )}
         </Link>
 
         {/* Navegación de escritorio */}
