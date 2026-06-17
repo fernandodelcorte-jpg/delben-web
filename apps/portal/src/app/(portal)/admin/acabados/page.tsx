@@ -191,11 +191,6 @@ function SubcategoriaCard({
                 {etiq.label}
                 {subcat.tipo_ajuste !== 'ninguno' && ` ${subcat.ajuste_pct}%`}
               </span>
-              {subcat.es_premium && (
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-stone-900 text-white">
-                  Premium
-                </span>
-              )}
               {!subcat.activo && (
                 <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-red-100 text-red-600">
                   Inactiva
@@ -330,7 +325,6 @@ function FormNuevaSubcategoria({
   const [nombre, setNombre] = useState('')
   const [tipoAjuste, setTipoAjuste] = useState<'ninguno' | 'descuento' | 'recargo'>('ninguno')
   const [ajustePct, setAjustePct] = useState(0)
-  const [esPremium, setEsPremium] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -345,7 +339,6 @@ function FormNuevaSubcategoria({
         nombre: nom,
         tipo_ajuste: tipoAjuste,
         ajuste_pct: tipoAjuste === 'ninguno' ? 0 : ajustePct,
-        es_premium: esPremium,
       })
       onCreada(nueva)
     } catch {
@@ -393,20 +386,6 @@ function FormNuevaSubcategoria({
             disabled={tipoAjuste === 'ninguno'}
             className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-stone-500 disabled:bg-stone-50 disabled:text-stone-400"
           />
-        </div>
-        <div className="flex items-end pb-1.5">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={esPremium}
-              onChange={(e) => setEsPremium(e.target.checked)}
-              className="h-4 w-4 rounded border-stone-300 accent-stone-900"
-            />
-            <span className="text-sm text-stone-700">
-              Línea premium
-              <span className="ml-1 text-xs text-stone-400">(usa descuento premium por categoría)</span>
-            </span>
-          </label>
         </div>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}

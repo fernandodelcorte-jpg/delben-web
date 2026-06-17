@@ -77,7 +77,7 @@ export async function escribirModulos(
   onProgress: Progreso,
 ): Promise<void> {
   // categorias_macro_ids y mostrar_en_todas son gestionados por el admin, no por el import.
-  const CAMPOS_CATEGORIA = ['nombre', 'desc_desarmado_base_pct', 'desc_desarmado_premium_pct', 'orden', 'activo']
+  const CAMPOS_CATEGORIA = ['nombre', 'desc_desarmado_base_pct', 'orden', 'activo']
 
   // Lista PERMITIDA de campos que el import puede escribir. imagen_url NO está (la
   // gestiona subirImagenes). Campos OPCIONALES (pueden faltar en algún módulo):

@@ -27,7 +27,6 @@ export interface SubcategoriaDoc {
   nombre: string
   tipo_ajuste: 'descuento' | 'ninguno' | 'recargo'
   ajuste_pct: number
-  es_premium: boolean
   activo: boolean
 }
 
@@ -48,7 +47,6 @@ export interface CategoriaMacroDoc {
 export interface CategoriaDoc {
   nombre: string
   desc_desarmado_base_pct: number
-  desc_desarmado_premium_pct: number
   orden: number
   activo: boolean
   categorias_macro_ids: string[]  // macros a las que pertenece

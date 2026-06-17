@@ -39,7 +39,6 @@ const SUBCAT: Subcategoria = {
   nombre: 'Estándar',
   tipo_ajuste: 'ninguno',
   ajuste_pct: 0,
-  es_premium: false,
   activo: true,
 }
 
@@ -84,7 +83,7 @@ const HERRAJES_BORRADOR = [
   { accesorio: herraje('her-2', 'Corredera telescópica'), cantidad: 1 },
 ]
 
-const CATEGORIA_CALCULO = { id: 'cocina', desc_base_pct: 30, desc_premium_pct: 20 }
+const CATEGORIA_CALCULO = { id: 'cocina', desc_base_pct: 30 }
 const PRECIO_COP = 520000
 
 function agregarUno(i: number): void {

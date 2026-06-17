@@ -23,6 +23,12 @@ import {
 } from '@/lib/firestore/catalogo'
 import type { CategoriaMacro, Categoria } from '@/lib/firebase/tipos-firestore'
 
+// Restringe un porcentaje al rango válido [0, 100].
+function clampPct(n: number): number {
+  if (Number.isNaN(n)) return 0
+  return Math.max(0, Math.min(100, n))
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function CategoriasAdminPage() {
@@ -318,6 +324,7 @@ function CategoriaFila({
   const [editando, setEditando] = useState(false)
   const [macroIds, setMacroIds] = useState<string[]>(categoria.categorias_macro_ids ?? [])
   const [mostrarEnTodas, setMostrarEnTodas] = useState(categoria.mostrar_en_todas ?? false)
+  const [descBase, setDescBase] = useState(categoria.desc_desarmado_base_pct ?? 0)
   const [guardando, setGuardando] = useState(false)
 
   function toggleMacro(id: string) {
@@ -329,7 +336,11 @@ function CategoriaFila({
   async function guardar() {
     setGuardando(true)
     try {
-      const data = { categorias_macro_ids: macroIds, mostrar_en_todas: mostrarEnTodas }
+      const data = {
+        categorias_macro_ids: macroIds,
+        mostrar_en_todas: mostrarEnTodas,
+        desc_desarmado_base_pct: clampPct(descBase),
+      }
       await actualizarCategoria(categoria.id, data)
       onActualizada({ ...categoria, ...data })
       setEditando(false)
@@ -360,13 +371,26 @@ function CategoriaFila({
                 {guardando ? <CircleNotch size={13} className="animate-spin" /> : <Check size={13} weight="bold" />}
               </button>
               <button
-                onClick={() => { setEditando(false); setMacroIds(categoria.categorias_macro_ids ?? []); setMostrarEnTodas(categoria.mostrar_en_todas ?? false) }}
+                onClick={() => { setEditando(false); setMacroIds(categoria.categorias_macro_ids ?? []); setMostrarEnTodas(categoria.mostrar_en_todas ?? false); setDescBase(categoria.desc_desarmado_base_pct ?? 0) }}
                 className="rounded-md border border-stone-200 p-1.5 text-stone-500 hover:bg-stone-50"
               >
                 <X size={13} weight="bold" />
               </button>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-xs text-stone-600">
+            Descuento desarmado (%)
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={descBase}
+              onChange={(e) => setDescBase(clampPct(parseFloat(e.target.value) || 0))}
+              className="w-24 rounded-md border border-stone-300 px-2.5 py-1 text-sm outline-none focus:border-stone-500"
+            />
+          </label>
 
           <label className="flex items-center gap-2 text-xs text-stone-600 cursor-pointer select-none">
             <input
@@ -405,6 +429,9 @@ function CategoriaFila({
           <div className="flex-1 min-w-0">
             <p className={['text-sm font-medium', categoria.activo ? 'text-stone-800' : 'text-stone-400 line-through'].join(' ')}>
               {categoria.nombre}
+              <span className="ml-2 text-xs font-normal text-stone-400">
+                desc. desarmado {categoria.desc_desarmado_base_pct ?? 0}%
+              </span>
             </p>
             <div className="mt-1 flex flex-wrap gap-1">
               {categoria.mostrar_en_todas ? (
@@ -536,6 +563,7 @@ function NuevaCategoriaInline({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [nombre, setNombre] = useState('')
+  const [descBase, setDescBase] = useState(0)
   const [macroIds, setMacroIds] = useState<string[]>([])
   const [mostrarEnTodas, setMostrarEnTodas] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -550,14 +578,14 @@ function NuevaCategoriaInline({
     try {
       const nueva = await crearCategoria({
         nombre: nombre.trim().toUpperCase(),
-        desc_desarmado_base_pct: 0,
-        desc_desarmado_premium_pct: 0,
+        desc_desarmado_base_pct: clampPct(descBase),
         orden: 99,
         categorias_macro_ids: macroIds,
         mostrar_en_todas: mostrarEnTodas,
       })
       onCreada(nueva)
       setNombre('')
+      setDescBase(0)
       setMacroIds([])
       setMostrarEnTodas(false)
       setAbierto(false)
@@ -589,6 +617,19 @@ function NuevaCategoriaInline({
           autoFocus
           className="rounded-md border border-stone-300 px-2.5 py-1 text-sm outline-none focus:border-stone-500 w-48"
         />
+        <label className="flex items-center gap-1.5 text-xs text-stone-500">
+          Desc. desarmado
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.1}
+            value={descBase}
+            onChange={(e) => setDescBase(clampPct(parseFloat(e.target.value) || 0))}
+            className="rounded-md border border-stone-300 px-2.5 py-1 text-sm outline-none focus:border-stone-500 w-20"
+          />
+          %
+        </label>
         <label className="flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer">
           <input type="checkbox" checked={mostrarEnTodas} onChange={(e) => setMostrarEnTodas(e.target.checked)} className="rounded" />
           Todas las macros

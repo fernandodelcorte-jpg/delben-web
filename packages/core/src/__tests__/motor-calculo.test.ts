@@ -11,8 +11,8 @@ import type { ItemInput } from '../motor-calculo'
 const SV = { diseno: 3, cotizacion: 2, produccion: 5, logistica: 4, gestion_comercial: 6 }
 const U = { transporte: 5, instalacion: 8, imprevistos: 3, utilidad: 25, iva: 19 }
 const DIST = { id: 'd1', descuento_muebles_pct: 35, descuento_herrajes_pct: 15 }
-const CAT_COCINA = { id: 'cocina', desc_base_pct: 30, desc_premium_pct: 12 }
-const LINEA_STD = { id: 'std', tipo_ajuste: 'ninguno' as const, ajuste_pct: 0, es_premium: false }
+const CAT_COCINA = { id: 'cocina', desc_base_pct: 30 }
+const LINEA_STD = { id: 'std', tipo_ajuste: 'ninguno' as const, ajuste_pct: 0 }
 
 const BASE: Omit<ItemInput, 'pais_cliente_final'> = {
   precio_base_cop: 1_000_000,
@@ -90,7 +90,7 @@ describe('Caso 4 — magenta recargo 12% / desarmado / Colombia', () => {
   it('aplica recargo 12% sobre el costo tras descuento y produce 1.749.995', () => {
     const r = calcularItem({
       ...BASE,
-      linea_acabado: { id: 'magenta', tipo_ajuste: 'recargo', ajuste_pct: 12, es_premium: false },
+      linea_acabado: { id: 'magenta', tipo_ajuste: 'recargo', ajuste_pct: 12 },
       pais_cliente_final: 'Colombia',
     })
     expect(r.costo_tras_descuentos).toBe(784_000)
@@ -123,6 +123,27 @@ describe('Caso 5 — campaña global −10% / desarmado / Colombia', () => {
     })
     expect(r.costo_tras_descuentos).toBe(630_000)
     expect(r.precio_final_unitario).toBe(1_406_246)
+  })
+})
+
+// ----------------------------------------------------------
+// Regresión — el premium de categoría YA NO existe (Camino B eliminado)
+// Un ítem desarmado cuya subcategoría tiene tipo_ajuste:'recargo' aplica ESE
+// recargo (paso 2 de subcategoría), nunca un "descuento premium" de categoría.
+// Antes, con es_premium:true, esta línea habría aplicado desc_premium_pct como
+// descuento; ahora manda el ajuste real de la subcategoría. El adicional por
+// subcategoría (categoría × subcategoría) es trabajo de la rebanada B.
+// ----------------------------------------------------------
+describe('Regresión — desarmado: la subcategoría manda, sin premium de categoría', () => {
+  it('aplica el recargo 20% de la subcategoría sobre el costo tras descuento base', () => {
+    const r = calcularItem({
+      ...BASE,
+      modelo: 'desarmado',
+      linea_acabado: { id: 'recargo-sub', tipo_ajuste: 'recargo', ajuste_pct: 20 },
+      pais_cliente_final: 'Colombia',
+    })
+    // base 1.000.000 → desc_base 30% = 700.000 → recargo subcategoría 20% = 840.000
+    expect(r.costo_tras_descuentos).toBe(840_000)
   })
 })
 

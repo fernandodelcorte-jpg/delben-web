@@ -40,14 +40,12 @@ export interface Distribuidor {
 export interface Categoria {
   id: string
   desc_base_pct: number
-  desc_premium_pct: number
 }
 
 export interface LineaAcabado {
   id: string
   tipo_ajuste: 'descuento' | 'ninguno' | 'recargo'
   ajuste_pct: number
-  es_premium: boolean
 }
 
 export interface Campana {
@@ -153,12 +151,8 @@ export function calcularItem(input: ItemInput): ResultadoCalculo {
       : input.categoria.desc_base_pct
   let x = base * (1 - desc1 / 100)
 
-  let at = input.linea_acabado.tipo_ajuste
-  let ap = input.linea_acabado.ajuste_pct
-  if (input.modelo === 'desarmado' && input.linea_acabado.es_premium) {
-    at = 'descuento'
-    ap = input.categoria.desc_premium_pct
-  }
+  const at = input.linea_acabado.tipo_ajuste
+  const ap = input.linea_acabado.ajuste_pct
   if (at === 'descuento') x = x * (1 - ap / 100)
   else if (at === 'recargo') x = x * (1 + ap / 100)
 

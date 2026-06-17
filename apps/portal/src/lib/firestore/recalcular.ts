@@ -131,7 +131,6 @@ function buildItemCarritoStub(snap: ItemCotizacionSnapshot): ItemCarrito {
       nombre: snap.config.subcategoriaNombre,
       tipo_ajuste: 'ninguno',
       ajuste_pct: 0,
-      es_premium: false,
       activo: true,
     },
     resultado: snap.resultado as ResultadoCalculo,
@@ -252,13 +251,11 @@ export async function recalcularCotizacion(
         categoria: {
           id: modulo.categoria_id,
           desc_base_pct: catData.desc_desarmado_base_pct,
-          desc_premium_pct: catData.desc_desarmado_premium_pct,
         },
         linea_acabado: {
           id: subcat.id,
           tipo_ajuste: subcat.tipo_ajuste,
           ajuste_pct: subcat.ajuste_pct,
-          es_premium: subcat.es_premium,
         },
         ...motorBase,
       })
@@ -280,8 +277,8 @@ export async function recalcularCotizacion(
               precio_base_cop: precioCopH,
               cantidad: h.cantidad,
               tipo_item: 'herraje',
-              categoria: { id: 'herraje', desc_base_pct: 0, desc_premium_pct: 0 },
-              linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
+              categoria: { id: 'herraje', desc_base_pct: 0 },
+              linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
               ...motorBase,
             }),
           }
@@ -333,8 +330,8 @@ export async function recalcularCotizacion(
           precio_base_cop: precioCop,
           cantidad: snap.cantidad,
           tipo_item: 'herraje',
-          categoria: { id: 'herraje', desc_base_pct: 0, desc_premium_pct: 0 },
-          linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
+          categoria: { id: 'herraje', desc_base_pct: 0 },
+          linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
           ...motorBase,
         }),
       }

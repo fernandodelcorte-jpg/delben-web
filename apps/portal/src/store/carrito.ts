@@ -117,7 +117,6 @@ export type CotizacionInfo = {
 type CategoriaCalculo = {
   id: string
   desc_base_pct: number
-  desc_premium_pct: number
 }
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
@@ -506,7 +505,6 @@ export const useCarrito = create<CarritoState>()(
         id: subcategoria.id,
         tipo_ajuste: subcategoria.tipo_ajuste,
         ajuste_pct: subcategoria.ajuste_pct,
-        es_premium: subcategoria.es_premium,
       },
       ...motorBase,
     })
@@ -525,8 +523,8 @@ export const useCarrito = create<CarritoState>()(
             precio_base_cop: precioCopH,
             cantidad,
             tipo_item: 'herraje',
-            categoria: { id: 'herraje', desc_base_pct: 0, desc_premium_pct: 0 },
-            linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
+            categoria: { id: 'herraje', desc_base_pct: 0 },
+            linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
             ...motorBase,
           }),
         }
@@ -574,8 +572,8 @@ export const useCarrito = create<CarritoState>()(
       tipo_item: 'herraje',
       modelo: cotizacionInfo.modalidad,
       distribuidor: distribuidorMotor,
-      categoria: { id: 'herraje', desc_base_pct: 0, desc_premium_pct: 0 },
-      linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
+      categoria: { id: 'herraje', desc_base_pct: 0 },
+      linea_acabado: { id: 'herraje', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
       fecha_cotizacion: new Date(cotizacionInfo.fecha),
       campanas_disponibles: campanasDisponibles,
       servicios_delben: serviciosMotor,
@@ -713,7 +711,6 @@ export const useCarrito = create<CarritoState>()(
         nombre: snap.config.subcategoriaNombre,
         tipo_ajuste: 'ninguno',
         ajuste_pct: 0,
-        es_premium: false,
         activo: true,
       } satisfies Subcategoria,
       resultado: snap.resultado as ResultadoCalculo,
@@ -828,7 +825,6 @@ export const useCarrito = create<CarritoState>()(
         nombre: snap.config.subcategoriaNombre,
         tipo_ajuste: 'ninguno',
         ajuste_pct: 0,
-        es_premium: false,
         activo: true,
       } satisfies Subcategoria,
       resultado: snap.resultado as ResultadoCalculo,
@@ -939,7 +935,6 @@ export const useCarrito = create<CarritoState>()(
         nombre: snap.config.subcategoriaNombre,
         tipo_ajuste: 'ninguno',
         ajuste_pct: 0,
-        es_premium: false,
         activo: true,
       } satisfies Subcategoria,
       resultado: snap.resultado as ResultadoCalculo,
@@ -1072,7 +1067,6 @@ export const useCarrito = create<CarritoState>()(
         nombre: snap.config.subcategoriaNombre,
         tipo_ajuste: 'ninguno',
         ajuste_pct: 0,
-        es_premium: false,
         activo: true,
       } satisfies Subcategoria,
       resultado: snap.resultado as ResultadoCalculo,

@@ -97,7 +97,6 @@ export async function crearSubcategoria(data: {
   nombre: string
   tipo_ajuste: 'descuento' | 'ninguno' | 'recargo'
   ajuste_pct: number
-  es_premium: boolean
 }): Promise<Subcategoria> {
   const ref = await addDoc(collection(db, 'subcategorias'), { ...data, activo: true })
   return { id: ref.id, ...data, activo: true }
@@ -178,7 +177,6 @@ export async function getCategoriasAdmin(): Promise<Categoria[]> {
 export async function crearCategoria(data: {
   nombre: string
   desc_desarmado_base_pct: number
-  desc_desarmado_premium_pct: number
   orden: number
   categorias_macro_ids: string[]
   mostrar_en_todas: boolean
@@ -192,7 +190,6 @@ export async function actualizarCategoria(
   data: Partial<Pick<CategoriaDoc,
     | 'nombre'
     | 'desc_desarmado_base_pct'
-    | 'desc_desarmado_premium_pct'
     | 'orden'
     | 'activo'
     | 'categorias_macro_ids'

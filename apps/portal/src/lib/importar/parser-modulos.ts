@@ -18,19 +18,19 @@ import type {
 
 // ─── Descuento por categoría (reglas de negocio Delben) ──────────────────────
 // 0% = sin confirmar → el admin debe configurarlo después del import.
-const DESC_CATEGORIA: Record<string, { base: number; premium: number }> = {
-  COCINA: { base: 30, premium: 12 },
-  'ZONA ROPAS': { base: 30, premium: 12 },
-  'COMPLEMENTO COCINAS': { base: 25, premium: 25 },
-  CLOSETS: { base: 30, premium: 12 },
-  'MUEBLES DE ENTRETENIMIENTO': { base: 30, premium: 0 },
-  'MUEBLES DE BAÑO': { base: 15, premium: 25 },
-  'COMPLEMENTO CLOSETS': { base: 25, premium: 25 },
-  'ACABADOS X M2': { base: 0, premium: 0 },
-  QUALITA: { base: 0, premium: 0 },
-  DECORACIÓN: { base: 0, premium: 0 },
-  'MULTI STORE': { base: 0, premium: 0 },
-  'PUERTAS DE PASO': { base: 0, premium: 0 },
+const DESC_CATEGORIA: Record<string, { base: number }> = {
+  COCINA: { base: 30 },
+  'ZONA ROPAS': { base: 30 },
+  'COMPLEMENTO COCINAS': { base: 25 },
+  CLOSETS: { base: 30 },
+  'MUEBLES DE ENTRETENIMIENTO': { base: 30 },
+  'MUEBLES DE BAÑO': { base: 15 },
+  'COMPLEMENTO CLOSETS': { base: 25 },
+  'ACABADOS X M2': { base: 0 },
+  QUALITA: { base: 0 },
+  DECORACIÓN: { base: 0 },
+  'MULTI STORE': { base: 0 },
+  'PUERTAS DE PASO': { base: 0 },
 }
 
 // ─── Tipos para el resultado del parser ──────────────────────────────────────
@@ -194,13 +194,12 @@ export async function parsearExcelModulos(
   for (const r of filasValidas) {
     const nombre = r['CATEGORIA']!.toString().trim()
     if (!categoriasMap.has(nombre)) {
-      const desc = DESC_CATEGORIA[nombre] ?? { base: 0, premium: 0 }
+      const desc = DESC_CATEGORIA[nombre] ?? { base: 0 }
       categoriasMap.set(nombre, {
         id: slugify(nombre),
         doc: {
           nombre,
           desc_desarmado_base_pct: desc.base,
-          desc_desarmado_premium_pct: desc.premium,
           orden: ordenCat++,
           activo: true,
           categorias_macro_ids: [],
@@ -225,7 +224,6 @@ export async function parsearExcelModulos(
         nombre: 'Estándar',
         tipo_ajuste: 'ninguno',
         ajuste_pct: 0,
-        es_premium: false,
         activo: true,
       },
     })

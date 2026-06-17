@@ -853,6 +853,49 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-17 — Rebanada A: descuento base por categoría editable + remoción total del "premium" de subcategoría
+
+Decisión de negocio (dueño): en DESARMADO el descuento es **uno solo, general por categoría**.
+El "premium" de categoría NO representaba ninguna regla real y se **eliminó por completo** (Camino B,
+opción b). El adicional real por subcategoría (ej. Magenta) se modelará en una **rebanada B** posterior
+como **categoría × subcategoría** — NO se tocó nada de eso aquí. El **ajuste de subcategoría** del motor
+(paso 2: `tipo_ajuste`/`ajuste_pct`, lee de `/subcategorias`) quedó **intacto**: es el cimiento de B.
+
+`npm test` en `packages/core` → **7/7 verde** (Caso 1 desarmado/cocina = **1.562.495 intacto**; Caso 4
+Magenta recargo +12% verde → prueba que el paso 2 sobrevive). `tsc --noEmit` **limpio** en `packages/core`
+y `apps/portal`, sin `any`. Cambio solo de config de super_admin → **no expone costo Delben** al comercial.
+`firestore.rules` de `/categorias` sin cambios (escritura ya restringida a `esSuperAdmin()`).
+
+⚠️ **No confundir** con el OTRO `es_premium`: el de `TipoEstructuraDoc` (+`colores_premium`, selector de
+color de estructura) quedó **totalmente fuera de alcance** y sigue funcionando.
+
+- **Fase 1 — motor** (`packages/core`, con aprobación explícita): se borró el bloque override del premium
+  en desarmado (`if (modelo==='desarmado' && linea_acabado.es_premium) { at='descuento'; ap=desc_premium_pct }`)
+  → `at`/`ap` quedan siempre con los valores de la subcategoría. Se eliminaron los campos huérfanos
+  `Categoria.desc_premium_pct` y `LineaAcabado.es_premium`. Fixtures de tests ajustados (sin cambiar
+  valores esperados) + **1 test de regresión nuevo** (desarmado con subcategoría `recargo` 20% aplica el
+  recargo, no un premium).
+- **Fase 2 — cableado** (guiado por `tsc`): se quitó `desc_premium_pct` de los objetos `categoria` y
+  `es_premium` de los `linea_acabado` construidos para el motor en `buscador-modulos.tsx`,
+  `ficha-modulo.tsx`, `recalcular.ts`, `store/carrito.ts` (incl. herrajes con `0`) y `bench/persist-bench.ts`.
+- **Fase 3 — doc + importador**: se eliminó `CategoriaDoc.desc_desarmado_premium_pct` (tipos-firestore),
+  su cableado en `catalogo.ts` (crear/actualizar) y `datos-demo.ts`; en el importador se quitó la columna
+  `premium` de `DESC_CATEGORIA`, la escritura del campo en `parser-modulos.ts`, y `desc_desarmado_premium_pct`
+  de `CAMPOS_CATEGORIA` en `writer-firestore.ts`.
+- **Fase 4 — `SubcategoriaDoc.es_premium`** (opción b): campo eliminado del tipo (tipos-firestore, demo) y
+  de su UI en `admin/acabados/page.tsx` (badge "Premium" + checkbox "Línea premium" + estado). Objetos
+  `Subcategoria` reconstruidos desde snapshot en `carrito.ts` limpiados.
+- **Fase 5 — UI rebanada A** (`admin/categorias/page.tsx`, solo sección "Categorías de lista de precios",
+  NO macros): input numérico **"Descuento desarmado (%)"** validado 0–100 (`clampPct`) en CREAR
+  (`NuevaCategoriaInline`, antes hardcodeado a 0) y EDITAR (`CategoriaFila`, precargado del doc, incluido en
+  `actualizarCategoria`). El valor también se muestra en la vista de solo lectura de cada categoría.
+
+> **Pendiente rebanada B**: el adicional por subcategoría (categoría × subcategoría, ej. Magenta) sigue
+> sin modelar. Hoy una subcategoría con `tipo_ajuste:'recargo'` aplica ese recargo plano vía el paso 2;
+> el cruce con la categoría es trabajo de B.
+> **Sin desplegar**: cambios solo en código (push a `main` → Netlify). No se tocaron reglas. **Sin commit
+> aún** (pendiente de revisión del diff por el dueño).
+
 ### 2026-06-12 — Logo de marca en el header de la web pública (server-side) + favicons estáticos
 La web institucional (apps/web) ya no toca Firestore solo vía el portal: ahora lee **directo** el
 logo de marca (`config/delben.logo_url`) **server-side**, y ambas apps tienen favicon. `tsc` limpio

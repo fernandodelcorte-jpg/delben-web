@@ -24,7 +24,6 @@ export type Subcategoria = {
   nombre: string
   tipo_ajuste: 'descuento' | 'ninguno' | 'recargo'
   ajuste_pct: number
-  es_premium: boolean
 }
 
 export type Acabado = {
@@ -54,7 +53,6 @@ export type CategoriaDemo = {
   id: string
   nombre: string
   desc_desarmado_base_pct: number
-  desc_desarmado_premium_pct: number
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -74,13 +72,13 @@ export const TIPOS_FACHADA: TipoFachada[] = [
 
 export const SUBCATEGORIAS: Subcategoria[] = [
   // Melamina
-  { id: 'mel-std', tipo_fachada_id: 'melamina', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
-  { id: 'mel-magenta', tipo_fachada_id: 'melamina', nombre: 'Magenta', tipo_ajuste: 'recargo', ajuste_pct: 12, es_premium: false },
+  { id: 'mel-std', tipo_fachada_id: 'melamina', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
+  { id: 'mel-magenta', tipo_fachada_id: 'melamina', nombre: 'Magenta', tipo_ajuste: 'recargo', ajuste_pct: 12 },
   // Laminado Mate
-  { id: 'lam-std', tipo_fachada_id: 'laminado-mate', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
-  { id: 'lam-brillo', tipo_fachada_id: 'laminado-mate', nombre: 'Brillo Especial', tipo_ajuste: 'recargo', ajuste_pct: 8, es_premium: false },
+  { id: 'lam-std', tipo_fachada_id: 'laminado-mate', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
+  { id: 'lam-brillo', tipo_fachada_id: 'laminado-mate', nombre: 'Brillo Especial', tipo_ajuste: 'recargo', ajuste_pct: 8 },
   // Aluminio Vidrio
-  { id: 'av-std', tipo_fachada_id: 'aluminio-vidrio', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false },
+  { id: 'av-std', tipo_fachada_id: 'aluminio-vidrio', nombre: 'Estándar', tipo_ajuste: 'ninguno', ajuste_pct: 0 },
 ]
 
 export const ACABADOS: Acabado[] = [
@@ -113,7 +111,7 @@ export const COLORES_VIDRIO: string[] = ['Claro', 'Esmerilado', 'Bronce', 'Negro
 export const COLORES_METAL: string[] = ['Aluminio Natural', 'Negro Mate', 'Champagne']
 
 export const CATEGORIAS: CategoriaDemo[] = [
-  { id: 'cocina', nombre: 'Cocinas', desc_desarmado_base_pct: 30, desc_desarmado_premium_pct: 12 },
+  { id: 'cocina', nombre: 'Cocinas', desc_desarmado_base_pct: 30 },
 ]
 
 // ─── Módulos de cocina (demo) ─────────────────────────────────────────────────

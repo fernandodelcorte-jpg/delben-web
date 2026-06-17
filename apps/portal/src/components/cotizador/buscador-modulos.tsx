@@ -279,13 +279,11 @@ function PanelEspecial({
       categoria: {
         id: cat?.id ?? '',
         desc_base_pct: cat?.desc_desarmado_base_pct ?? 0,
-        desc_premium_pct: cat?.desc_desarmado_premium_pct ?? 0,
       },
       linea_acabado: {
         id: subcat?.id ?? '',
         tipo_ajuste: subcat?.tipo_ajuste ?? 'ninguno',
         ajuste_pct: subcat?.ajuste_pct ?? 0,
-        es_premium: subcat?.es_premium ?? false,
       },
       fecha_cotizacion: new Date(cotizacionInfo.fecha),
       campanas_disponibles: campanasDisponibles,
@@ -869,7 +867,6 @@ function PanelConfigModulo({
           nombre: 'Sin fachada',
           tipo_ajuste: 'ninguno',
           ajuste_pct: 0,
-          es_premium: false,
           activo: true,
         }
 
@@ -902,7 +899,6 @@ function PanelConfigModulo({
       {
         id: categoria.id,
         desc_base_pct: categoria.desc_desarmado_base_pct,
-        desc_premium_pct: categoria.desc_desarmado_premium_pct,
       },
       herrajesBorrador,
     )

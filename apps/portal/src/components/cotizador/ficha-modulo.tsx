@@ -318,7 +318,7 @@ export function FichaModulo() {
     // Subcategoría y acabado: usar sentinels cuando el módulo no requiere fachada
     const subcategoriaEfectiva: Subcategoria = requiereFachada && subcategoria
       ? subcategoria
-      : { id: 'sin-fachada', tipo_fachada_id: 'sin-fachada', nombre: 'Sin fachada', tipo_ajuste: 'ninguno', ajuste_pct: 0, es_premium: false, activo: true }
+      : { id: 'sin-fachada', tipo_fachada_id: 'sin-fachada', nombre: 'Sin fachada', tipo_ajuste: 'ninguno', ajuste_pct: 0, activo: true }
 
     const acabadoEfectivo = requiereFachada ? acabados.find((a) => a.id === acabadoId) : null
     if (requiereFachada && !acabadoEfectivo) return
@@ -345,7 +345,6 @@ export function FichaModulo() {
     agregarItem(moduloActual, config, subcategoriaEfectiva, precio.precio_cop, {
       id: categoria.id,
       desc_base_pct: categoria.desc_desarmado_base_pct,
-      desc_premium_pct: categoria.desc_desarmado_premium_pct,
     }, herrajesBorrador)
   }
 
