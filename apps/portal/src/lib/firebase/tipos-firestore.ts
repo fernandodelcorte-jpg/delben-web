@@ -37,6 +37,19 @@ export interface AcabadoDoc {
   activo: boolean
 }
 
+// Ajuste adicional por par (categoría × subcategoría), SOLO desarmado (rebanada B).
+// Solo se guardan los pares CON ajuste: par ausente = sin adicional. El doc vive en
+// /ajustes_par/{categoria_id}__{subcategoria_id} (id determinista, ver ajustes-par.ts).
+export interface AjusteParDoc {
+  categoria_id: string
+  subcategoria_id: string
+  tipo_ajuste: 'descuento' | 'recargo' // sin 'ninguno': si no aplica, el doc no existe
+  ajuste_pct: number // 0..100
+  activo: boolean
+  created_at: number // epoch ms (Date.now())
+  updated_at: number // epoch ms (Date.now())
+}
+
 export interface CategoriaMacroDoc {
   nombre: string
   orden: number
@@ -276,6 +289,7 @@ export type TipoEstructura = TipoEstructuraDoc & { id: string }
 export type TipoFachada = TipoFachadaDoc & { id: string }
 export type Subcategoria = SubcategoriaDoc & { id: string }
 export type Acabado = AcabadoDoc & { id: string }
+export type AjustePar = AjusteParDoc & { id: string }
 export type CategoriaMacro = CategoriaMacroDoc & { id: string }
 export type Categoria = CategoriaDoc & { id: string }
 export type Modulo = ModuloDoc & { id: string }

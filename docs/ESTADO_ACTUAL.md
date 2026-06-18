@@ -853,6 +853,45 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-18 — Rebanada B (Push 1): adicional por par categoría × subcategoría — datos + UI, SOLO DESARMADO
+
+Arranca la **rebanada B**: un ajuste adicional (descuento/recargo) que depende del par
+(**categoría × subcategoría**), **solo en DESARMADO** (tradicional no se toca). Este Push 1 es
+**puramente aditivo y NO toca el motor**: **los cálculos NO cambian todavía**. Se despliegan datos + UI
+primero; el corte del motor va en el Push 2. `tsc` limpio en `apps/portal`, sin `any`. No se tocó
+`packages/core` ni el cableado de cálculo.
+
+- **Colección nueva `/ajustes_par`** con **id determinista** `{categoria_id}__{subcategoria_id}` (separador
+  `__` seguro: los ids de `/categorias` y `/subcategorias` son slugs `[a-z0-9-]` o auto-ids `[A-Za-z0-9]`,
+  nunca contienen `_`). Modelo **"solo excepciones"**: un par sin ajuste = **doc inexistente** (no se guarda
+  `'ninguno'`). Campos: `categoria_id`, `subcategoria_id`, `tipo_ajuste` (`'descuento'|'recargo'`),
+  `ajuste_pct` (0..100), `activo`, `created_at`/`updated_at` (epoch ms). Tipo `AjusteParDoc` en
+  `lib/firebase/tipos-firestore.ts`.
+- **CRUD** `lib/firestore/ajustes-par.ts`: `listarAjustesPar`, `listarAjustesParPorSubcategoria`,
+  `upsertAjustePar` (created_at solo al crear, updated_at siempre), `eliminarAjustePar` (idempotente).
+  Validación `tipo_ajuste`/`ajuste_pct` 0..100.
+- **Regla** `match /ajustes_par/{id}` (read: autenticado, write: `esSuperAdmin()`), junto a `/categorias`.
+  **YA publicada a mano en la consola de producción.**
+- **Pantalla admin "Ajustes por categoría"** (`/admin/ajustes-par`, solo super_admin, en el nav de
+  Herramientas tras "Subcategorías"): selector de subcategoría → lista de las categorías de lista activas,
+  cada una con `Ninguno|Descuento|Recargo` + `%`. **Precarga real** desde `/ajustes_par`, **guardado
+  global** (upsert para las que tienen ajuste, delete para las puestas en `Ninguno` → la excepción
+  desaparece), validación 0..100 (clamp). Reutiliza patrones de `categorias`/`acabados`.
+
+> **Estado intermedio INTENCIONAL**: la pantalla queda en producción y funcional, pero **el motor todavía
+> NO consume estos ajustes**. Magenta en desarmado **sigue con su +12% genérico** (paso 2 actual) hasta el
+> Push 2. **Cargar pares ahora NO afecta ningún cálculo.**
+
+> **Pendiente Push 2** (requiere aprobación de `packages/core`): corte del motor — **opción M1**: rama por
+> modalidad en el paso 2 (tradicional usa el genérico intacto; desarmado usa el par); cableado
+> (`carrito`/`recalcular`/`buscador`/`ficha`); y **persistir el adicional resuelto en el snapshot**.
+> Antes del Push 2: **cargar y verificar en producción la matriz de Magenta (13 categorías)** para que el
+> desarmado no quede sin adicional durante el corte.
+
+> **Inventario de producción** (script de solo lectura `scripts/inventario-subcategorias.mjs`, ADC sin
+> escritura): **7 subcategorías**, **2 con ajuste** — *Magenta* (descuento 12%, **activa**) y *DURATEX*
+> (recargo 7%, **inactiva**); **13 categorías activas**.
+
 ### 2026-06-17 — Rebanada A: descuento base por categoría editable + remoción total del "premium" de subcategoría
 
 Decisión de negocio (dueño): en DESARMADO el descuento es **uno solo, general por categoría**.

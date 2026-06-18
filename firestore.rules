@@ -119,6 +119,12 @@ service cloud.firestore {
       allow write: if esSuperAdmin();
     }
 
+    // Ajuste adicional por par (categoría × subcategoría), solo desarmado (rebanada B).
+    match /ajustes_par/{id} {
+      allow read: if autenticado();
+      allow write: if esSuperAdmin();
+    }
+
     match /modulos/{moduloId} {
       allow read: if autenticado();
       allow write: if esSuperAdmin();
