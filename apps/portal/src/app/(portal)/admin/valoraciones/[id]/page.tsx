@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { CircleNotch, PencilSimple, CheckCircle } from '@phosphor-icons/react'
+import { CircleNotch, PencilSimple, CheckCircle, ArrowsClockwise } from '@phosphor-icons/react'
 import { getValoracion, marcarComoFacturada, totalCostoDelbenDeValoracion } from '@/lib/firestore/valoraciones'
+import { recalcularValoracion } from '@/lib/firestore/recalcular-valoracion'
 import { getSede } from '@/lib/firestore/sedes'
 import { BotonDuplicar } from '@/components/cotizador/boton-duplicar'
 import { formatCOP } from '@/lib/datos-demo'
@@ -33,9 +34,12 @@ export default function ValoracionDetallePage() {
   const router = useRouter()
   const reabrirValoracion = useCarrito((s) => s.reabrirValoracion)
   const copiarValoracion = useCarrito((s) => s.copiarValoracion)
+  const cargarValoracionRecalculada = useCarrito((s) => s.cargarValoracionRecalculada)
   const [valoracion, setValoracion] = useState<Valoracion | null>(null)
   const [cargando, setCargando] = useState(true)
   const [marcando, setMarcando] = useState(false)
+  const [actualizando, setActualizando] = useState(false)
+  const [errorActualizar, setErrorActualizar] = useState<string | null>(null)
 
   useEffect(() => {
     getValoracion(id)
@@ -60,6 +64,28 @@ export default function ValoracionDetallePage() {
     const sede = await getSede(valoracion.distribuidor_id, valoracion.sede_id).catch(() => null)
     reabrirValoracion(valoracion, sede)
     router.push('/admin/valoraciones/borrador')
+  }
+
+  async function handleActualizarPrecios() {
+    if (!valoracion) return
+    setActualizando(true)
+    setErrorActualizar(null)
+    try {
+      const result = await recalcularValoracion(valoracion)
+      cargarValoracionRecalculada({
+        valoracionId: valoracion.id,
+        cotizacionInfo: result.cotizacionInfo,
+        distribuidorData: result.distribuidorData,
+        sedeData: result.sedeData,
+        items: result.items,
+        itemsHerraje: result.itemsHerraje,
+        itemsEspeciales: result.itemsEspeciales,
+      })
+      router.push('/admin/valoraciones/borrador')
+    } catch {
+      setErrorActualizar('No se pudieron actualizar los precios. Intenta de nuevo.')
+      setActualizando(false)
+    }
   }
 
   if (cargando) {
@@ -176,6 +202,20 @@ export default function ValoracionDetallePage() {
           )}
           {valoracion.estado === 'borrador' && (
             <button
+              onClick={handleActualizarPrecios}
+              disabled={actualizando}
+              className="tactil flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:border-stone-300 disabled:opacity-50 transition-colors"
+            >
+              {actualizando ? (
+                <CircleNotch size={13} className="animate-spin" />
+              ) : (
+                <ArrowsClockwise size={13} weight="bold" />
+              )}
+              {actualizando ? 'Actualizando…' : 'Actualizar precios'}
+            </button>
+          )}
+          {valoracion.estado === 'borrador' && (
+            <button
               onClick={handleMarcarFacturada}
               disabled={marcando}
               className="tactil flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
@@ -190,6 +230,10 @@ export default function ValoracionDetallePage() {
           )}
         </div>
       </div>
+
+      {errorActualizar && (
+        <p className="text-xs text-red-600">{errorActualizar}</p>
+      )}
 
       {/* Descargas — documento interno de Delben: SOLO costo Delben, sin venta ni IVA */}
       <div className="flex items-center gap-3 flex-wrap">

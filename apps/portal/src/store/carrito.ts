@@ -167,6 +167,15 @@ type CarritoState = {
   guardarValoracion: (distribuidorId: string, distribuidorNombre: string, userId: string) => Promise<string>
   reabrirBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
   reabrirValoracion: (valoracion: Valoracion, sede: Sede | null) => void
+  cargarValoracionRecalculada: (payload: {
+    valoracionId: string
+    cotizacionInfo: CotizacionInfo
+    distribuidorData: Distribuidor | null
+    sedeData: Sede | null
+    items: ItemCarrito[]
+    itemsHerraje: ItemHerrajeCarrito[]
+    itemsEspeciales: ItemEspecial[]
+  }) => void
   copiarBorrador: (cotizacion: Cotizacion, sede: Sede | null, nuevoNombre?: string) => Promise<void>
   copiarValoracion: (valoracion: Valoracion, sede: Sede | null, nuevoNombre?: string) => void
   cargarBorrador: (payload: {
@@ -765,6 +774,25 @@ export const useCarrito = create<CarritoState>()(
       itemEditando: null,
     })
   },
+
+  // "Actualizar precios" de una valoración: igual que reabrirValoracion pero con los
+  // ítems ya RECALCULADOS (no rehidratados del snapshot congelado), y conservando la
+  // identidad de la valoración (valoracionGuardadaId) para que Guardar ACTUALICE el
+  // mismo doc. NO se persiste venta: la serialización recorta a costo al guardar.
+  cargarValoracionRecalculada: ({ valoracionId, cotizacionInfo, distribuidorData, sedeData, items, itemsHerraje, itemsEspeciales }) =>
+    set({
+      cotizacionInfo,
+      distribuidorData,
+      sedeData,
+      cotizacionGuardadaId: null,
+      valoracionGuardadaId: valoracionId,
+      items,
+      itemsHerraje,
+      itemsEspeciales,
+      pantallaActiva: 'carrito',
+      moduloPendiente: null,
+      itemEditando: null,
+    }),
 
   copiarValoracion: (valoracion, sede, nuevoNombre) => {
     // Copia para crear una valoración NUEVA: se fuerza doc nuevo
