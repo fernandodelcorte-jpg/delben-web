@@ -853,6 +853,40 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-18 — "Actualizar precios" en VALORACIONES (paridad con cotizaciones)
+
+Las **valoraciones** (documento interno de Delben, **SOLO COSTO DELBEN**; actor `delben_facturacion`)
+ya tienen el botón **"Actualizar precios"** que existía en cotizaciones: re-lee precios de lista del
+catálogo + la config de cálculo vigente (sede/descuentos/servicios/campañas/tasa) y re-corre el motor.
+`tsc` limpio en `apps/portal`, sin `any`; motor `packages/core` 7/7 (intacto).
+
+- **Refactor previo** (commit `66779d6`): se extrajo el **núcleo de recálculo por-ítem** a
+  `lib/firestore/recompute-core.ts` (`recomputeItemModulo` / `recomputeItemHerraje` + `buildMotorParams`
+  + los stubs de ítems sin IDs), **sin cambio de comportamiento**. `recalcularCotizacion` ahora **consume
+  ese helper** y queda como pura orquestación. Es el **ÚNICO punto de recálculo por-ítem** del sistema.
+- **Botón** (commit `7f22fec`): `recalcularValoracion` (`lib/firestore/recalcular-valoracion.ts`) re-lee
+  catálogo + config vigente (por `valoracion.distribuidor_id` / `sede_id`) y recalcula **vía el helper
+  compartido**; los especiales se arrastran (precio fijo a mano). Botón en `admin/valoraciones/[id]` **solo
+  en estado `'borrador'`** (ausente en `'facturada'`). El guardado **actualiza la MISMA valoración** —
+  nueva acción del carrito `cargarValoracionRecalculada` conserva `valoracionGuardadaId` (y setea
+  `distribuidorData`) — no crea un doc nuevo.
+- **Seguridad por rol — sin filtración de venta.** Verificado en un doc real de Firestore: el `resultado`
+  guardado contiene solo `moneda / costo_tras_descuentos / servicios_subtotal1 / costo_delben / cantidad`;
+  **ningún campo de venta**. La persistencia recorta vía `resultadoCosto` (`serializarItems`); no se creó
+  guardado alterno que evite ese recorte. La UI del borrador solo muestra costo.
+
+> **Deuda registrada (no bloqueante):** el recálculo corre **client-side**, así que el motor computa la
+> venta en memoria del navegador de facturación aunque **no se persista ni se muestre**. El blindaje 100%
+> sería calcular **server-side** y filtrar con `filtrarPorRol` antes de devolver (Opción C / deuda §1).
+
+> **CLAVE para Push 2 (rebanada B):** cuando se corte el motor (ajuste por par categoría×subcategoría en
+> desarmado), se inyecta en **`recomputeItemModulo` — un solo sitio** — y **cotizaciones + valoraciones lo
+> heredan juntas y consistentes**. Ese es el objetivo del refactor de extracción.
+
+> **Observación pendiente (config, no código):** la sede **PRADA DESING** mostró los servicios Delben y la
+> gestión comercial en **0%** en una valoración recalculada. Confirmar con el dueño si es intencional (sede
+> sin condiciones cargadas) o un dato a corregir.
+
 ### 2026-06-18 — Rebanada B (Push 1): adicional por par categoría × subcategoría — datos + UI, SOLO DESARMADO
 
 Arranca la **rebanada B**: un ajuste adicional (descuento/recargo) que depende del par
