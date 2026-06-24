@@ -1498,3 +1498,21 @@ Cierra el pendiente que dejó la tanda de IVA. Solo display; no toca el motor.
 ### 2026-04 — Multi-tenant y cotizador conectado (Rebanada 3) / Catálogo en Firestore (Rebanada 2)
 - R3: panel de distribuidores y gestión de usuarios por tenant; cotizador conectado a Firestore (módulos, precios, herrajes); deduplicación por variantes; herrajes asociados en la ficha.
 - R2: panel admin de importación desde Excel (idempotente); ~2.076 módulos + ~447 herrajes; imágenes en Storage con matching automático.
+### 2026-06-24 — Corrección de emails mal escritos en Auth + Firestore (2 usuarios)
+Fernando había creado dos usuarios con el correo de autenticación mal escrito. Firebase Console no
+permite editar el email desde la UI, así que se corrigió vía Admin SDK con script suelto de
+mantenimiento (fuera del monorepo, no versionado).
+
+Correcciones aplicadas (el uid NO cambia → rol, sede y distribuidor intactos):
+- `nanaquizena@hotmail.com` → `naziraquizena@quivanni.com`  (uid 6FkZLSmvbDREZauw6gkEtkH76eT2)
+- `lindakarq@gmail.com`     → `linda.arq@gmail.com`          (uid GFfD1OBR6aXbvFSaKOXV7mUq5fg1)
+
+Cada caso actualizó DOS lugares: `auth().updateUser(uid, { email })` + el campo `email` del doc
+`usuarios/{uid}` en Firestore (Auth y Firestore son fuentes separadas; el primero no toca el segundo).
+Script con patrón dry-run → --write; validó existencia en Auth y ausencia de colisión
+(`email-already-exists`) antes de escribir. Corrido local con ADC apuntando a `delben---web`.
+Motor intacto (no se tocó). Pendiente operativo: que ambas personas reentren con el correo nuevo
+(la contraseña no cambió).
+
+Nota: `linda.arq@gmail.com` y `lindakarq@gmail.com` son el mismo buzón físico (Gmail ignora puntos),
+pero para Firebase Auth son logins distintos — el cambio sí tiene efecto en el string de acceso.
