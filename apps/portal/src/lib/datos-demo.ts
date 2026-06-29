@@ -265,3 +265,13 @@ export function formatMoneda(n: number, moneda: 'COP' | 'USD'): string {
   }
   return formatCOP(n)
 }
+
+// Moneda de una sede según su país — MISMA derivación que el motor (Colombia COP,
+// cualquier otro país USD). Helper único compartido por toda la UI del cotizador:
+// no duplicar el check inline ni compararse contra nombres de país sueltos
+// (ej. 'Venezuela'/'USA'). Sin país conocido → COP (default Colombia, nunca USD
+// por accidente durante la carga).
+export function monedaDeSede(pais: string | null | undefined): 'COP' | 'USD' {
+  if (!pais) return 'COP'
+  return pais.trim().toLowerCase() === 'colombia' ? 'COP' : 'USD'
+}

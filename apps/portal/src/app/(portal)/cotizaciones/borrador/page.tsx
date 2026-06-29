@@ -15,7 +15,7 @@ import { SiglaFaltanteError } from '@/lib/firestore/cotizaciones'
 import { BuscadorModulos } from '@/components/cotizador/buscador-modulos'
 import { FichaModulo } from '@/components/cotizador/ficha-modulo'
 import { ModuloImagen } from '@/components/cotizador/modulo-imagen'
-import { formatCOP } from '@/lib/datos-demo'
+import { formatMoneda, monedaDeSede } from '@/lib/datos-demo'
 import {
   itemCarritoToPDF,
   herrajeCarritoToPDF,
@@ -95,9 +95,9 @@ export default function BorradorPage() {
   }
 
   const puedeVerCosto = rol !== 'distribuidor_comercial'
-  // Moneda del PDF: COP en Colombia, USD en exportación (se deriva del país de la sede).
-  const monedaPdf: 'COP' | 'USD' =
-    sedeData && sedeData.pais.trim().toLowerCase() !== 'colombia' ? 'USD' : 'COP'
+  // Moneda de la sede: COP en Colombia, USD en exportación. Única para TODA la
+  // pantalla (montos en vivo) y para los PDFs. Se deriva con el helper compartido.
+  const moneda = monedaDeSede(sedeData?.pais)
 
   useEffect(() => {
     if (!cotizacionInfo) {
@@ -256,6 +256,7 @@ export default function BorradorPage() {
                   onEditar={editarModulo}
                   onCambiarCantidad={cambiarCantidadItem}
                   puedeVerCosto={puedeVerCosto}
+                  moneda={moneda}
                 />
               </div>
             ))}
@@ -282,6 +283,7 @@ export default function BorradorPage() {
                     onEliminar={eliminarHerraje}
                     onCambiarCantidad={cambiarCantidadHerraje}
                     puedeVerCosto={puedeVerCosto}
+                    moneda={moneda}
                   />
                 </div>
               ))}
@@ -311,6 +313,7 @@ export default function BorradorPage() {
                     onEliminar={eliminarEspecial}
                     onCambiarCantidad={cambiarCantidadEspecial}
                     puedeVerCosto={puedeVerCosto}
+                    moneda={moneda}
                   />
                 </div>
               ))}
@@ -328,7 +331,7 @@ export default function BorradorPage() {
               {usaTransporteFijo && (
                 <div>
                   <label className="block text-xs text-stone-500 mb-1.5">
-                    Transporte ({sedeData?.pais === 'Venezuela' || sedeData?.pais === 'USA' ? 'USD' : 'COP'})
+                    Transporte ({moneda})
                   </label>
                   <input
                     type="number"
@@ -347,7 +350,7 @@ export default function BorradorPage() {
               {usaInstalacionFija && (
                 <div>
                   <label className="block text-xs text-stone-500 mb-1.5">
-                    Instalación ({sedeData?.pais === 'Venezuela' || sedeData?.pais === 'USA' ? 'USD' : 'COP'})
+                    Instalación ({moneda})
                   </label>
                   <input
                     type="number"
@@ -379,7 +382,7 @@ export default function BorradorPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-stone-600">Total costo a Delben</p>
                   <p className="text-sm font-bold text-stone-900 tabular-nums">
-                    {formatCOP(totalCostoDelben)}
+                    {formatMoneda(totalCostoDelben, moneda)}
                   </p>
                 </div>
               </div>
@@ -392,7 +395,7 @@ export default function BorradorPage() {
                   info={cotizacionInfoToInfoPDF(cotizacionInfo, {
                     logoDistribuidorUrl: logoDistribuidorData,
                     logoDelbenUrl: logoDelbenData,
-                    moneda: monedaPdf,
+                    moneda,
                     distribuidorNombre: distribuidorData?.nombre,
                   })}
                   items={items.map(itemCarritoToPDF)}
@@ -404,7 +407,7 @@ export default function BorradorPage() {
                     info={cotizacionInfoToInfoPDF(cotizacionInfo, {
                       logoDistribuidorUrl: logoDistribuidorData,
                       logoDelbenUrl: logoDelbenData,
-                      moneda: monedaPdf,
+                      moneda,
                       distribuidorNombre: distribuidorData?.nombre,
                     })}
                     items={items.map(itemCarritoToPDF)}
@@ -433,13 +436,13 @@ export default function BorradorPage() {
               <div className="text-right">
                 <p className="text-xs text-stone-400 mb-1">Total final</p>
                 <p className="text-2xl font-bold text-stone-900 tabular-nums">
-                  {formatCOP(total)}
+                  {formatMoneda(total, moneda)}
                 </p>
                 <p className="text-xs text-stone-400 mt-1">
                   {items.length} módulo{items.length !== 1 ? 's' : ''}
                   {itemsHerraje.length > 0 &&
                     ` · ${itemsHerraje.length} herraje${itemsHerraje.length !== 1 ? 's' : ''}`}{' '}
-                  · COP
+                  · {moneda}
                 </p>
               </div>
             </div>
@@ -463,6 +466,7 @@ const CarritoItemRow = memo(function CarritoItemRow({
   onEditar,
   onCambiarCantidad,
   puedeVerCosto,
+  moneda,
 }: {
   item: ItemCarrito
   expandido: boolean
@@ -471,6 +475,7 @@ const CarritoItemRow = memo(function CarritoItemRow({
   onEditar: (item: ItemCarrito) => void
   onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
+  moneda: 'COP' | 'USD'
 }) {
   return (
     <div>
@@ -503,17 +508,17 @@ const CarritoItemRow = memo(function CarritoItemRow({
 
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-stone-900 tabular-nums">
-            {formatCOP(item.resultado.subtotal_linea)}
+            {formatMoneda(item.resultado.subtotal_linea, moneda)}
           </p>
           {item.config.cantidad > 1 && (
             <p className="text-xs text-stone-400 tabular-nums">
-              {formatCOP(item.resultado.precio_final_unitario)} c/u
+              {formatMoneda(item.resultado.precio_final_unitario, moneda)} c/u
             </p>
           )}
           {puedeVerCosto && (
             <p className="text-xs text-stone-400 tabular-nums">
-              costo: {formatCOP(item.resultado.costo_delben * item.config.cantidad)}
-              {item.config.cantidad > 1 && ` · ${formatCOP(item.resultado.costo_delben)} c/u`}
+              costo: {formatMoneda(item.resultado.costo_delben * item.config.cantidad, moneda)}
+              {item.config.cantidad > 1 && ` · ${formatMoneda(item.resultado.costo_delben, moneda)} c/u`}
             </p>
           )}
         </div>
@@ -563,9 +568,9 @@ const CarritoItemRow = memo(function CarritoItemRow({
 
       {expandido && (
         <div className="border-t border-stone-100 px-4 py-4 bg-stone-50 space-y-4">
-          <DetalleGrid item={item} puedeVerCosto={puedeVerCosto} />
+          <DetalleGrid item={item} puedeVerCosto={puedeVerCosto} moneda={moneda} />
           {item.herrajesAsociados.length > 0 && (
-            <HerrajesAsociadosList herrajes={item.herrajesAsociados} puedeVerCosto={puedeVerCosto} />
+            <HerrajesAsociadosList herrajes={item.herrajesAsociados} puedeVerCosto={puedeVerCosto} moneda={moneda} />
           )}
         </div>
       )}
@@ -578,11 +583,13 @@ const HerrajeItemRow = memo(function HerrajeItemRow({
   onEliminar,
   onCambiarCantidad,
   puedeVerCosto,
+  moneda,
 }: {
   item: ItemHerrajeCarrito
   onEliminar: (id: string) => void
   onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
+  moneda: 'COP' | 'USD'
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3.5">
@@ -599,17 +606,17 @@ const HerrajeItemRow = memo(function HerrajeItemRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-stone-900 tabular-nums">
-            {formatCOP(item.resultado.subtotal_linea)}
+            {formatMoneda(item.resultado.subtotal_linea, moneda)}
           </p>
           {item.cantidad > 1 && !puedeVerCosto && (
             <p className="text-xs text-stone-400 tabular-nums">
-              {formatCOP(item.resultado.precio_final_unitario)} c/u
+              {formatMoneda(item.resultado.precio_final_unitario, moneda)} c/u
             </p>
           )}
           {puedeVerCosto && (
             <p className="text-xs text-stone-400 tabular-nums">
-              costo: {formatCOP(item.resultado.costo_delben * item.cantidad)}
-              {item.cantidad > 1 && ` · ${formatCOP(item.resultado.costo_delben)} c/u`}
+              costo: {formatMoneda(item.resultado.costo_delben * item.cantidad, moneda)}
+              {item.cantidad > 1 && ` · ${formatMoneda(item.resultado.costo_delben, moneda)} c/u`}
             </p>
           )}
         </div>
@@ -654,9 +661,11 @@ const HerrajeItemRow = memo(function HerrajeItemRow({
 function HerrajesAsociadosList({
   herrajes,
   puedeVerCosto,
+  moneda,
 }: {
   herrajes: HerrajeAsociado[]
   puedeVerCosto: boolean
+  moneda: 'COP' | 'USD'
 }) {
   return (
     <div>
@@ -672,11 +681,11 @@ function HerrajesAsociadosList({
             </span>
             <div className="shrink-0 text-right">
               <span className="font-medium text-stone-700 tabular-nums">
-                {formatCOP(h.resultado.subtotal_linea)}
+                {formatMoneda(h.resultado.subtotal_linea, moneda)}
               </span>
               {puedeVerCosto && (
                 <span className="block text-stone-400 tabular-nums">
-                  costo: {formatCOP(h.resultado.costo_delben * h.cantidad)}
+                  costo: {formatMoneda(h.resultado.costo_delben * h.cantidad, moneda)}
                 </span>
               )}
             </div>
@@ -692,11 +701,13 @@ const EspecialItemRow = memo(function EspecialItemRow({
   onEliminar,
   onCambiarCantidad,
   puedeVerCosto,
+  moneda,
 }: {
   item: ItemEspecial
   onEliminar: (id: string) => void
   onCambiarCantidad: (id: string, delta: number) => void
   puedeVerCosto: boolean
+  moneda: 'COP' | 'USD'
 }) {
   const dims = [
     item.ancho ? `${item.ancho}` : null,
@@ -724,16 +735,16 @@ const EspecialItemRow = memo(function EspecialItemRow({
 
         <div className="shrink-0 text-right">
           <p className="text-sm font-bold text-stone-900 tabular-nums">
-            {formatCOP(item.precioClienteUnitario * item.cantidad)}
+            {formatMoneda(item.precioClienteUnitario * item.cantidad, moneda)}
           </p>
           {puedeVerCosto && (
             <p className="text-xs text-stone-400 tabular-nums">
-              costo: {formatCOP(item.precioDelbenUnitario * item.cantidad)}
+              costo: {formatMoneda(item.precioDelbenUnitario * item.cantidad, moneda)}
             </p>
           )}
           {item.cantidad > 1 && (
             <p className="text-xs text-stone-400 tabular-nums">
-              {formatCOP(item.precioClienteUnitario)} c/u
+              {formatMoneda(item.precioClienteUnitario, moneda)} c/u
             </p>
           )}
         </div>
@@ -786,9 +797,11 @@ const EspecialItemRow = memo(function EspecialItemRow({
 function DetalleGrid({
   item,
   puedeVerCosto,
+  moneda,
 }: {
   item: ItemCarrito
   puedeVerCosto: boolean
+  moneda: 'COP' | 'USD'
 }) {
   const filas: [string, string][] = [
     ['Estructura', item.config.tipoEstructuraNombre],
@@ -817,20 +830,20 @@ function DetalleGrid({
           <div>
             <span className="text-stone-400">Sin IVA:</span>{' '}
             <span className="font-medium text-stone-700">
-              {formatCOP(item.resultado.precio_sin_iva)}
+              {formatMoneda(item.resultado.precio_sin_iva, moneda)}
             </span>
           </div>
           <div>
             <span className="text-stone-400">Con IVA:</span>{' '}
             <span className="font-semibold text-stone-900">
-              {formatCOP(item.resultado.precio_final_unitario)}
+              {formatMoneda(item.resultado.precio_final_unitario, moneda)}
             </span>
           </div>
           {puedeVerCosto && (
             <div>
               <span className="text-stone-400">Costo Delben:</span>{' '}
               <span className="font-medium text-stone-500">
-                {formatCOP(item.resultado.costo_delben)}
+                {formatMoneda(item.resultado.costo_delben, moneda)}
               </span>
             </div>
           )}

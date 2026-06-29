@@ -855,6 +855,42 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-29 — Rebanada 2: moneda de sede en TODA la UI del cotizador (cierre display USD)
+
+En sedes de exportación, la pantalla del cotizador ya **no muestra ningún monto en COP**: todo en
+**US$ con 2 decimales**. En Colombia, todo sigue en COP idéntico a antes. Es SOLO display — el motor y
+la magnitud no se tocaron (la Rebanada 1 ya arregló la magnitud del especial).
+
+**Helper centralizado:** nuevo `monedaDeSede(pais)` en `lib/datos-demo.ts` (misma derivación que el
+motor: Colombia → COP, cualquier otro país → USD; sin país → COP). Reemplaza los checks frágiles
+hardcodeados `pais === 'Venezuela' || pais === 'USA'` (borrador `:331/:350` y la etiqueta "· COP" del
+total) — ahora cualquier país de exportación funciona, no solo esos dos strings.
+
+**Dos tipos de cambio (clave para no romper magnitud):**
+- **A) Montos que YA pasan por el motor** (magnitud ya en moneda de sede): solo se cambió el formato,
+  `formatCOP(x)` → `formatMoneda(x, moneda)`. Pantalla borrador completa (totales, líneas de módulo,
+  herrajes, especiales, desglose por capas — se enhebró `moneda` como prop por `CarritoItemRow`,
+  `HerrajeItemRow`, `EspecialItemRow`, `DetalleGrid`, `HerrajesAsociadosList`).
+- **B) Precios de catálogo CRUDOS** (no pasan por el motor → hay que convertir ÷ tasa Y formatear):
+  `formatMoneda(convertirMoneda(precio_cop, moneda, tasaUsd), moneda)`. Header "Ref:" del panel especial,
+  herraje en `PanelConfigModulo`, "Desde…" en `PanelBusquedaModulos`, lista + staging de `PanelHerrajes`,
+  y el herraje en `ficha-modulo.tsx`. NO se doble-convierte: A nunca pasa por `convertirMoneda`.
+
+**C)** Se quitaron del panel de especiales las dos líneas de preview ("Costo Delben…" / "Precio al
+cliente calculado"): el resultado se ve en la lista del carrito. El cálculo que las alimentaba
+(`costoDelben`/`precioClienteCalculado`) NO quedó huérfano: `handleAgregar` lo sigue usando para construir
+el ítem.
+
+**Fuera de alcance / pendiente:** `resumen-proyecto-pdf.tsx` (`:167/:176`) sigue en `formatCOP` — es un
+caso distinto (PDF de resumen de proyecto desde la lista `/cotizaciones`, cuyo tipo no carga la moneda y
+podría mezclar versiones de sedes con monedas distintas). Requiere decisión aparte; NO se tocó. Los PDFs
+de cotización y orden de compra ya estaban correctos (`formatMoneda(n, info.moneda)`).
+
+- **Archivos:** `lib/datos-demo.ts` (helper `monedaDeSede`), `app/(portal)/cotizaciones/borrador/page.tsx`,
+  `components/cotizador/buscador-modulos.tsx`, `components/cotizador/ficha-modulo.tsx`, `docs/ESTADO_ACTUAL.md`.
+- **No tocados:** `packages/core` (motor, git vacío, 7/7), magnitud de cálculos, PDFs correctos, `resumen-proyecto-pdf`.
+- `tsc` limpio en `apps/portal`, sin `any`.
+
 ### 2026-06-29 — Fix magnitud: precarga del especial-desde-referencia en USD (exportación)
 
 **Bug:** al crear un especial a partir de un módulo de catálogo en sede de exportación, el campo

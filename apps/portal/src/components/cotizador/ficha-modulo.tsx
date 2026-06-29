@@ -13,7 +13,8 @@ import {
   getCategorias,
 } from '@/lib/firestore/catalogo'
 import { getPreciosModulo, getVariantesModulo, buscarAccesorios } from '@/lib/firestore/modulos'
-import { formatCOP } from '@/lib/datos-demo'
+import { formatMoneda, monedaDeSede } from '@/lib/datos-demo'
+import { convertirMoneda } from '@/lib/catalogo-precios'
 import type {
   TipoEstructura,
   TipoFachada,
@@ -32,6 +33,10 @@ export function FichaModulo() {
   const cerrarFicha = useCarrito((s) => s.cerrarFicha)
   const agregarItem = useCarrito((s) => s.agregarItem)
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
+  const sedeData = useCarrito((s) => s.sedeData)
+  const tasaUsd = useCarrito((s) => s.tasaUsd)
+  // Precio de herraje del catálogo (precio_cop): CRUDO, ÷ tasa en exportación.
+  const moneda = monedaDeSede(sedeData?.pais)
 
   const [tiposEstructura, setTiposEstructura] = useState<TipoEstructura[]>([])
   const [tiposFachada, setTiposFachada] = useState<TipoFachada[]>([])
@@ -696,7 +701,7 @@ export function FichaModulo() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-3">
                           {p && (
-                            <span className="text-xs text-stone-500">{formatCOP(p)}</span>
+                            <span className="text-xs text-stone-500">{formatMoneda(convertirMoneda(p, moneda, tasaUsd), moneda)}</span>
                           )}
                           <Plus size={13} weight="bold" className="text-stone-400" />
                         </div>

@@ -26,7 +26,7 @@ import {
   getAcabados,
   getCategorias,
 } from '@/lib/firestore/catalogo'
-import { formatCOP } from '@/lib/datos-demo'
+import { formatMoneda, monedaDeSede } from '@/lib/datos-demo'
 import { convertirMoneda } from '@/lib/catalogo-precios'
 import type {
   Modulo,
@@ -413,7 +413,7 @@ function PanelEspecial({
             </p>
             {precioRefActual ? (
               <span className="text-xs font-bold text-stone-800 tabular-nums shrink-0">
-                {formatCOP(precioRefActual.precio_cop)}
+                {formatMoneda(convertirMoneda(precioRefActual.precio_cop, monedaBase, tasaUsd), monedaBase)}
               </span>
             ) : preciosRef.length > 0 ? (
               <span className="text-xs text-stone-400 shrink-0">Sin precio</span>
@@ -527,17 +527,8 @@ function PanelEspecial({
             onChange={(e) => setPrecioDelbenStr(e.target.value)}
             placeholder="0" min={0} className={inputCls} />
           {errores.precioDelben && <p className={errorCls}>{errores.precioDelben}</p>}
-          {costoDelben > 0 && (
-            <p className="mt-1.5 text-xs text-stone-500">
-              Costo Delben (con descuento + servicios):{' '}
-              <span className="font-semibold">{formatCOP(costoDelben)}</span>
-            </p>
-          )}
-          {precioClienteCalculado > 0 && (
-            <p className="mt-0.5 text-xs text-stone-500">
-              Precio al cliente calculado: <span className="font-semibold">{formatCOP(precioClienteCalculado)}</span>
-            </p>
-          )}
+          {/* El resultado (costo Delben / precio al cliente) se ve en la lista del
+              carrito, no aquí. Se quitó el preview para no mostrar montos en el panel. */}
         </Campo>
 
         {/* Herrajes */}
@@ -698,6 +689,11 @@ function PanelConfigModulo({
 }) {
   const agregarItem = useCarrito((s) => s.agregarItem)
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
+  const sedeData = useCarrito((s) => s.sedeData)
+  const tasaUsd = useCarrito((s) => s.tasaUsd)
+  // Los precios de catálogo (precio_cop) son CRUDOS (no pasan por el motor): en
+  // exportación se convierten ÷ tasa antes de mostrarlos. Colombia → COP.
+  const moneda = monedaDeSede(sedeData?.pais)
 
   const [tiposEstructura, setTiposEstructura] = useState<TipoEstructura[]>([])
   const [tiposFachada, setTiposFachada] = useState<TipoFachada[]>([])
@@ -1265,7 +1261,7 @@ function PanelConfigModulo({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
-                        {p && <span className="text-xs text-stone-500">{formatCOP(p)}</span>}
+                        {p && <span className="text-xs text-stone-500">{formatMoneda(convertirMoneda(p, moneda, tasaUsd), moneda)}</span>}
                         <Plus size={13} weight="bold" className="text-stone-400" />
                       </div>
                     </button>
@@ -1404,6 +1400,10 @@ function PanelBusquedaModulos({
 }) {
   const categoriaId = useCarrito((s) => s.cotizacionInfo?.categoriaId)
   const categoriaNombre = useCarrito((s) => s.cotizacionInfo?.categoriaNombre)
+  const sedeData = useCarrito((s) => s.sedeData)
+  const tasaUsd = useCarrito((s) => s.tasaUsd)
+  // "Desde …" muestra precio_min CRUDO del catálogo: ÷ tasa en exportación.
+  const moneda = monedaDeSede(sedeData?.pais)
   const [busqueda, setBusqueda] = useState('')
   const [modulos, setModulos] = useState<Modulo[]>([])
   const [cargando, setCargando] = useState(false)
@@ -1531,7 +1531,7 @@ function PanelBusquedaModulos({
                     'text-xs tabular-nums mt-0.5',
                     moduloSeleccionado?.id === m.id ? 'text-stone-400' : 'text-stone-400',
                   ].join(' ')}>
-                    Desde {formatCOP(m.precio_min)}
+                    Desde {formatMoneda(convertirMoneda(m.precio_min, moneda, tasaUsd), moneda)}
                   </p>
                 ) : null}
               </div>
@@ -1560,6 +1560,11 @@ function PanelHerrajes() {
   const agregarHerraje = useCarrito((s) => s.agregarHerraje)
   const cerrarBuscador = useCarrito((s) => s.cerrarBuscador)
   const modalidad = useCarrito((s) => s.cotizacionInfo?.modalidad ?? 'desarmado')
+  const sedeData = useCarrito((s) => s.sedeData)
+  const tasaUsd = useCarrito((s) => s.tasaUsd)
+  // Precios de herraje del catálogo (precio_tradicional/desarmado_cop): CRUDOS,
+  // ÷ tasa en exportación.
+  const moneda = monedaDeSede(sedeData?.pais)
 
   const [busqueda, setBusqueda] = useState('')
   const [accesorios, setAccesorios] = useState<Accesorio[]>([])
@@ -1690,7 +1695,7 @@ function PanelHerrajes() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-stone-800">{a.nombre}</p>
                     <p className="mt-0.5 text-xs text-stone-400">
-                      {p ? formatCOP(p) : 'Sin precio'} · cód. {a.codigo}
+                      {p ? formatMoneda(convertirMoneda(p, moneda, tasaUsd), moneda) : 'Sin precio'} · cód. {a.codigo}
                     </p>
                   </div>
                   {p && (
@@ -1757,7 +1762,7 @@ function PanelHerrajes() {
                       <p className="text-xs font-medium text-stone-800 truncate">{h.accesorio.nombre}</p>
                       {p && (
                         <p className="text-xs text-stone-400 tabular-nums">
-                          {formatCOP(p * h.cantidad)}
+                          {formatMoneda(convertirMoneda(p * h.cantidad, moneda, tasaUsd), moneda)}
                         </p>
                       )}
                     </div>
