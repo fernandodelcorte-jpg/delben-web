@@ -853,6 +853,23 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-29 — Imágenes de herrajes en el buscador (3 listas), fallback a iniciales
+
+Las tres listas de herrajes del cotizador no pintaban la miniatura, aunque el objeto `Accesorio`
+trae `imagen_url` intacto desde la caché (`delben_accesorios_v1` guarda el objeto completo, sin el
+recorte que sí aplica a módulos). Era un problema de **render**, no de caché. Se reusa el componente
+`ModuloImagen` (que ya hace `<img>` con fallback a iniciales del nombre) en las tres listas:
+buscador del carrito (`PanelHerrajes`, antes mostraba los 3 dígitos del código → ahora imagen
+`size="md"`), herrajes en la ficha de módulo (`size="sm"`) y panel de ítems especiales (`size="sm"`).
+El fallback ahora son **iniciales del nombre**, no el código.
+
+- **Archivos:** `apps/portal/src/components/cotizador/buscador-modulos.tsx` (3 listas).
+- **No tocados:** caché (`lib/firestore/modulos.ts`), motor `packages/core`, reglas de negocio.
+- `tsc` limpio en `apps/portal`, sin `any`. Cambio solo de presentación.
+- **PENDIENTE ABIERTO (datos, no render):** varios herrajes en Firestore (`/accesorios`) no
+  tienen `imagen_url` poblado — ahora se nota porque se pinta la imagen real (caen al fallback de
+  iniciales). Es un problema de datos/matching de imágenes, separado de este cambio de render.
+
 ### 2026-06-18 — "Actualizar precios" en VALORACIONES (paridad con cotizaciones)
 
 Las **valoraciones** (documento interno de Delben, **SOLO COSTO DELBEN**; actor `delben_facturacion`)

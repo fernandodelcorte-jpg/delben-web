@@ -531,9 +531,12 @@ function PanelEspecial({
             <div className="mb-2 rounded-lg border border-stone-200 bg-white shadow-sm divide-y divide-stone-100 max-h-40 overflow-y-auto">
               {resultadosHerraje.map((a) => (
                 <button key={a.id} type="button" onClick={() => agregarHerrajeLocal(a)}
-                  className="tactil w-full flex items-center justify-between px-3 py-2 text-left hover:bg-stone-50 transition-colors"
+                  className="tactil w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-stone-50 transition-colors"
                 >
-                  <p className="text-xs font-medium text-stone-800 truncate">{a.nombre}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ModuloImagen url={a.imagen_url} nombre={a.nombre} size="sm" />
+                    <p className="text-xs font-medium text-stone-800 truncate">{a.nombre}</p>
+                  </div>
                   <Plus size={12} weight="bold" className="text-stone-400 shrink-0 ml-2" />
                 </button>
               ))}
@@ -1221,9 +1224,12 @@ function PanelConfigModulo({
                       onClick={() => agregarHerrajeLocal(a)}
                       className="tactil w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-stone-50 transition-colors"
                     >
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-stone-800 truncate">{a.nombre}</p>
-                        <p className="text-xs text-stone-400">cód. {a.codigo}</p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <ModuloImagen url={a.imagen_url} nombre={a.nombre} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-stone-800 truncate">{a.nombre}</p>
+                          <p className="text-xs text-stone-400">cód. {a.codigo}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
                         {p && <span className="text-xs text-stone-500">{formatCOP(p)}</span>}
@@ -1647,9 +1653,7 @@ function PanelHerrajes() {
               const yaEnStaging = staged.some((h) => h.accesorio.id === a.id)
               return (
                 <div key={a.id} className="flex items-center gap-4 py-3.5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-xs font-semibold text-stone-500">
-                    {String(a.codigo).slice(0, 3)}
-                  </div>
+                  <ModuloImagen url={a.imagen_url} nombre={a.nombre} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-stone-800">{a.nombre}</p>
                     <p className="mt-0.5 text-xs text-stone-400">
