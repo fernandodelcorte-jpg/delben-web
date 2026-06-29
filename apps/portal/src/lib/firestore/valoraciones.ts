@@ -94,6 +94,9 @@ function serializarEspeciales(items: ItemEspecial[]): ValoracionEspecialSnapshot
     profundidad: item.profundidad,
     cantidad: item.cantidad,
     precioDelbenUnitario: item.precioDelbenUnitario,
+    precioListaBase: item.precioListaBase,
+    monedaBase: item.monedaBase,
+    tasaUsdAplicada: item.tasaUsdAplicada,
     observaciones: item.observaciones,
     herrajes: item.herrajes.map((h) => ({
       accesorioId: h.accesorioId,

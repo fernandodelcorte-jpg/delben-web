@@ -378,6 +378,12 @@ export interface ItemEspecialSnapshot {
   cantidad: number
   precioDelbenUnitario: number
   precioClienteUnitario: number
+  // Precio de lista base ingresado (fuente de verdad), moneda de entrada y tasa
+  // USD congelada. Opcionales: especiales viejos no los tienen. En exportación
+  // monedaBase='USD' y el COP que recibió el motor = precioListaBase × tasaUsdAplicada.
+  precioListaBase?: number
+  monedaBase?: 'COP' | 'USD'
+  tasaUsdAplicada?: number
   observaciones: string
   herrajes: HerrajeEspecialSnapshot[]
   moduloReferenciaId?: string
@@ -452,6 +458,11 @@ export interface ValoracionEspecialSnapshot {
   profundidad: number
   cantidad: number
   precioDelbenUnitario: number
+  // Precio de lista base ingresado (fuente de verdad), moneda de entrada y tasa
+  // USD congelada. Opcionales: especiales viejos no los tienen.
+  precioListaBase?: number
+  monedaBase?: 'COP' | 'USD'
+  tasaUsdAplicada?: number
   observaciones: string
   herrajes: HerrajeEspecialSnapshot[]
   moduloReferenciaId?: string

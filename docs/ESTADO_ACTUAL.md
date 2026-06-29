@@ -692,10 +692,12 @@ cotizacion-pdf-button,orden-compra-pdf-button}.tsx`,
 `admin/cotizaciones/[distribuidorId]/[id]/page.tsx`.
 
 ### Limitaciones conocidas
-- "Actualizar precios" recalcula los módulos pero NO los especiales (guardan su
-  costo/precio unitario, no el precio de lista base). Si cambian servicios o
-  descuentos, los especiales conservan su valor; habría que recrearlos o, a
-  futuro, guardar también el precio de lista base.
+- "Actualizar precios" recalcula los módulos pero NO los especiales. **Parcialmente
+  desbloqueado (2026-06-29):** los especiales nuevos ya guardan `precioListaBase`,
+  `monedaBase` y `tasaUsdAplicada`, así que el dato para recalcular existe; falta
+  ACTIVAR el recálculo en `recalcular.ts` (fuera del alcance de esa rebanada). Los
+  especiales viejos no traen esos campos (caen a `0`), por lo que seguirían sin
+  poder recalcularse; habría que recrearlos.
 - La reconstrucción del desglose de especiales viejos usa los parámetros
   ACTUALES del distribuidor; si cambiaron desde el guardado, el reparto entre
   capas puede variar (el costo Delben y el total se mantienen exactos).
@@ -852,6 +854,60 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-06-29 — Fix magnitud: precarga del especial-desde-referencia en USD (exportación)
+
+**Bug:** al crear un especial a partir de un módulo de catálogo en sede de exportación, el campo
+"Precio de lista Delben (USD)" se precargaba con el `precio_cop` CRUDO (pesos, ej. 254.500). Como el
+flujo nuevo multiplica por la tasa antes del motor y el motor vuelve a dividir, el round-trip se cancela
+y "Costo Delben" salía en magnitud-pesos (229.050 = 254.500×0,9) en vez de ~57 USD.
+
+**Fix (SOLO magnitud, rebanada acotada):** las dos precargas del campo ahora convierten el precio de
+referencia a la moneda de la sede con `convertirMoneda` (helper canónico del catálogo): en exportación
+`precio_cop ÷ tasa` a 2 decimales (254.500 ÷ 4000 → `63.63`), en Colombia `precio_cop` entero tal cual.
+Mismo criterio de exportación que el resto del panel (`esExportacion` / `sedeData.pais !== 'colombia'`).
+
+Cadena confirmada (sin doble multiplicación/división): precarga `63.63` USD → panel ×4000 = 254.520 →
+motor ÷4000 = 63.63 → desc 10% → ~57,27. El `precioListaBase` guardado en el snapshot es el **USD**
+precargado/editado (~63.63), no el COP — coherente con "USD como fuente de verdad".
+
+**Fuera de alcance (queda para Rebanada 2):** el display sigue usando `formatCOP` (símbolo "$" peso, sin
+decimales) en el panel y en toda la pantalla del cotizador; los precios de catálogo crudos del buscador
+siguen en magnitud-COP. Es un trabajo transversal de "moneda de sede en la UI", aún pendiente.
+
+- **Archivos:** `components/cotizador/buscador-modulos.tsx` (import `convertirMoneda` + 2 precargas),
+  `docs/ESTADO_ACTUAL.md`.
+- **No tocados:** `packages/core` (motor, git status vacío, 7/7 incl. 1.562.495), display/formato.
+- `tsc` limpio en `apps/portal`, sin `any`.
+
+### 2026-06-29 — Muebles especiales: entrada del precio de lista base en USD (sedes de exportación)
+
+En sedes de exportación (no Colombia) el comercial ahora **ingresa y ve el precio de lista base
+del especial en USD**; en Colombia sigue en COP. El **motor NO se tocó** (7/7, caso 1.562.495 intacto):
+sigue recibiendo `precio_base_cop` en COP. En exportación la conversión USD→COP (× tasa) ocurre
+**antes** de `calcularItem()`; el motor luego divide por la misma tasa como siempre → el número final
+es idéntico al de antes, pero el **USD ingresado pasa a ser la fuente de verdad**.
+
+Se congelan en el snapshot, **por ítem**: `precioListaBase` (lo tecleado), `monedaBase` (`'COP'|'USD'`)
+y `tasaUsdAplicada` (la `tasaUsd` del store, la misma que ya alimenta el cotizador). Campos
+**opcionales** en el snapshot: los especiales VIEJOS no los traen y se muestran sin romperse con su
+costo/precio ya congelado (al reconstruirlos caen a `0/'COP'/0`).
+
+Bloqueo anti-carrera: en exportación el botón "Agregar especial" queda **deshabilitado hasta que la
+tasa real cargó**, vía un flag explícito `tasaUsdCargada` en el store (lo pone `setTasaUsd`, que llaman
+las páginas de borrador al resolver `getTasaUsdActual()`). NO se infiere por `tasaUsd === 4000`.
+
+**Recálculo de especiales:** esta rebanada **deja guardados** los datos que faltaban para recalcular
+(precio base + moneda + tasa), pero **NO reactiva** el recálculo en `recalcular.ts` (sigue saltándolos).
+La limitación documentada queda **parcialmente desbloqueada** (datos disponibles), pendiente de activar
+en una rebanada futura.
+
+- **Archivos:** `store/carrito.ts` (tipo `ItemEspecial` + flag `tasaUsdCargada` + `buildEspecialDesdeSnapshot`),
+  `components/cotizador/buscador-modulos.tsx` (panel especial: etiqueta dinámica, conversión, bloqueo, 3 campos),
+  `lib/firebase/tipos-firestore.ts` (`ItemEspecialSnapshot` + `ValoracionEspecialSnapshot`),
+  `lib/firestore/{cotizaciones,valoraciones}.ts` (`serializarEspeciales`), `docs/ESTADO_ACTUAL.md`.
+- **No tocados:** `packages/core` (motor, git status vacío), `recalcular.ts`.
+- `tsc` limpio en `apps/portal`, sin `any`. Motor 7/7.
 
 ### 2026-06-29 — Imágenes de herrajes en el buscador (3 listas), fallback a iniciales
 

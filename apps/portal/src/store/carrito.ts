@@ -84,6 +84,14 @@ export type ItemEspecial = {
   cantidad: number
   precioDelbenUnitario: number
   precioClienteUnitario: number
+  // Precio de lista base TAL CUAL lo tecleó el comercial (fuente de verdad), la
+  // moneda en que lo ingresó y la tasa USD congelada con que se derivó el COP que
+  // recibe el motor. En Colombia monedaBase='COP' y tasaUsdAplicada no se usa para
+  // convertir (el COP es directo). En exportación monedaBase='USD' y el COP =
+  // precioListaBase × tasaUsdAplicada. Permiten reabrir/recalcular el especial.
+  precioListaBase: number
+  monedaBase: 'COP' | 'USD'
+  tasaUsdAplicada: number
   observaciones: string
   herrajes: HerrajeEspecial[]
   moduloReferenciaId?: string
@@ -135,6 +143,10 @@ type CarritoState = {
   itemEditando: ItemCarrito | null
   campanasDisponibles: CampanaMotor[]
   tasaUsd: number
+  // true solo cuando la tasa REAL llegó de Firestore (setTasaUsd). Sirve para
+  // bloquear "Agregar especial" en exportación y no congelar el default 4000 por
+  // una carrera de carga. NO inferir por tasaUsd === 4000 (4000 puede ser la real).
+  tasaUsdCargada: boolean
 
   setCampanas: (campanas: CampanaMotor[]) => void
   setTasaUsd: (tasa: number) => void
@@ -302,6 +314,11 @@ export function buildEspecialDesdeSnapshot(
     cantidad: snap.cantidad,
     precioDelbenUnitario: snap.precioDelbenUnitario,
     precioClienteUnitario,
+    // Especiales viejos no traen estos campos: caen a valores neutros (no se
+    // recalculan en esta rebanada; solo se muestra su costo/precio congelado).
+    precioListaBase: snap.precioListaBase ?? 0,
+    monedaBase: snap.monedaBase ?? 'COP',
+    tasaUsdAplicada: snap.tasaUsdAplicada ?? 0,
     observaciones: snap.observaciones,
     herrajes: snap.herrajes.map((h) => ({ ...h })),
     moduloReferenciaId: snap.moduloReferenciaId,
@@ -407,9 +424,12 @@ export const useCarrito = create<CarritoState>()(
   itemEditando: null,
   campanasDisponibles: [],
   tasaUsd: 4000,
+  tasaUsdCargada: false,
 
   setCampanas: (campanas) => set({ campanasDisponibles: campanas }),
-  setTasaUsd: (tasa) => set({ tasaUsd: tasa }),
+  // Marca la tasa como cargada: la llaman las páginas de borrador cuando
+  // getTasaUsdActual() resuelve con la tasa vigente de Firestore.
+  setTasaUsd: (tasa) => set({ tasaUsd: tasa, tasaUsdCargada: true }),
 
   iniciarCotizacion: (info, distribuidor, sede) =>
     set({

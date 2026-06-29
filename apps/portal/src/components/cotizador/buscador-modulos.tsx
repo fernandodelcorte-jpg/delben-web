@@ -27,6 +27,7 @@ import {
   getCategorias,
 } from '@/lib/firestore/catalogo'
 import { formatCOP } from '@/lib/datos-demo'
+import { convertirMoneda } from '@/lib/catalogo-precios'
 import type {
   Modulo,
   Accesorio,
@@ -125,6 +126,13 @@ function PanelEspecial({
   const cotizacionInfo = useCarrito((s) => s.cotizacionInfo)
   const campanasDisponibles = useCarrito((s) => s.campanasDisponibles)
   const tasaUsd = useCarrito((s) => s.tasaUsd)
+  const tasaUsdCargada = useCarrito((s) => s.tasaUsdCargada)
+
+  // Exportación = sede fuera de Colombia. En exportación el comercial ingresa y ve
+  // el precio de lista base en USD (misma derivación país→moneda que el motor).
+  // Sin sede aún → se trata como Colombia (COP) para no mostrar USD por defecto.
+  const esExportacion = !!sedeData && sedeData.pais.trim().toLowerCase() !== 'colombia'
+  const monedaBase: 'COP' | 'USD' = esExportacion ? 'USD' : 'COP'
 
   // Catálogo
   const [tiposEstructura, setTiposEstructura] = useState<TipoEstructura[]>([])
@@ -141,8 +149,13 @@ function PanelEspecial({
   const [profStr, setProfStr] = useState(referencia?.profundidad ? String(referencia.profundidad) : '')
   const [cantidadStr, setCantidadStr] = useState('1')
   const cantidad = Math.max(0.1, parseFloat(cantidadStr) || 0.1)
+  // El precio de referencia del catálogo viene en COP. En exportación se siembra
+  // su equivalente en USD (precio_cop ÷ tasa, 2 decimales); en Colombia, COP tal
+  // cual. Se reusa convertirMoneda (mismo redondeo que el catálogo).
   const [precioDelbenStr, setPrecioDelbenStr] = useState(
-    referencia?.precioBaseRef ? String(Math.round(referencia.precioBaseRef)) : '',
+    referencia?.precioBaseRef
+      ? String(convertirMoneda(referencia.precioBaseRef, monedaBase, tasaUsd))
+      : '',
   )
   const [observaciones, setObservaciones] = useState('')
 
@@ -218,8 +231,9 @@ function PanelEspecial({
     const precio = preciosRef.find(
       (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
     )
-    if (precio) setPrecioDelbenStr(String(Math.round(precio.precio_cop)))
-  }, [preciosRef, tipoEstructuraId, tipoFachadaId]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Mismo criterio que la precarga inicial: USD (÷ tasa) en exportación, COP en Colombia.
+    if (precio) setPrecioDelbenStr(String(convertirMoneda(precio.precio_cop, monedaBase, tasaUsd)))
+  }, [preciosRef, tipoEstructuraId, tipoFachadaId, monedaBase, tasaUsd]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Búsqueda herrajes
   useEffect(() => {
@@ -261,13 +275,18 @@ function PanelEspecial({
       return { costoDelben: 0, precioClienteCalculado: 0, resultadoMotor: null }
     }
     const u = getUniversoParaModalidad(sedeData.universo, cotizacionInfo.modalidad)
+    // El motor SIEMPRE recibe COP. En exportación el comercial teclea USD: se
+    // convierte a COP (× tasa) ANTES de calcularItem; el motor luego vuelve a
+    // dividir por la misma tasa → el número final no cambia, pero el USD ingresado
+    // es la fuente de verdad. En Colombia el valor tecleado ya es COP.
+    const precioBaseCop = esExportacion ? precioBase * tasaUsd : precioBase
     const subcat = subcategorias.find((sx) => sx.id === subcategoriaId)
     // Categoría para el descuento (desarmado) y la segmentación de campañas:
     // la del módulo de referencia si lo hay; si no, la de la cotización.
     const catId = referencia?.categoriaId || cotizacionInfo.categoriaId || ''
     const cat = categorias.find((c) => c.id === catId)
     const resultado = calcularItem({
-      precio_base_cop: precioBase,
+      precio_base_cop: precioBaseCop,
       cantidad: 1,
       tipo_item: 'mueble',
       modelo: cotizacionInfo.modalidad,
@@ -309,7 +328,7 @@ function PanelEspecial({
       precioClienteCalculado: resultado.precio_final_unitario,
       resultadoMotor: resultado,
     }
-  }, [precioBase, distribuidorData, sedeData, cotizacionInfo, subcategoriaId, subcategorias, categorias, referencia, campanasDisponibles, tasaUsd])
+  }, [precioBase, distribuidorData, sedeData, cotizacionInfo, subcategoriaId, subcategorias, categorias, referencia, campanasDisponibles, tasaUsd, esExportacion])
 
   function agregarHerrajeLocal(a: Accesorio) {
     setHerrajes((prev) => {
@@ -332,7 +351,12 @@ function PanelEspecial({
     return Object.keys(e).length === 0
   }
 
+  // En exportación no se permite agregar hasta que la tasa REAL haya cargado
+  // (evita congelar el default 4000 por una carrera de carga). En Colombia no aplica.
+  const bloqueadoPorTasa = esExportacion && !tasaUsdCargada
+
   function handleAgregar() {
+    if (bloqueadoPorTasa) return
     if (!validar()) return
     const item: Omit<ItemEspecial, 'id'> = {
       nombre: nombre.trim(),
@@ -347,6 +371,10 @@ function PanelEspecial({
       cantidad,
       precioDelbenUnitario: costoDelben,
       precioClienteUnitario: precioClienteCalculado,
+      // Fuente de verdad del precio base: lo tecleado + su moneda + la tasa congelada.
+      precioListaBase: precioBase,
+      monedaBase,
+      tasaUsdAplicada: tasaUsd,
       observaciones: observaciones.trim(),
       herrajes,
       moduloReferenciaId: referencia?.moduloId,
@@ -494,7 +522,7 @@ function PanelEspecial({
         )}
 
         {/* Precio de lista base (pasa por el motor, igual que un módulo del catálogo) */}
-        <Campo label="Precio de lista Delben (COP)" nota="precio base de catálogo">
+        <Campo label={`Precio de lista Delben (${monedaBase})`} nota="precio base de catálogo">
           <input type="number" value={precioDelbenStr}
             onChange={(e) => setPrecioDelbenStr(e.target.value)}
             placeholder="0" min={0} className={inputCls} />
@@ -620,12 +648,17 @@ function PanelEspecial({
 
       {/* Footer */}
       <div className="shrink-0 border-t border-stone-100 px-6 py-4 bg-white">
-        <button type="button" onClick={handleAgregar}
-          className="tactil w-full rounded-lg bg-caoba-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-caoba-700 flex items-center justify-center gap-2"
+        <button type="button" onClick={handleAgregar} disabled={bloqueadoPorTasa}
+          className="tactil w-full rounded-lg bg-caoba-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-caoba-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           <Sparkle size={14} weight="fill" />
           Agregar especial al carrito
         </button>
+        {bloqueadoPorTasa && (
+          <p className="mt-2 text-center text-xs text-stone-400">
+            Cargando la tasa USD vigente…
+          </p>
+        )}
       </div>
     </div>
   )
