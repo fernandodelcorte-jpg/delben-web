@@ -855,6 +855,34 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-06-30 — Fix "Error al guardar" en especiales con campos USD `undefined` (borradores pre-deploy)
+
+**Síntoma:** una cotización de exportación con un mueble especial fallaba al guardar con el genérico
+"Error al guardar. Intenta de nuevo." — solo esa, no todas.
+
+**Causa (confirmada):** el deploy del 2026-06-29 (commit `6e7d039`) agregó tres campos al especial
+(`precioListaBase`, `monedaBase`, `tasaUsdAplicada`). Un especial agregado a un borrador **antes** de ese
+deploy quedó en el carrito persistido en `localStorage` (Zustand `persist`, clave `delben-carrito`) **sin**
+esos campos. Al rehidratar hoy, ese camino NO pasa por `buildEspecialDesdeSnapshot` (que sí tiene fallback),
+así que los campos llegaban `undefined`; `serializarEspeciales` los pasaba directo y **Firestore rechaza
+`undefined`**. El reabrir de cotizaciones ya guardadas NO estaba afectado (ese sí pasa por el snapshot con
+fallback). Además el `catch` del guardado tragaba el error real (sin `console.error`).
+
+**Tres correcciones:**
+- **(1) Guard de fondo** en `serializarEspeciales` de `lib/firestore/cotizaciones.ts` y `lib/firestore/valoraciones.ts`:
+  `item.precioListaBase ?? 0`, `monedaBase ?? 'COP'`, `tasaUsdAplicada ?? 0` (mismo criterio que
+  `buildEspecialDesdeSnapshot`). Cierra el bug para siempre, venga el `undefined` de donde venga.
+- **(2) Migración del persist** (`store/carrito.ts`): `version: 1` + `migrate` que rellena esos tres campos
+  en `itemsEspeciales` viejos (v0) sin pisar los que ya existen (`??`). Sana el borrador atascado del
+  comercial **sin perder su trabajo**.
+- **(3) `console.error(e)`** en el `catch` del guardado (`cotizaciones/borrador/page.tsx` y
+  `admin/valoraciones/borrador/page.tsx`): el mensaje al usuario sigue siendo el genérico; el error real
+  ahora queda visible en consola para no volver a quedar ciegos.
+
+- **Archivos:** `lib/firestore/cotizaciones.ts`, `lib/firestore/valoraciones.ts`, `store/carrito.ts`,
+  `app/(portal)/cotizaciones/borrador/page.tsx`, `app/(portal)/admin/valoraciones/borrador/page.tsx`, `docs/ESTADO_ACTUAL.md`.
+- **No tocados:** `packages/core` (motor, 7/7 incluido 1.562.495). `tsc` limpio en `apps/portal`, sin `any`.
+
 ### 2026-06-29 — Rebanada 2: moneda de sede en TODA la UI del cotizador (cierre display USD)
 
 En sedes de exportación, la pantalla del cotizador ya **no muestra ningún monto en COP**: todo en

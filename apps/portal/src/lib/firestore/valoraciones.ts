@@ -94,9 +94,12 @@ function serializarEspeciales(items: ItemEspecial[]): ValoracionEspecialSnapshot
     profundidad: item.profundidad,
     cantidad: item.cantidad,
     precioDelbenUnitario: item.precioDelbenUnitario,
-    precioListaBase: item.precioListaBase,
-    monedaBase: item.monedaBase,
-    tasaUsdAplicada: item.tasaUsdAplicada,
+    // Fallback defensivo: un especial rehidratado de un borrador en localStorage
+    // anterior al deploy de estos campos llega sin ellos; Firestore rechaza `undefined`.
+    // Mismo criterio que buildEspecialDesdeSnapshot.
+    precioListaBase: item.precioListaBase ?? 0,
+    monedaBase: item.monedaBase ?? 'COP',
+    tasaUsdAplicada: item.tasaUsdAplicada ?? 0,
     observaciones: item.observaciones,
     herrajes: item.herrajes.map((h) => ({
       accesorioId: h.accesorioId,

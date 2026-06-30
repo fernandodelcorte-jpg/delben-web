@@ -94,7 +94,10 @@ export default function ValoracionBorradorPage() {
     try {
       const id = await guardarValoracion(distribuidorData.id, distribuidorData.nombre, usuario.uid)
       router.push(`/admin/valoraciones/${id}`)
-    } catch {
+    } catch (e) {
+      // Loguea el error REAL (p. ej. el de Firestore) para no quedar ciegos: el
+      // mensaje al usuario es genérico a propósito, pero la causa debe verse en consola.
+      console.error('Error al guardar valoración:', e)
       setErrorGuardar('Error al guardar. Intenta de nuevo.')
       setGuardando(false)
     }

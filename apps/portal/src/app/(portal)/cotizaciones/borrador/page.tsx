@@ -170,6 +170,9 @@ export default function BorradorPage() {
       const pid = cotizacionInfo?.proyectoId
       router.push(`/cotizaciones/${id}${pid ? `?pid=${pid}` : ''}`)
     } catch (e) {
+      // Loguea el error REAL (p. ej. el de Firestore) para no quedar ciegos: el
+      // mensaje al usuario es genérico a propósito, pero la causa debe verse en consola.
+      console.error('Error al guardar cotización:', e)
       // Sigla faltante: mensaje específico (el comercial no puede arreglarlo solo).
       setErrorGuardar(
         e instanceof SiglaFaltanteError ? e.message : 'Error al guardar. Intenta de nuevo.',

@@ -1199,6 +1199,27 @@ export const useCarrito = create<CarritoState>()(
   {
     name: 'delben-carrito',
     storage: crearAlmacenThrottled(RETRASO_PERSIST_MS),
+    // v1: especiales persistidos antes de los campos USD (precioListaBase/monedaBase/
+    // tasaUsdAplicada) no los traen; al guardar, Firestore rechaza `undefined`. La
+    // migración los rellena con valores neutros (mismo criterio que
+    // buildEspecialDesdeSnapshot) SIN pisar los que ya existen → el borrador atascado
+    // se sana sin perder trabajo.
+    version: 1,
+    migrate: (persisted, version) => {
+      const state = persisted as CarritoState
+      if (version < 1 && Array.isArray(state.itemsEspeciales)) {
+        state.itemsEspeciales = state.itemsEspeciales.map((e) => {
+          const esp = e as Partial<ItemEspecial>
+          return {
+            ...(e as ItemEspecial),
+            precioListaBase: esp.precioListaBase ?? 0,
+            monedaBase: esp.monedaBase ?? 'COP',
+            tasaUsdAplicada: esp.tasaUsdAplicada ?? 0,
+          }
+        })
+      }
+      return state
+    },
     // campanasDisponibles: no se persiste, se refresca en cada sesión
     partialize: (state) => ({
       cotizacionInfo: state.cotizacionInfo,
