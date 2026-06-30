@@ -69,6 +69,21 @@ const schemaEspacio = z.object({
 type FormProyecto = z.infer<typeof schemaProyectoNuevo>
 type FormEspacio = z.infer<typeof schemaEspacio>
 
+// Modalidades realmente habilitadas para la sede, según sus banderas de acceso.
+// Mismo criterio que sedeHabilitada (tipos-firestore.ts:226-232) y la lista de /catalogo:
+// el comercial solo ve/cotiza lo que la sede tiene habilitado.
+function modalidadesDeSede(sede: Sede): ('desarmado' | 'tradicional')[] {
+  const ms: ('desarmado' | 'tradicional')[] = []
+  if (sede.acceso_desarmado) ms.push('desarmado')
+  if (sede.acceso_tradicional) ms.push('tradicional')
+  return ms
+}
+
+const DESC_MODALIDAD: Record<'desarmado' | 'tradicional', string> = {
+  desarmado: 'Despiezado, descuento fijo por categoría',
+  tradicional: 'Armado, descuento pactado por distribuidor',
+}
+
 // ─── Página ───────────────────────────────────────────────────────────────────
 
 export default function NuevaCotizacionPage() {
@@ -121,6 +136,8 @@ function NuevaCotizacionContent() {
   }, [distribuidorId, usuario, rol, cargandoAuth])
 
   const sedeSel = sedesDisponibles.find((s) => s.id === sedeSelId) ?? null
+  // Modalidades que esta sede tiene habilitadas (vacío hasta elegir sede).
+  const modalidadesSede = sedeSel ? modalidadesDeSede(sedeSel) : []
 
   // Si llega ?proyecto=ID (y opcionalmente ?espacio=nombre), saltar al paso 2
   const proyectoParamId = searchParams.get('proyecto') ?? ''
@@ -182,8 +199,30 @@ function NuevaCotizacionContent() {
   const modalidad = formEspacio.watch('modalidad')
   const categoriaIdSeleccionada = formEspacio.watch('categoriaId')
 
+  // Al elegir/cambiar la sede, fija la modalidad a una habilitada. Si la actual no
+  // está permitida (p. ej. el default 'desarmado' en una sede solo-tradicional),
+  // salta a la primera disponible; con una sola habilitada, queda fija en esa.
+  useEffect(() => {
+    if (!sedeSel) return
+    const ms = modalidadesDeSede(sedeSel)
+    if (ms.length === 0) return
+    if (!ms.includes(formEspacio.getValues('modalidad'))) {
+      formEspacio.setValue('modalidad', ms[0]!)
+    }
+  }, [sedeSelId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function onSubmitEspacio(data: FormEspacio) {
     if (!distribuidorId || !usuario || !sedeSel) return
+    // Defensa de fondo: nunca dejar pasar una modalidad que la sede no tiene
+    // habilitada (el descuento depende de la modalidad — regla de negocio). La UI
+    // ya filtra; esto cubre cualquier estado inconsistente.
+    if (!modalidadesDeSede(sedeSel).includes(data.modalidad)) {
+      formEspacio.setError('modalidad', {
+        type: 'manual',
+        message: 'Esta modalidad no está habilitada para la sede seleccionada.',
+      })
+      return
+    }
     setGuardando(true)
     try {
       let proyectoId: string
@@ -540,37 +579,55 @@ function NuevaCotizacionContent() {
                 )}
               </div>
 
-              {/* Modalidad */}
+              {/* Modalidad — solo las habilitadas para la sede. Con una sola queda
+                  fija (sin selector), según el diseño; con ninguna no se cotiza. */}
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-2">
                   Modalidad
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['desarmado', 'tradicional'] as const).map((m) => (
-                    <label
-                      key={m}
-                      className={[
-                        'relative flex cursor-pointer flex-col rounded-lg border p-4 transition-all',
-                        modalidad === m
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300',
-                      ].join(' ')}
-                    >
-                      <input
-                        type="radio"
-                        value={m}
-                        {...formEspacio.register('modalidad')}
-                        className="sr-only"
-                      />
-                      <span className="text-sm font-semibold capitalize">{m}</span>
-                      <span className={['mt-1 text-xs', modalidad === m ? 'text-stone-300' : 'text-stone-400'].join(' ')}>
-                        {m === 'desarmado'
-                          ? 'Despiezado, descuento fijo por categoría'
-                          : 'Armado, descuento pactado por distribuidor'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                {modalidadesSede.length === 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Esta sede no tiene ninguna modalidad habilitada. Pídele a Delben que
+                    configure el acceso de la sede antes de cotizar.
+                  </div>
+                ) : modalidadesSede.length === 1 ? (
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                    <span className="text-sm font-semibold capitalize text-stone-900">
+                      {modalidadesSede[0]}
+                    </span>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {DESC_MODALIDAD[modalidadesSede[0]!]} · única habilitada para esta sede
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {modalidadesSede.map((m) => (
+                      <label
+                        key={m}
+                        className={[
+                          'relative flex cursor-pointer flex-col rounded-lg border p-4 transition-all',
+                          modalidad === m
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300',
+                        ].join(' ')}
+                      >
+                        <input
+                          type="radio"
+                          value={m}
+                          {...formEspacio.register('modalidad')}
+                          className="sr-only"
+                        />
+                        <span className="text-sm font-semibold capitalize">{m}</span>
+                        <span className={['mt-1 text-xs', modalidad === m ? 'text-stone-300' : 'text-stone-400'].join(' ')}>
+                          {DESC_MODALIDAD[m]}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {formEspacio.formState.errors.modalidad && (
+                  <p className="mt-1.5 text-xs text-red-600">{formEspacio.formState.errors.modalidad.message}</p>
+                )}
               </div>
 
               <div className="pt-2">

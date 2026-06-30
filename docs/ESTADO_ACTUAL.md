@@ -847,6 +847,19 @@ con la misma causa raíz (snapshot monolítico legible entero; `filtrarPorRol` s
 sistémica común (Opción C): separar costo/venta en otro doc/colección o servir por endpoint que
 filtre por rol. Ver §1 y bitácora 2026-06-04.
 
+### 11. Pendientes abiertos (sesión 2026-06-30)
+- **Cotización anómala `SCA-SCA-2026-0005` (SCALATTO STUDIO)** — corrección **manual** pendiente: está en
+  `desarmado` en una sede solo-tradicional (creada con el bug del selector, ya arreglado). En **borrador**,
+  no enviada. Acción tras desplegar el fix: **recrearla en `tradicional`** y **anular la vieja**. Única
+  anómala de 153 (ver bitácora 2026-06-30 y la auditoría `scripts-sueltos/auditar-modalidad-sede.mjs`).
+- **Rebanada 2b — `resumen-proyecto-pdf.tsx` multi-moneda:** sigue en `formatCOP` (`:167/:176`). Es el PDF
+  de resumen desde la lista `/cotizaciones`, cuyo tipo no carga la moneda y podría mezclar versiones de
+  sedes con monedas distintas. Requiere decisión aparte; los PDFs de cotización y orden de compra ya están
+  correctos (`formatMoneda(n, info.moneda)`). Ver bitácora 2026-06-29.
+- **Herrajes sin `imagen_url` en Firestore:** la UI ya pinta la imagen del herraje cuando existe, pero
+  varios accesorios no tienen `imagen_url` poblado y caen al fallback de iniciales. Pendiente: completar
+  las imágenes faltantes (datos, no código). Ver bitácora 2026-06-29.
+
 ---
 
 ## Bitácora cronológica
@@ -854,6 +867,38 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-06-30 — Fix selector de modalidad: respeta las banderas `acceso_*` de la sede + auditoría
+
+**Bug:** el selector de modalidad en `cotizaciones/nueva/page.tsx` tenía **hardcodeado**
+`['desarmado', 'tradicional']` y con default fijo `'desarmado'`, **sin leer** `acceso_tradicional` /
+`acceso_desarmado` de la sede. Violaba la regla del diseño ("el comercial solo ve/cotiza las modalidades
+habilitadas; si solo tiene una, el selector no aparece y queda fija"). Riesgo real: cotizar en una
+modalidad no habilitada aplica una **lógica de descuento que no corresponde** a ese cliente.
+
+**Fix (solo `cotizaciones/nueva/page.tsx`, motor intacto):**
+- **Lista derivada de la sede:** nuevo helper `modalidadesDeSede(sede)` (mismo criterio que `sedeHabilitada`
+  en `tipos-firestore.ts:226-232` y la lista de `/catalogo`). El selector mapea sobre eso, no sobre el literal.
+- **Default según sede:** `useEffect` keyed en `sedeSelId` — si la modalidad actual no está habilitada
+  (p. ej. el viejo default `desarmado` en una sede solo-tradicional), salta a la primera disponible.
+- **Una sola modalidad → fija y sin selector:** con `length === 1` se muestra una tarjeta de solo lectura
+  (mismo patrón que el selector de sede que autoselecciona si hay una).
+- **Validación de respaldo** en `onSubmitEspacio`: si `data.modalidad` no está habilitada, bloquea con
+  `setError('modalidad', …)`. Defensa de fondo aunque la UI ya filtre.
+- **Caso sin ninguna habilitada:** mensaje ámbar "configura el acceso antes de cotizar" (en la práctica
+  inalcanzable: `sedeHabilitada` ya filtra esas sedes de la lista, pero queda cubierto).
+
+**Alcance del bug (diagnóstico):** estaba **solo** en el selector inicial. La modalidad se fija al crear y
+es inmutable después (borrador, ficha, detalle solo la **leen**). Arreglar el selector cierra la entrada.
+
+**Auditoría (solo lectura, Admin SDK — `~/Desarrollo/scripts-sueltos/auditar-modalidad-sede.mjs`):**
+cruzó `modalidad` vs banderas de la sede en todo Firestore. Resultado: **153 cotizaciones, 1 anómala**,
+0 finalizadas, 0 valoraciones anómalas. La anómala: **`SCA-SCA-2026-0005`** (SCALATTO STUDIO), `desarmado`
+en una sede **solo-tradicional**, en estado **borrador** (no enviada → no llegó al cliente). Pendiente
+manual post-deploy (ver Deuda §11): recrearla en `tradicional` y anular la vieja. El script no modifica nada.
+
+- **Archivos:** `app/(portal)/cotizaciones/nueva/page.tsx`, `docs/ESTADO_ACTUAL.md`. Auditoría fuera del
+  monorepo (`scripts-sueltos/`). **No tocados:** `packages/core` (motor, 7/7). `tsc` limpio, sin `any`.
 
 ### 2026-06-30 — Fix "Error al guardar" en especiales con campos USD `undefined` (borradores pre-deploy)
 
