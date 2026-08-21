@@ -1698,3 +1698,34 @@ Motor intacto (no se tocó). Pendiente operativo: que ambas personas reentren co
 
 Nota: `linda.arq@gmail.com` y `lindakarq@gmail.com` son el mismo buzón físico (Gmail ignora puntos),
 pero para Firebase Auth son logins distintos — el cambio sí tiene efecto en el string de acceso.
+### 2026-08-21 — Editar valoración no seteaba el distribuidor (bug latente desde su origen)
+
+Facturación no podía guardar al editar una valoración: "Falta información del distribuidor."
+Reportado como "pasa desde la casa, en la oficina no" — la ubicación resultó irrelevante.
+
+- **Causa**: `handleEditar` (`admin/valoraciones/[id]/page.tsx`) resolvía la sede pero NO el
+  distribuidor, y `reabrirValoracion` (`store/carrito.ts`) ni lo recibía en su firma ni lo incluía
+  en su `set({...})`. Zustand con `set` parcial conserva el valor previo, así que `distribuidorData`
+  quedaba con el residuo de la sesión anterior — o `null` en estado limpio.
+- **Por qué no se había visto**: el `partialize` persiste `distribuidorData` en `localStorage`. En
+  máquinas de uso continuo siempre había un distribuidor de una sesión previa y el flujo funcionaba
+  *de prestado*. Una máquina nueva (sin localStorage) lo dejó al descubierto. El bug existía desde
+  que se escribió `handleEditar`; no fue una regresión.
+- **El riesgo real no era el error visible**: con estado previo de OTRA valoración, `handleGuardar`
+  escribía `guardarValoracion(distribuidorData.id, ...)` con el distribuidor equivocado, sin error
+  y sin señal alguna. El fallo ruidoso era el caso afortunado.
+- **Fix** (simétrico con `handleActualizarPrecios`, que ya lo hacía bien): `reabrirValoracion` recibe
+  `distribuidor: Distribuidor` como tercer parámetro **obligatorio** (TS impide llamarla sin él) y lo
+  setea en el `set`. `handleEditar` resuelve distribuidor + sede con `Promise.all`; si el distribuidor
+  no resuelve, **no navega** al borrador y muestra `errorEditar`. La sede conserva su tolerancia a `null`.
+- Motor intacto. `tsc` limpio sin `any`, `npm test` 7/7 (incl. 1.562.495). Verificado en local con
+  localStorage limpio (incógnito): editar y guardar funcionan. Commit `3020a86`, desplegado.
+
+> **Pendiente — auditoría de datos**: hay 58 valoraciones. Las editadas antes de este fix pudieron
+> guardarse con el `distribuidor_id` de otra valoración vista previamente. Revisar en
+> `/admin/valoraciones` comparando cliente/proyecto contra el distribuidor mostrado; priorizar las
+> que tengan `updatedAt ≠ createdAt`. No corregido: primero hay que confirmar si ocurrió.
+
+> **Deuda menor detectada**: el mensaje de `handleGuardar` dice "Falta información del distribuidor"
+> para la condición `if (!usuario || !distribuidorData)`. Cuando el null es `usuario`, el mensaje
+> apunta al lugar equivocado — costó dos rondas de diagnóstico. Separar los dos casos.
