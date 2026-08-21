@@ -7,6 +7,7 @@ import { CircleNotch, PencilSimple, CheckCircle, ArrowsClockwise } from '@phosph
 import { getValoracion, marcarComoFacturada, totalCostoDelbenDeValoracion } from '@/lib/firestore/valoraciones'
 import { recalcularValoracion } from '@/lib/firestore/recalcular-valoracion'
 import { getSede } from '@/lib/firestore/sedes'
+import { getDistribuidor } from '@/lib/firestore/distribuidores'
 import { BotonDuplicar } from '@/components/cotizador/boton-duplicar'
 import { formatCOP } from '@/lib/datos-demo'
 import { useCarrito } from '@/store/carrito'
@@ -40,6 +41,7 @@ export default function ValoracionDetallePage() {
   const [marcando, setMarcando] = useState(false)
   const [actualizando, setActualizando] = useState(false)
   const [errorActualizar, setErrorActualizar] = useState<string | null>(null)
+  const [errorEditar, setErrorEditar] = useState<string | null>(null)
 
   useEffect(() => {
     getValoracion(id)
@@ -60,9 +62,19 @@ export default function ValoracionDetallePage() {
 
   async function handleEditar() {
     if (!valoracion) return
-    // La sede viaja con la valoración para que el motor use sus condiciones al editar.
-    const sede = await getSede(valoracion.distribuidor_id, valoracion.sede_id).catch(() => null)
-    reabrirValoracion(valoracion, sede)
+    setErrorEditar(null)
+    // Distribuidor y sede viajan con la valoración para que el motor use sus
+    // condiciones al editar. Sin distribuidor el borrador guardaría con el
+    // distribuidor equivocado: se aborta antes de navegar.
+    const [distribuidor, sede] = await Promise.all([
+      getDistribuidor(valoracion.distribuidor_id).catch(() => null),
+      getSede(valoracion.distribuidor_id, valoracion.sede_id).catch(() => null),
+    ])
+    if (!distribuidor) {
+      setErrorEditar('No se pudo cargar el distribuidor de la valoración. Intenta de nuevo.')
+      return
+    }
+    reabrirValoracion(valoracion, sede, distribuidor)
     router.push('/admin/valoraciones/borrador')
   }
 
@@ -233,6 +245,10 @@ export default function ValoracionDetallePage() {
 
       {errorActualizar && (
         <p className="text-xs text-red-600">{errorActualizar}</p>
+      )}
+
+      {errorEditar && (
+        <p className="text-xs text-red-600">{errorEditar}</p>
       )}
 
       {/* Descargas — documento interno de Delben: SOLO costo Delben, sin venta ni IVA */}

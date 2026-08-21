@@ -178,7 +178,7 @@ type CarritoState = {
   guardar: (distribuidorId: string, userId: string) => Promise<string>
   guardarValoracion: (distribuidorId: string, distribuidorNombre: string, userId: string) => Promise<string>
   reabrirBorrador: (cotizacion: Cotizacion, sede: Sede | null) => void
-  reabrirValoracion: (valoracion: Valoracion, sede: Sede | null) => void
+  reabrirValoracion: (valoracion: Valoracion, sede: Sede | null, distribuidor: Distribuidor) => void
   cargarValoracionRecalculada: (payload: {
     valoracionId: string
     cotizacionInfo: CotizacionInfo
@@ -687,7 +687,7 @@ export const useCarrito = create<CarritoState>()(
     return id
   },
 
-  reabrirValoracion: (valoracion, sede) => {
+  reabrirValoracion: (valoracion, sede, distribuidor) => {
     const cotizacionInfo: CotizacionInfo = {
       clienteNombre: valoracion.clienteNombre,
       proyectoNombre: valoracion.proyectoNombre,
@@ -783,6 +783,7 @@ export const useCarrito = create<CarritoState>()(
 
     set({
       cotizacionInfo,
+      distribuidorData: distribuidor,
       sedeData: sede,
       cotizacionGuardadaId: null,
       valoracionGuardadaId: valoracion.id,
