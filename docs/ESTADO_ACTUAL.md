@@ -10,10 +10,11 @@
 > - **Bitácora cronológica** — registro inverso de cambios, fecha a fecha.
 >   Agregar una entrada aquí al cerrar cada trabajo importante.
 
-Última actualización: 2026-06-05 — ver **Estado de despliegue** abajo. Hoy: incidente del
-guardado (reglas del contador no desplegadas) → reglas publicadas a mano + Opción B (desacople
-del número, commit `94f66a1`, falta push). Sesión 2026-06-04: seguridad por rol, IVA por sede,
-PDFs, consecutivo, backfill de números viejos.
+Última actualización: 2026-09-22 — cotizador: los módulos con UNA sola dimensión real (PUERTAS
+DE PASO: alto sí, profundidad 0) ya se pueden agregar al carrito, tanto en el modal "Agregar
+producto" como en la ficha de edición; y una combinación estructura × fachada sin precio de
+lista deshabilita el botón y lo dice, en vez de fallar en silencio. Verificado en el navegador.
+Ver **Estado de despliegue** abajo para lo anterior (2026-06-05).
 
 ---
 
@@ -868,6 +869,92 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
 
+### 2026-09-22 — Cotizador: módulos de UNA sola dimensión real (PUERTAS DE PASO) + aviso de combinación sin precio
+
+**Bug:** las PUERTAS DE PASO no se podían agregar al carrito. En el Excel (filas 16303–16312)
+traen ALTURA (2400/2800) pero PROFUNDIDAD y TIPO ESTRUCTURA vacíos; el parser
+(`Number(r['PROFUNDIDAD'])` con `defval: ''`) las guarda con `profundidad: 0`. La ficha
+(`components/cotizador/ficha-modulo.tsx`) solo contemplaba dos casos —módulo plano (0/0,
+selectores ocultos) y módulo con alto y profundidad reales— gobernados por un único
+`tieneDimensiones = altura > 0 || profundidad > 0`. Con una sola dimensión real mostraba el
+selector de Prof. con un absurdo "0 mm" y, al cambiar de alto, `profundidadSeleccionada` quedaba
+en `null` sin opción que la repusiera: `listo` no se cumplía y "Agregar al carrito" quedaba muerto.
+
+**Confirmado con Admin SDK** (`scripts-sueltos/diagnostico-puertas-magenta.mjs`, solo lectura):
+los 8 docs de `categoria_id = 'puertas-de-paso'` tienen `altura` 2400/2800 y `profundidad: 0`
+(number), con un único precio `sin-estructura` + `melamina`.
+
+**Fix (`ficha-modulo.tsx` + `buscador-modulos.tsx`, sin tocar el parser ni el motor):**
+- Cada dimensión se evalúa por separado: `tieneAltura` / `tieneProfundidad`. Se muestra el
+  selector de cada una solo si es real; el grid pasa de 2 a 1 columna cuando solo hay una. La
+  selección interna sigue siendo la variante real (altura, `profundidad: 0`), igual que en los
+  planos, para que la búsqueda de precio por sentinel y `hayVarianteSeleccionada` funcionen.
+- Al cambiar el alto, si ese alto admite una sola profundidad se autoselecciona; si admite varias,
+  el `<select>` muestra un placeholder "Elige una profundidad…" en vez de aparentar un valor que
+  el estado no tiene (antes el select controlado mostraba la primera opción con el estado en `null`).
+- **Combinación estructura × fachada sin precio de lista** (vale para todo el catálogo, no solo
+  puertas): antes `handleAgregar` hacía `return` en silencio y el botón parecía roto. Ahora
+  `precioSeleccionado` es un derivado, entra en `listo` —el botón se deshabilita— y bajo los
+  selectores aparece "Sin precio de lista para esta combinación". Se agregó `cargandoPrecios`
+  (reset en `.finally`; si la lectura de precios falla, `precios` queda en `[]` → sale el aviso y
+  el botón off, nunca un estado a medias) para no mostrar el aviso mientras aún cargan.
+- **`PanelConfigModulo` (`buscador-modulos.tsx`) — el modal "Agregar producto", que es el que usa
+  el comercial a diario**: mostraba SIEMPRE los dos selectores, sin `tieneDimensiones` de ningún
+  tipo; los planos enseñaban un "0 mm" sin sentido y las puertas, el mismo callejón. Ahora usa la
+  misma lógica `tieneAltura` / `tieneProfundidad` y el grid a una columna. Su aviso de combinación
+  sin precio y su `cargandoPrecios` ya existían (con `.catch` + `.finally`), no se tocaron.
+
+**Verificación:** `tsc` limpio sin `any`; `npm test` en `packages/core` 7/7 (incl. 1.562.495);
+`next build` del portal OK. El motor se corrió aparte (compilado a un temporal, sin tocar
+`packages/core`) con el precio base real de la PUERTA DE PASO LISA ANCHO 700/800/900 (971.900) y la
+config real de las sedes de Colombia: calcula sin `NaN` y el costo Delben sale del descuento de la
+sede, como cualquier otro módulo. **Verificado en el navegador por el dueño**: puerta LISA se agrega,
+otra fachada muestra el aviso y deja el botón off, y un módulo de cocina (alto y profundidad reales)
+y un tubo de colgar (plano) siguen igual.
+
+> **Hallazgo operativo (datos, no código):** `categorias/puertas-de-paso` tiene
+> `desc_desarmado_base_pct: 0` y `desc_desarmado_premium_pct: 0`. En modalidad desarmado el costo
+> Delben de una puerta sale IGUAL al precio de lista (sin descuento de categoría). Configurar en el
+> admin antes de cotizar puertas en desarmado.
+
+> **Pendiente P1b (no se hizo aquí):** el parser guarda `profundidad: 0` para celdas vacías, y
+> `slugify` corta a 80 caracteres, lo que hace **colisionar** los ids de "COMPLEMENTO SUPERIOR E
+> INFERIOR VETA CONTINUA/TRANSVERSAL ANCHO 1000" con los de "ANCHO 700/800/900" (en `modulos` quedó
+> el nombre de una y en `modulos_busqueda` el de la otra, con un solo precio). Requiere tocar el
+> parser + reimportar.
+
+### 2026-08-21 — Editar valoración no seteaba el distribuidor (bug latente desde su origen)
+
+Facturación no podía guardar al editar una valoración: "Falta información del distribuidor."
+Reportado como "pasa desde la casa, en la oficina no" — la ubicación resultó irrelevante.
+
+- **Causa**: `handleEditar` (`admin/valoraciones/[id]/page.tsx`) resolvía la sede pero NO el
+  distribuidor, y `reabrirValoracion` (`store/carrito.ts`) ni lo recibía en su firma ni lo incluía
+  en su `set({...})`. Zustand con `set` parcial conserva el valor previo, así que `distribuidorData`
+  quedaba con el residuo de la sesión anterior — o `null` en estado limpio.
+- **Por qué no se había visto**: el `partialize` persiste `distribuidorData` en `localStorage`. En
+  máquinas de uso continuo siempre había un distribuidor de una sesión previa y el flujo funcionaba
+  *de prestado*. Una máquina nueva (sin localStorage) lo dejó al descubierto. El bug existía desde
+  que se escribió `handleEditar`; no fue una regresión.
+- **El riesgo real no era el error visible**: con estado previo de OTRA valoración, `handleGuardar`
+  escribía `guardarValoracion(distribuidorData.id, ...)` con el distribuidor equivocado, sin error
+  y sin señal alguna. El fallo ruidoso era el caso afortunado.
+- **Fix** (simétrico con `handleActualizarPrecios`, que ya lo hacía bien): `reabrirValoracion` recibe
+  `distribuidor: Distribuidor` como tercer parámetro **obligatorio** (TS impide llamarla sin él) y lo
+  setea en el `set`. `handleEditar` resuelve distribuidor + sede con `Promise.all`; si el distribuidor
+  no resuelve, **no navega** al borrador y muestra `errorEditar`. La sede conserva su tolerancia a `null`.
+- Motor intacto. `tsc` limpio sin `any`, `npm test` 7/7 (incl. 1.562.495). Verificado en local con
+  localStorage limpio (incógnito): editar y guardar funcionan. Commit `3020a86`, desplegado.
+
+> **Pendiente — auditoría de datos**: hay 58 valoraciones. Las editadas antes de este fix pudieron
+> guardarse con el `distribuidor_id` de otra valoración vista previamente. Revisar en
+> `/admin/valoraciones` comparando cliente/proyecto contra el distribuidor mostrado; priorizar las
+> que tengan `updatedAt ≠ createdAt`. No corregido: primero hay que confirmar si ocurrió.
+
+> **Deuda menor detectada**: el mensaje de `handleGuardar` dice "Falta información del distribuidor"
+> para la condición `if (!usuario || !distribuidorData)`. Cuando el null es `usuario`, el mensaje
+> apunta al lugar equivocado — costó dos rondas de diagnóstico. Separar los dos casos.
+
 ### 2026-06-30 — Fix selector de modalidad: respeta las banderas `acceso_*` de la sede + auditoría
 
 **Bug:** el selector de modalidad en `cotizaciones/nueva/page.tsx` tenía **hardcodeado**
@@ -1698,34 +1785,3 @@ Motor intacto (no se tocó). Pendiente operativo: que ambas personas reentren co
 
 Nota: `linda.arq@gmail.com` y `lindakarq@gmail.com` son el mismo buzón físico (Gmail ignora puntos),
 pero para Firebase Auth son logins distintos — el cambio sí tiene efecto en el string de acceso.
-### 2026-08-21 — Editar valoración no seteaba el distribuidor (bug latente desde su origen)
-
-Facturación no podía guardar al editar una valoración: "Falta información del distribuidor."
-Reportado como "pasa desde la casa, en la oficina no" — la ubicación resultó irrelevante.
-
-- **Causa**: `handleEditar` (`admin/valoraciones/[id]/page.tsx`) resolvía la sede pero NO el
-  distribuidor, y `reabrirValoracion` (`store/carrito.ts`) ni lo recibía en su firma ni lo incluía
-  en su `set({...})`. Zustand con `set` parcial conserva el valor previo, así que `distribuidorData`
-  quedaba con el residuo de la sesión anterior — o `null` en estado limpio.
-- **Por qué no se había visto**: el `partialize` persiste `distribuidorData` en `localStorage`. En
-  máquinas de uso continuo siempre había un distribuidor de una sesión previa y el flujo funcionaba
-  *de prestado*. Una máquina nueva (sin localStorage) lo dejó al descubierto. El bug existía desde
-  que se escribió `handleEditar`; no fue una regresión.
-- **El riesgo real no era el error visible**: con estado previo de OTRA valoración, `handleGuardar`
-  escribía `guardarValoracion(distribuidorData.id, ...)` con el distribuidor equivocado, sin error
-  y sin señal alguna. El fallo ruidoso era el caso afortunado.
-- **Fix** (simétrico con `handleActualizarPrecios`, que ya lo hacía bien): `reabrirValoracion` recibe
-  `distribuidor: Distribuidor` como tercer parámetro **obligatorio** (TS impide llamarla sin él) y lo
-  setea en el `set`. `handleEditar` resuelve distribuidor + sede con `Promise.all`; si el distribuidor
-  no resuelve, **no navega** al borrador y muestra `errorEditar`. La sede conserva su tolerancia a `null`.
-- Motor intacto. `tsc` limpio sin `any`, `npm test` 7/7 (incl. 1.562.495). Verificado en local con
-  localStorage limpio (incógnito): editar y guardar funcionan. Commit `3020a86`, desplegado.
-
-> **Pendiente — auditoría de datos**: hay 58 valoraciones. Las editadas antes de este fix pudieron
-> guardarse con el `distribuidor_id` de otra valoración vista previamente. Revisar en
-> `/admin/valoraciones` comparando cliente/proyecto contra el distribuidor mostrado; priorizar las
-> que tengan `updatedAt ≠ createdAt`. No corregido: primero hay que confirmar si ocurrió.
-
-> **Deuda menor detectada**: el mensaje de `handleGuardar` dice "Falta información del distribuidor"
-> para la condición `if (!usuario || !distribuidorData)`. Cuando el null es `usuario`, el mensaje
-> apunta al lugar equivocado — costó dos rondas de diagnóstico. Separar los dos casos.

@@ -862,6 +862,14 @@ function PanelConfigModulo({
       (v) => v.altura === alturaSeleccionada && v.profundidad === profundidadSeleccionada,
     )
 
+  // Cada dimensión se evalúa por separado: hay módulos con UNA sola dimensión real
+  // (ej. PUERTAS DE PASO: alto 2400/2800, profundidad vacía en el Excel → 0) y planos
+  // sin ninguna (tubo de colgar, 0/0). El selector de la dimensión ausente se oculta,
+  // pero la selección interna queda en 0 para que la búsqueda de precio por sentinel
+  // y `hayVarianteSeleccionada` sigan funcionando.
+  const tieneAltura = variantes.some((v) => v.altura > 0)
+  const tieneProfundidad = variantes.some((v) => v.profundidad > 0)
+
   const precioActual = (!cargandoPrecios && tipoEstructuraId && tipoFachadaId)
     ? precios.find(
         (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
@@ -1011,43 +1019,50 @@ function PanelConfigModulo({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {/* Dimensiones */}
-          <div className="grid grid-cols-2 gap-4">
-            <Campo label="Alto (mm)">
-              <Select
-                value={alturaSeleccionada?.toString() ?? ''}
-                onChange={(v) => {
-                  const nuevaAltura = Number(v)
-                  setAlturaSeleccionada(nuevaAltura)
-                  const profsDisponibles = [
-                    ...new Set(
-                      variantes
-                        .filter((va) => va.altura === nuevaAltura)
-                        .map((va) => va.profundidad),
-                    ),
-                  ].sort((a, b) => a - b)
-                  if (!profsDisponibles.includes(profundidadSeleccionada ?? -1)) {
-                    setProfundidadSeleccionada(profsDisponibles[0] ?? null)
-                  }
-                }}
-                options={alturasDisponibles.map((a) => ({
-                  value: a.toString(),
-                  label: `${a} mm`,
-                }))}
-              />
-            </Campo>
-            <Campo label="Prof. (mm)">
-              <Select
-                value={profundidadSeleccionada?.toString() ?? ''}
-                onChange={(v) => setProfundidadSeleccionada(Number(v))}
-                options={profundidadesDisponibles.map((p) => ({
-                  value: p.toString(),
-                  label: `${p} mm`,
-                }))}
-                disabled={profundidadesDisponibles.length === 0}
-              />
-            </Campo>
-          </div>
+          {/* Dimensiones — cada selector se muestra solo si esa dimensión es real.
+              Planos (0/0): ninguno. Puertas de paso (alto real, prof. 0): solo Alto. */}
+          {(tieneAltura || tieneProfundidad) && (
+            <div className={`grid gap-4 ${tieneAltura && tieneProfundidad ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {tieneAltura && (
+                <Campo label="Alto (mm)">
+                  <Select
+                    value={alturaSeleccionada?.toString() ?? ''}
+                    onChange={(v) => {
+                      const nuevaAltura = Number(v)
+                      setAlturaSeleccionada(nuevaAltura)
+                      const profsDisponibles = [
+                        ...new Set(
+                          variantes
+                            .filter((va) => va.altura === nuevaAltura)
+                            .map((va) => va.profundidad),
+                        ),
+                      ].sort((a, b) => a - b)
+                      if (!profsDisponibles.includes(profundidadSeleccionada ?? -1)) {
+                        setProfundidadSeleccionada(profsDisponibles[0] ?? null)
+                      }
+                    }}
+                    options={alturasDisponibles.map((a) => ({
+                      value: a.toString(),
+                      label: `${a} mm`,
+                    }))}
+                  />
+                </Campo>
+              )}
+              {tieneProfundidad && (
+                <Campo label="Prof. (mm)">
+                  <Select
+                    value={profundidadSeleccionada?.toString() ?? ''}
+                    onChange={(v) => setProfundidadSeleccionada(Number(v))}
+                    options={profundidadesDisponibles.map((p) => ({
+                      value: p.toString(),
+                      label: `${p} mm`,
+                    }))}
+                    disabled={profundidadesDisponibles.length === 0}
+                  />
+                </Campo>
+              )}
+            </div>
+          )}
 
           {/* Tipo de estructura */}
           {requiereEstructura && (

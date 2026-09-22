@@ -44,6 +44,7 @@ export function FichaModulo() {
   const [acabados, setAcabados] = useState<Acabado[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [precios, setPrecios] = useState<Precio[]>([])
+  const [cargandoPrecios, setCargandoPrecios] = useState(false)
   const [variantes, setVariantes] = useState<Modulo[]>([])
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true)
 
@@ -162,7 +163,16 @@ export function FichaModulo() {
     )
     if (!variante) return
     setModuloActual(variante)
-    getPreciosModulo(variante.id).then(setPrecios)
+    setCargandoPrecios(true)
+    getPreciosModulo(variante.id)
+      .then(setPrecios)
+      .catch((err) => {
+        // Sin precios no se puede agregar: dejar la lista vacía hace que el aviso
+        // "Sin precio de lista para esta combinación" aparezca y el botón quede off.
+        console.error('[FichaModulo] Error cargando precios:', err)
+        setPrecios([])
+      })
+      .finally(() => setCargandoPrecios(false))
   }, [alturaSeleccionada, profundidadSeleccionada, variantes])
 
   // Subcategorías reactivas al cambio de fachada
@@ -285,11 +295,14 @@ export function FichaModulo() {
 
   // Dimensiones disponibles para los selectors
   const alturasDisponibles = [...new Set(variantes.map((v) => v.altura))].sort((a, b) => a - b)
-  const profundidadesDisponibles = alturaSeleccionada
-    ? [...new Set(variantes.filter((v) => v.altura === alturaSeleccionada).map((v) => v.profundidad))].sort(
-        (a, b) => a - b,
-      )
-    : []
+  const profundidadesDisponibles =
+    alturaSeleccionada !== null
+      ? [
+          ...new Set(
+            variantes.filter((v) => v.altura === alturaSeleccionada).map((v) => v.profundidad),
+          ),
+        ].sort((a, b) => a - b)
+      : []
   const hayVarianteSeleccionada =
     alturaSeleccionada !== null &&
     profundidadSeleccionada !== null &&
@@ -297,14 +310,27 @@ export function FichaModulo() {
       (v) => v.altura === alturaSeleccionada && v.profundidad === profundidadSeleccionada,
     )
 
-  // Módulos planos (ej. tubo de colgar) no tienen alto/prof reales: el Excel los trae
-  // vacíos (→ 0). Se ocultan los selectores, pero la selección interna queda en 0/0
-  // para que la búsqueda de precio por sentinel siga encontrando la variante.
-  const tieneDimensiones = variantes.some((v) => v.altura > 0 || v.profundidad > 0)
+  // Cada dimensión se evalúa por separado: hay módulos con UNA sola dimensión real
+  // (ej. PUERTAS DE PASO: alto 2400/2800, profundidad vacía en el Excel → 0). El
+  // selector de la dimensión ausente se oculta, pero la selección interna queda en 0
+  // —igual que en los módulos planos (tubo de colgar, 0/0)— para que la búsqueda de
+  // precio por sentinel siga encontrando la variante.
+  const tieneAltura = variantes.some((v) => v.altura > 0)
+  const tieneProfundidad = variantes.some((v) => v.profundidad > 0)
+
+  // Precio de lista de la combinación estructura × fachada elegida. Puede no existir
+  // (ej. puertas: solo tienen precio en MELAMINA aunque el selector ofrezca las demás).
+  const precioSeleccionado =
+    precios.find(
+      (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
+    ) ?? null
+  const sinPrecioCombinacion =
+    !cargandoCatalogo && !cargandoPrecios && hayVarianteSeleccionada && !precioSeleccionado
 
   const listo =
     !cargandoCatalogo &&
     hayVarianteSeleccionada &&
+    !!precioSeleccionado &&
     (!requiereFachada || (!!subcategoriaId && !!acabadoId)) &&
     (!esPremium || !!acabadoEstructura) &&
     (!requiereMetalModulo || !!colorMetal)
@@ -312,9 +338,7 @@ export function FichaModulo() {
   function handleAgregar() {
     if (!moduloPendiente || !moduloActual || !listo) return
 
-    const precio = precios.find(
-      (p) => p.tipo_estructura_id === tipoEstructuraId && p.tipo_fachada_id === tipoFachadaId,
-    )
+    const precio = precioSeleccionado
     if (!precio) return
 
     const categoria = categorias.find((c) => c.id === moduloActual.categoria_id)
@@ -442,34 +466,54 @@ export function FichaModulo() {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-            {/* Dimensiones — ocultas en módulos planos sin alto/prof reales */}
-            {tieneDimensiones && (
-              <div className="grid grid-cols-2 gap-4">
-                <Campo label="Alto (mm)">
-                  <Select
-                    value={alturaSeleccionada?.toString() ?? ''}
-                    onChange={(v) => {
-                      const n = Number(v)
-                      setAlturaSeleccionada(n)
-                      setProfundidadSeleccionada(null)
-                    }}
-                    options={alturasDisponibles.map((a) => ({
-                      value: a.toString(),
-                      label: `${a} mm`,
-                    }))}
-                  />
-                </Campo>
-                <Campo label="Prof. (mm)">
-                  <Select
-                    value={profundidadSeleccionada?.toString() ?? ''}
-                    onChange={(v) => setProfundidadSeleccionada(Number(v))}
-                    options={profundidadesDisponibles.map((p) => ({
-                      value: p.toString(),
-                      label: `${p} mm`,
-                    }))}
-                    disabled={profundidadesDisponibles.length === 0}
-                  />
-                </Campo>
+            {/* Dimensiones — cada selector se muestra solo si esa dimensión es real.
+                Planos (0/0): ninguno. Puertas de paso (alto real, prof. 0): solo Alto. */}
+            {(tieneAltura || tieneProfundidad) && (
+              <div className={`grid gap-4 ${tieneAltura && tieneProfundidad ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {tieneAltura && (
+                  <Campo label="Alto (mm)">
+                    <Select
+                      value={alturaSeleccionada?.toString() ?? ''}
+                      onChange={(v) => {
+                        const n = Number(v)
+                        setAlturaSeleccionada(n)
+                        // Si ese alto solo admite una profundidad, elegirla sola; si hay
+                        // varias, limpiar para que el comercial elija.
+                        const profs = [
+                          ...new Set(variantes.filter((x) => x.altura === n).map((x) => x.profundidad)),
+                        ]
+                        const [unica] = profs
+                        setProfundidadSeleccionada(
+                          profs.length === 1 && unica !== undefined ? unica : null,
+                        )
+                      }}
+                      options={alturasDisponibles.map((a) => ({
+                        value: a.toString(),
+                        label: `${a} mm`,
+                      }))}
+                    />
+                  </Campo>
+                )}
+                {tieneProfundidad && (
+                  <Campo label="Prof. (mm)">
+                    <Select
+                      value={profundidadSeleccionada?.toString() ?? ''}
+                      onChange={(v) => setProfundidadSeleccionada(v === '' ? null : Number(v))}
+                      options={[
+                        // Placeholder solo mientras no hay elección, para que el select
+                        // controlado no aparente un valor que el estado no tiene.
+                        ...(profundidadSeleccionada === null
+                          ? [{ value: '', label: 'Elige una profundidad…' }]
+                          : []),
+                        ...profundidadesDisponibles.map((p) => ({
+                          value: p.toString(),
+                          label: `${p} mm`,
+                        })),
+                      ]}
+                      disabled={profundidadesDisponibles.length === 0}
+                    />
+                  </Campo>
+                )}
               </div>
             )}
 
@@ -517,6 +561,14 @@ export function FichaModulo() {
                   ))}
                 </div>
               </Campo>
+            )}
+
+            {/* Combinación estructura × fachada sin precio de lista: el botón queda
+                deshabilitado, así que hay que decir por qué (antes fallaba en silencio). */}
+            {sinPrecioCombinacion && (
+              <p className="-mt-2 text-xs text-amber-700">
+                Sin precio de lista para esta combinación.
+              </p>
             )}
 
             {/* Subcategoría */}
