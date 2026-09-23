@@ -8,12 +8,14 @@ import {
   doc,
   writeBatch,
   getFirestore,
+  getDocs,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase/client'
 import { slugify } from './slugify'
 import type { ResultadoParserModulos, ItemConId } from './parser-modulos'
 import type { ResultadoParserHerrajes } from './parser-herrajes'
 import type { ModuloDoc } from '@/lib/firebase/tipos-firestore'
+import { camposCategoria, categoriasConDescuentoCero } from './categorias-import'
 
 const BATCH_SIZE = 400
 
@@ -29,8 +31,9 @@ async function escribirLotes<T extends object>(
   rangoPct: number,
   etiqueta: string,
   // string[] fijo, o una función por-documento (para campos opcionales: el mask
-  // de cada doc puede variar, ej. colores_metal solo en módulos planos).
-  camposPreservados?: string[] | ((doc: T) => string[]),
+  // de cada doc puede variar, ej. colores_metal solo en módulos planos, o campos
+  // que solo se escriben al CREAR el doc, como la config de las categorías).
+  camposPreservados?: string[] | ((doc: T, id: string) => string[]),
 ) {
   let escritas = 0
   const total = items.length
@@ -45,7 +48,9 @@ async function escribirLotes<T extends object>(
         // mergeFields: actualiza solo estos campos; deja el resto intacto en Firestore.
         // Resuelto por-documento cuando es función (campos opcionales por doc).
         const campos =
-          typeof camposPreservados === 'function' ? camposPreservados(item.doc) : camposPreservados
+          typeof camposPreservados === 'function'
+            ? camposPreservados(item.doc, item.id)
+            : camposPreservados
         lote.set(ref, item.doc, { mergeFields: campos })
       } else {
         lote.set(ref, item.doc)
@@ -70,14 +75,111 @@ function maskPresente(campos: string[]): (doc: object) => string[] {
   return (doc) => campos.filter((c) => (doc as Record<string, unknown>)[c] !== undefined)
 }
 
+// ─── Bajas: lo que está en Firestore y ya no está en el Excel ────────────────
+// El import es un upsert por id, así que un producto retirado del Excel se quedaba
+// activo para siempre (de ahí 2.108 módulos activos frente a 2.078 variantes del
+// Excel). Se marcan `activo: false`, NUNCA se borran: las cotizaciones guardadas
+// referencian `modulo_id` y el recálculo lee `modulos/{id}` sin filtrar por `activo`.
+
+export type ItemBaja = { id: string; nombre: string }
+export type Desactivaciones = {
+  modulos: ItemBaja[]
+  modulosBusqueda: ItemBaja[]
+}
+
+// Lo que hay que saber de Firestore ANTES de escribir: qué docs sobran y qué
+// categorías ya existen (para no pisarles la configuración del admin). Una sola
+// lectura sirve para el preview y para la escritura.
+export type PrevioImportacion = {
+  desactivaciones: Desactivaciones
+  // ids de `categorias` que YA están en Firestore → mask reducido al escribirlas.
+  categoriasExistentes: Set<string>
+  // Nombres con descuento 0% según el valor REAL (Firestore si existe, parser si no).
+  categoriasConDescuento0: string[]
+}
+
+export async function analizarAntesDeImportar(
+  datos: ResultadoParserModulos,
+): Promise<PrevioImportacion> {
+  const idsExcel = new Set(datos.modulos.map((m) => m.id))
+  const idsBusquedaExcel = new Set(datos.modulosBusqueda.map((m) => m.id))
+
+  const [snapModulos, snapBusqueda, snapCategorias] = await Promise.all([
+    getDocs(collection(db, 'modulos')),
+    getDocs(collection(db, 'modulos_busqueda')),
+    getDocs(collection(db, 'categorias')),
+  ])
+
+  // Solo los que hoy están activos: volver a desactivar lo ya inactivo no aporta.
+  const sobran = (docs: typeof snapModulos.docs, presentes: Set<string>): ItemBaja[] =>
+    docs
+      .filter((d) => d.get('activo') === true && !presentes.has(d.id))
+      .map((d) => ({ id: d.id, nombre: (d.get('nombre') as string) ?? '(sin nombre)' }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+  const categoriasExistentes = new Set(snapCategorias.docs.map((d) => d.id))
+  const descuentosEnFirestore = new Map(
+    snapCategorias.docs.map((d) => [d.id, (d.get('desc_desarmado_base_pct') as number) ?? 0]),
+  )
+
+  return {
+    desactivaciones: {
+      modulos: sobran(snapModulos.docs, idsExcel),
+      modulosBusqueda: sobran(snapBusqueda.docs, idsBusquedaExcel),
+    },
+    categoriasExistentes,
+    categoriasConDescuento0: categoriasConDescuentoCero(datos.categorias, descuentosEnFirestore),
+  }
+}
+
+async function desactivarLotes(
+  coleccionPath: string,
+  items: ItemBaja[],
+  onProgress: Progreso,
+  offsetPct: number,
+  rangoPct: number,
+  etiqueta: string,
+) {
+  let hechas = 0
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const lote = writeBatch(db)
+    const chunk = items.slice(i, i + BATCH_SIZE)
+    for (const item of chunk) {
+      // merge en vez de update: si alguien borró el doc entre el preview y el import,
+      // el lote entero fallaría y dejaría la importación a medio reportar.
+      lote.set(doc(collection(db, coleccionPath), item.id), { activo: false }, { merge: true })
+    }
+    await lote.commit()
+    hechas += chunk.length
+    onProgress(
+      offsetPct + Math.round((hechas / items.length) * rangoPct),
+      `${etiqueta}: ${hechas} / ${items.length}`,
+    )
+  }
+}
+
 // ─── Módulos ─────────────────────────────────────────────────────────────────
 
+// `previo` es OBLIGATORIO: sin él no se sabe qué categorías ya existen y el import
+// volvería a pisar la configuración del admin. TypeScript impide llamarla sin él.
 export async function escribirModulos(
   datos: ResultadoParserModulos,
   onProgress: Progreso,
+  previo: PrevioImportacion,
 ): Promise<void> {
-  // categorias_macro_ids y mostrar_en_todas son gestionados por el admin, no por el import.
-  const CAMPOS_CATEGORIA = ['nombre', 'desc_desarmado_base_pct', 'orden', 'activo']
+  // Red de seguridad: si el parser detectó dos productos peleando por el mismo id,
+  // escribir significaría perder uno. La UI ya bloquea el botón; esto cubre el resto.
+  if (datos.colisiones.length > 0) {
+    throw new Error(
+      `Importación abortada: ${datos.colisiones.length} colisión(es) de id. ` +
+        'Revisa el detalle en el preview; hay productos distintos que generan el mismo id.',
+    )
+  }
+
+  // Categorías: mask distinto por doc. Existente → solo nombre y orden. Nueva →
+  // también la config de arranque (descuento, activo, macros). Ver camposCategoria.
+  const maskCategoria = (docCat: object, id: string) =>
+    maskPresente(camposCategoria(id, previo.categoriasExistentes))(docCat)
 
   // Lista PERMITIDA de campos que el import puede escribir. imagen_url NO está (la
   // gestiona subirImagenes). Campos OPCIONALES (pueden faltar en algún módulo):
@@ -103,11 +205,11 @@ export async function escribirModulos(
     path: string
     label: string
     peso: number
-    campos?: string[] | ((doc: object) => string[])
+    campos?: string[] | ((doc: object, id: string) => string[])
   }> = [
     { items: datos.tiposEstructura, path: 'tipos_estructura', label: 'Tipos estructura', peso: 2 },
     { items: datos.tiposFachada, path: 'tipos_fachada', label: 'Tipos fachada', peso: 2 },
-    { items: datos.categorias as ItemConId<object>[], path: 'categorias', label: 'Categorías', peso: 2, campos: maskPresente(CAMPOS_CATEGORIA) },
+    { items: datos.categorias as ItemConId<object>[], path: 'categorias', label: 'Categorías', peso: 2, campos: maskCategoria },
     { items: datos.subcategorias, path: 'subcategorias', label: 'Subcategorías', peso: 2 },
     { items: datos.acabados, path: 'acabados', label: 'Acabados', peso: 4 },
     { items: datos.modulos as ItemConId<object>[], path: 'modulos', label: 'Módulos', peso: 20, campos: maskPresente(CAMPOS_MODULO) },
@@ -147,8 +249,28 @@ export async function escribirModulos(
 
     await lote.commit()
     escritos += chunk.length
-    const pct = 40 + Math.round((escritos / totalPrecios) * 58)
+    const pct = 40 + Math.round((escritos / totalPrecios) * 56)
     onProgress(pct, `Precios: ${escritos} / ${totalPrecios}`)
+  }
+
+  // Bajas al final: primero queda escrito todo lo del Excel, después se apaga lo
+  // que ya no viene en él.
+  const bajasModulos = previo.desactivaciones.modulos
+  const bajasBusqueda = previo.desactivaciones.modulosBusqueda
+  if (bajasModulos.length > 0) {
+    onProgress(96, 'Desactivando módulos que ya no están en el Excel…')
+    await desactivarLotes('modulos', bajasModulos, onProgress, 96, 2, 'Desactivando módulos')
+  }
+  if (bajasBusqueda.length > 0) {
+    onProgress(98, 'Desactivando módulos de búsqueda…')
+    await desactivarLotes(
+      'modulos_busqueda',
+      bajasBusqueda,
+      onProgress,
+      98,
+      2,
+      'Desactivando módulos de búsqueda',
+    )
   }
 
   onProgress(100, 'Importación de módulos completada.')

@@ -3,9 +3,10 @@
 import { useState, useRef } from 'react'
 import { UploadSimple, CheckCircle, Warning, CircleNotch } from '@phosphor-icons/react'
 import { parsearExcelModulos } from '@/lib/importar/parser-modulos'
-import { escribirModulos } from '@/lib/importar/writer-firestore'
+import { escribirModulos, analizarAntesDeImportar } from '@/lib/importar/writer-firestore'
 import { limpiarCacheModulos } from '@/lib/firestore/modulos'
 import type { ResultadoParserModulos } from '@/lib/importar/parser-modulos'
+import type { PrevioImportacion } from '@/lib/importar/writer-firestore'
 
 type Fase = 'idle' | 'parseando' | 'previo' | 'importando' | 'listo' | 'error'
 
@@ -16,6 +17,10 @@ export function ImportarModulos() {
   const [mensajeProgreso, setMensajeProgreso] = useState('')
   const [resultado, setResultado] = useState<ResultadoParserModulos | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Lectura de Firestore previa al import: bajas por confirmar y qué categorías ya
+  // existen (para no pisar su configuración). Sin esto no se puede importar.
+  const [previo, setPrevio] = useState<PrevioImportacion | null>(null)
+  const [calculandoBajas, setCalculandoBajas] = useState(false)
 
   async function handleArchivo(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0]
@@ -24,6 +29,7 @@ export function ImportarModulos() {
     setFase('parseando')
     setError(null)
     setProgreso(0)
+    setPrevio(null)
     setMensajeProgreso('Leyendo Excel…')
 
     try {
@@ -31,6 +37,16 @@ export function ImportarModulos() {
       const datos = await parsearExcelModulos(buffer)
       setResultado(datos)
       setFase('previo')
+
+      // Con colisiones no se importa nada, así que no vale la pena leer Firestore.
+      if (datos.colisiones.length === 0) {
+        setCalculandoBajas(true)
+        try {
+          setPrevio(await analizarAntesDeImportar(datos))
+        } finally {
+          setCalculandoBajas(false)
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al leer el archivo')
       setFase('error')
@@ -38,7 +54,7 @@ export function ImportarModulos() {
   }
 
   async function handleImportar() {
-    if (!resultado) return
+    if (!resultado || !previo) return
     setFase('importando')
     setProgreso(0)
 
@@ -46,7 +62,7 @@ export function ImportarModulos() {
       await escribirModulos(resultado, (pct, msg) => {
         setProgreso(pct)
         setMensajeProgreso(msg)
-      })
+      }, previo)
       limpiarCacheModulos() // invalidar caché para que el buscador use datos frescos
       setFase('listo')
       setProgreso(100)
@@ -61,6 +77,7 @@ export function ImportarModulos() {
     setResultado(null)
     setError(null)
     setProgreso(0)
+    setPrevio(null)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -171,6 +188,74 @@ export function ImportarModulos() {
             </div>
           </div>
 
+          {/* Colisiones de id — BLOQUEAN el import */}
+          {resultado.colisiones.length > 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 space-y-2">
+              <p className="text-xs font-semibold text-red-800 uppercase tracking-wide">
+                Importación bloqueada: {resultado.colisiones.length} colisión(es) de id
+              </p>
+              <p className="text-xs text-red-700 leading-relaxed">
+                Dos productos distintos generan el mismo id de Firestore. Si se importara, uno
+                pisaría al otro y se perdería en silencio. Revisa estos nombres en el Excel:
+              </p>
+              {resultado.colisiones.map((c) => (
+                <div key={`${c.coleccion}-${c.id}`} className="text-xs text-red-700 leading-relaxed">
+                  <p className="font-medium">
+                    {c.coleccion} · {c.id}
+                  </p>
+                  <p>· {c.claves[0]}</p>
+                  <p>· {c.claves[1]}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Bajas — docs que dejarán de estar activos */}
+          {calculandoBajas && (
+            <div className="flex items-center gap-2 text-xs text-stone-500">
+              <CircleNotch size={14} className="animate-spin text-stone-400" />
+              Comparando con lo que ya hay en Firestore…
+            </div>
+          )}
+          {previo &&
+            (previo.desactivaciones.modulos.length > 0 ||
+              previo.desactivaciones.modulosBusqueda.length > 0) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-2">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
+                  {previo.desactivaciones.modulos.length} módulos se desactivarán
+                  {previo.desactivaciones.modulosBusqueda.length > 0 &&
+                    ` · ${previo.desactivaciones.modulosBusqueda.length} en el buscador`}
+                </p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  Están en Firestore y no vienen en este Excel. NO se borran: quedan con
+                  `activo: false`, así que dejan de aparecer en el cotizador pero las
+                  cotizaciones ya guardadas los siguen encontrando para recalcular.
+                </p>
+                <details className="text-xs text-amber-700">
+                  <summary className="cursor-pointer font-medium">Ver la lista</summary>
+                  <div className="mt-1.5 max-h-48 overflow-y-auto space-y-0.5">
+                    {previo.desactivaciones.modulos.map((m) => (
+                      <p key={m.id}>· {m.nombre}</p>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+
+          {/* Descuento 0% — con el valor REAL de Firestore para las categorías que ya
+              existen (el import ya no las pisa, así que la tabla del parser no manda). */}
+          {previo && previo.categoriasConDescuento0.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1.5">
+                Categorías con descuento 0%
+              </p>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                Pendientes de configurar en /admin/categorias:{' '}
+                {previo.categoriasConDescuento0.join(', ')}.
+              </p>
+            </div>
+          )}
+
           {/* Advertencias */}
           {resultado.advertencias.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-1.5">
@@ -188,9 +273,12 @@ export function ImportarModulos() {
           <div className="flex gap-3">
             <button
               onClick={handleImportar}
-              className="tactil rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 transition-all"
+              disabled={resultado.colisiones.length > 0 || calculandoBajas || !previo}
+              className="tactil rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Confirmar e importar a Firestore
+              {previo && previo.desactivaciones.modulos.length > 0
+                ? `Confirmar: importar y desactivar ${previo.desactivaciones.modulos.length}`
+                : 'Confirmar e importar a Firestore'}
             </button>
             <button
               onClick={reiniciar}

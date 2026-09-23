@@ -10,11 +10,10 @@
 > - **Bitácora cronológica** — registro inverso de cambios, fecha a fecha.
 >   Agregar una entrada aquí al cerrar cada trabajo importante.
 
-Última actualización: 2026-09-22 — cotizador: los módulos con UNA sola dimensión real (PUERTAS
-DE PASO: alto sí, profundidad 0) ya se pueden agregar al carrito, tanto en el modal "Agregar
-producto" como en la ficha de edición; y una combinación estructura × fachada sin precio de
-lista deshabilita el botón y lo dice, en vez de fallar en silencio. Verificado en el navegador.
-Ver **Estado de despliegue** abajo para lo anterior (2026-06-05).
+Última actualización: 2026-09-23 — **reimport del catálogo en producción hecho** (2.079
+módulos, 16.791 precios, 123 desactivados): cierra P1b, el fix del importador (ids sin
+colisión, bajas, y los % de `/admin/categorias` a salvo del import). Quedan tres tareas de
+configuración en el admin — ver **Estado de despliegue § (4)** abajo.
 
 ---
 
@@ -51,6 +50,15 @@ Ver **Estado de despliegue** abajo para lo anterior (2026-06-05).
   `apps/portal`. Verificado por el dueño en local antes del push.
 
 ### (4) Pendiente
+- **Reimport del catálogo: HECHO el 2026-09-23** (2.079 módulos, 16.791 precios, 123 desactivados).
+  Deja tres tareas de configuración, todas en el admin:
+  - **(a) Re-subir fotos** en `/admin/importar` → Imágenes: los ~92 módulos que cambiaron de id (los
+    que antes se truncaban) y los curvos se quedaron sin `imagen_url`. Hoy **1.946 de 2.079** módulos
+    tienen foto.
+  - **(b) Configurar el descuento** de **PUERTAS DE PASO, DECORACIÓN, MULTI STORE y QUALITA** en
+    `/admin/categorias`: siguen en 0%, así que en desarmado el costo Delben sale igual al precio de
+    lista. El import ya no toca ese campo, así que basta con ponerlo una vez.
+  - **(c) Asignar las categorías de lista a sus macros** en `/admin/categorias`.
 - **Configuración operativa**: `iva_pct` en sedes de exportación (ver (2)); siglas al alta de nuevos
   distribuidores/sedes.
 - **Resto de la sesión 2026-06-04** (rendimiento del carrito, catálogo `modulos_busqueda`
@@ -868,6 +876,97 @@ filtre por rol. Ver §1 y bitácora 2026-06-04.
 > Registro inverso de cambios relevantes (lo más nuevo arriba). Agregar una entrada
 > cada vez que se implemente o corrija algo importante: fecha, qué cambió, archivos.
 > Antes vivía en la sección "Actualizaciones" de `README.md`; se consolidó aquí.
+
+### 2026-09-23 — Reimport del catálogo en producción: P1b verificado con datos reales
+
+El dueño corrió el reimport desde localhost contra **producción** (`/admin/importar` → Módulos). Es
+la verificación que faltaba del trabajo del 2026-09-22: no se pudo hacer en emulador (la máquina no
+tiene Java) y se hizo contra la base real.
+
+Resultado: **2.079 módulos**, **16.791 precios**, **123 docs desactivados** (ids viejos truncados más
+lo que ya no viene en el Excel; ninguno borrado).
+
+Comprobado a mano después del import:
+- **`/admin/categorias` conserva los porcentajes** configurados por el admin (curvos 10%, acabados
+  x m² 25%) — el import ya no los pisa.
+- **"VETA CONTINUA" devuelve 2 puertas**, con 1.269.100 (ANCHO 1000) y 1.215.300 (ANCHO 700/800/900):
+  el producto que el slug truncado perdía está de vuelta y con su precio propio.
+- **"curvo" devuelve 4 módulos sin duplicados** — el cambio de id no duplicó docs.
+- **"Actualizar precios" en una cotización vieja recalcula sin error**: los `modulo_id` guardados
+  siguen resolviendo, incluidos los de módulos ahora desactivados.
+
+Pendientes operativos que deja el reimport (imágenes, porcentajes y macros): ver
+**Estado de despliegue § (4)**.
+
+### 2026-09-22 — Importador: el slug truncado a 80 caracteres perdía productos (P1b)
+
+**Bug de datos.** `slugify` cortaba a 80 caracteres. El id de módulo sale de slugificar
+"categoría + nombre + altura + profundidad" y el de búsqueda "categoria_id + nombre"; con nombres
+largos el corte caía ANTES de la parte que distingue las variantes, dos productos distintos recibían
+el mismo id y el segundo pisaba al primero en `modulos`, en `modulos/{id}/precios` y en
+`modulos_busqueda`. Caso real: PUERTA DE PASO
+COMPLEMENTO SUPERIOR E INFERIOR VETA CONTINUA / TRANSVERSAL, ANCHO 1000 vs ANCHO 700/800/900 — el
+Excel trae 4 productos y Firestore tenía 2, con el doc mezclado (nombre de una variante, precio de
+la otra). Silencioso: nada en el importador lo señalaba.
+
+**Fix (`slugify.ts`, `parser-modulos.ts`, `writer-firestore.ts`, `categorias-import.ts` nuevo, y el
+preview de `/admin/importar`):**
+- **slugify**: los ids que caben en 80 caracteres **no cambian** (un id no puede moverse: queda
+  guardado como `modulo_id` en el snapshot de cada cotización). Solo cuando el slug completo pasa
+  de 80: `primeros 71 + '-' + 8 hex` de un FNV-1a del slug completo. FNV-1a de 32 bits escrito a
+  mano en el propio archivo: hace falta síncrono (el parser corre en un bucle en el browser) y sin
+  dependencias nuevas; `crypto.subtle` es async. Tests en `slugify.test.ts` (7).
+- **parser**: guardia anti-pisado ANTES de escribir. Si dos claves naturales distintas
+  (categoría|nombre|alto|prof, y categoría|nombre para búsqueda) producen el mismo id, se
+  registran en `colisiones[]`, el preview las lista en rojo y el botón de importar se deshabilita;
+  `escribirModulos` además se niega a escribir. Los grupos de búsqueda ahora se agrupan por clave
+  natural, no por id — agrupar por id era justamente lo que fundía dos grupos en silencio.
+- **writer — categorías: el import deja de pisar al admin**. Antes reescribía
+  `desc_desarmado_base_pct` y `activo` en CADA import, así que un reimport devolvía el descuento de
+  cada categoría al valor de la tabla `DESC_CATEGORIA` del parser (0% en varias) y el motor pasaba a
+  cobrar con ese número. Ahora el mask depende del doc: si la categoría YA existe se escriben **solo
+  `nombre` y `orden`**; `desc_desarmado_base_pct`, `activo`, `categorias_macro_ids` y
+  `mostrar_en_todas` se escriben **únicamente al crearla**. La tabla del parser vuelve a ser lo que
+  siempre debió ser: un valor de arranque. Las reglas viven en `categorias-import.ts` (módulo puro,
+  sin Firebase, testeable) y `escribirLotes` pasa ahora el id al resolver el mask.
+- **writer — la advertencia de "descuento 0%" sale del valor REAL**: la calcula
+  `analizarAntesDeImportar` leyendo Firestore (parser para las nuevas, Firestore para las que ya
+  existen), no la tabla del parser. Antes avisaba de categorías que el admin ya tenía configuradas.
+- **writer**: bajas. El import era solo upsert, así que un producto retirado del Excel quedaba
+  activo para siempre (2.108 activos en Firestore contra 2.078 variantes del Excel).
+  `analizarAntesDeImportar` compara antes de escribir —una sola lectura de Firestore sirve para las
+  bajas y para saber qué categorías existen—, el preview muestra "N módulos se desactivarán" con la
+  lista y el botón lo confirma; al final del import se marcan `activo: false`. Ese previo es
+  parámetro **obligatorio** de `escribirModulos`: sin él no se sabe qué categorías existen, así que
+  TypeScript impide llamarla sin hacer la lectura.
+  **No se borra nada**: verificado que `recompute-core.ts` lee `modulos/{id}` por id y NO filtra por
+  `activo`, así que las cotizaciones guardadas siguen recalculando contra un módulo desactivado.
+
+**Verificación:** parser corrido de verdad contra `data/LISTA DE PRECIOS TOTALES.xlsx`: 16.790 filas
+válidas → **2.078 variantes con 2.078 ids únicos** (antes 2.076: los 2 productos perdidos
+reaparecen), **0 colisiones**, 729 docs de búsqueda con 729 ids únicos. Las dos VETA CONTINUA salen
+separadas con sus precios correctos (**1.215.300** para ANCHO 700/800/900 y **1.269.100** para ANCHO
+1000), y PUERTAS DE PASO pasa de 8 a 10 módulos. `tsc` limpio sin `any`; `npm test` 7/7 en
+`packages/core` y **13/13** en `apps/portal` (7 de `slugify` + 6 de las reglas de categorías:
+mask reducido en las existentes, completo en las nuevas, y la advertencia de 0% saliendo del valor
+real); `next build` exit 0.
+
+> **La escritura en Firestore SÍ se verificó, con datos reales — no en emulador.** Cuando se escribió
+> el código quedó sin probar (no hay emuladores en `firebase.json` y la máquina no tiene Java, que el
+> emulador de Firestore necesita). El **2026-09-23** el dueño corrió el reimport contra **producción**
+> desde localhost y confirmó las tres partes: bajas, mask de categorías e ids sin colisión. Ver la
+> entrada del 2026-09-23 arriba.
+
+> **Corrección de una cifra del diagnóstico:** se habló de 111 nombres en el límite de 80. El conteo
+> real sobre el Excel es **80 ids de `modulos`** y **12 de `modulos_busqueda`** que pasan de 80 y por
+> tanto cambian de id con el fix (más 18 que miden exactamente 80 sin pasarse y NO cambian).
+
+> **Nueva dependencia:** `vitest` como devDependency de `apps/portal` (+ `vitest.config.ts` y script
+> `test`), para poder testear `slugify` sin tocar `packages/core`. Es el mismo runner que ya usa el
+> motor, no un cambio de stack.
+
+> **Pendiente operativo:** el reimport en producción lo hace Fernando desde `/admin/importar` con el
+> Excel vigente — ver **Estado de despliegue § (4)** arriba.
 
 ### 2026-09-22 — Cotizador: módulos de UNA sola dimensión real (PUERTAS DE PASO) + aviso de combinación sin precio
 

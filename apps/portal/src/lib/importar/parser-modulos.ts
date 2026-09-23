@@ -37,6 +37,15 @@ const DESC_CATEGORIA: Record<string, { base: number }> = {
 
 export type ItemConId<T> = { id: string; doc: T }
 
+// Dos productos distintos que reciben el MISMO id de Firestore. Si esto ocurre, el
+// segundo pisa al primero al escribir y se pierde un producto en silencio (pasó con
+// las PUERTAS DE PASO por el corte a 80 caracteres del slug). El import se bloquea.
+export type ColisionId = {
+  coleccion: 'modulos' | 'modulos_busqueda'
+  id: string
+  claves: [string, string]
+}
+
 export type ResultadoParserModulos = {
   tiposEstructura: ItemConId<TipoEstructuraDoc>[]
   tiposFachada: ItemConId<TipoFachadaDoc>[]
@@ -54,6 +63,9 @@ export type ResultadoParserModulos = {
     categoriasConDescuento0: string[]
   }
   advertencias: string[]
+  // Vacío = se puede importar. Con contenido, la UI bloquea el botón y el writer
+  // se niega a escribir.
+  colisiones: ColisionId[]
 }
 
 // ─── Parser principal ─────────────────────────────────────────────────────────
@@ -264,6 +276,23 @@ export async function parsearExcelModulos(
   // módulos CON fachada el metal va por la vía ALUMINIO VIDRIO (en tipos_fachada).
   const moduloColoresMetal = new Map<string, Set<string>>()
 
+  // Guardia anti-pisado: id de Firestore → clave natural que lo generó. Si el mismo
+  // id llega desde dos claves distintas, son dos productos distintos compitiendo por
+  // el mismo doc. Se registra y el import se bloquea; nunca se escribe "el último gana".
+  const idsModulo = new Map<string, string>()
+  const colisiones: ColisionId[] = []
+  const colisionesVistas = new Set<string>()
+  function registrarColision(
+    coleccion: ColisionId['coleccion'],
+    id: string,
+    claves: [string, string],
+  ) {
+    const marca = `${coleccion}|${id}`
+    if (colisionesVistas.has(marca)) return
+    colisionesVistas.add(marca)
+    colisiones.push({ coleccion, id, claves })
+  }
+
   for (const r of filasValidas) {
     const nombreRaw = normalizarNombre(r['NOMBRE']?.toString() ?? '')
     const altura = Number(r['ALTURA'])
@@ -280,6 +309,12 @@ export async function parsearExcelModulos(
     const moduloId = slugify(
       `${categoriaNombre} ${nombreRaw} ${altura} ${profundidad}`,
     )
+
+    const clavePrevia = idsModulo.get(moduloId)
+    if (clavePrevia === undefined) idsModulo.set(moduloId, moduloKey)
+    else if (clavePrevia !== moduloKey) {
+      registrarColision('modulos', moduloId, [clavePrevia, moduloKey])
+    }
 
     if (!modulosMap.has(moduloKey)) {
       modulosMap.set(moduloKey, {
@@ -353,15 +388,24 @@ export async function parsearExcelModulos(
   //    → los planos NO muestran selectores de estructura/fachada en la ficha).
   //  · precio_min = mínimo entre variantes; imagen_url + tipologia del representante
   //    (variante de menor altura×profundidad). id determinista → idempotente.
-  const gruposBusqueda = new Map<string, ModuloDoc[]>()
+  // Se agrupa por la clave NATURAL (categoria_id|nombre), no por el id: agrupar por
+  // id fundía en silencio dos grupos distintos cuyo slug colisionaba.
+  const gruposBusqueda = new Map<string, { id: string; variantes: ModuloDoc[] }>()
+  const idsBusqueda = new Map<string, string>()
   for (const { doc: m } of modulosMap.values()) {
+    const clave = `${m.categoria_id}|${m.nombre}`
     const id = slugify(`${m.categoria_id} ${m.nombre}`)
-    const arr = gruposBusqueda.get(id) ?? []
-    arr.push(m)
-    gruposBusqueda.set(id, arr)
+    const clavePrevia = idsBusqueda.get(id)
+    if (clavePrevia === undefined) idsBusqueda.set(id, clave)
+    else if (clavePrevia !== clave) {
+      registrarColision('modulos_busqueda', id, [clavePrevia, clave])
+    }
+    const grupo = gruposBusqueda.get(clave) ?? { id, variantes: [] }
+    grupo.variantes.push(m)
+    gruposBusqueda.set(clave, grupo)
   }
   const modulosBusqueda: ItemConId<ModuloBusquedaDoc>[] = []
-  for (const [id, variantes] of gruposBusqueda) {
+  for (const { id, variantes } of gruposBusqueda.values()) {
     const rep = variantes.reduce((a, b) =>
       (b.altura - a.altura || b.profundidad - a.profundidad) < 0 ? b : a,
     )
@@ -387,12 +431,11 @@ export async function parsearExcelModulos(
     .filter((c) => c.doc.desc_desarmado_base_pct === 0)
     .map((c) => c.doc.nombre)
 
+  // La advertencia de "descuento 0%" NO se emite aquí: el parser solo conoce la tabla
+  // DESC_CATEGORIA (valor de arranque), y para una categoría que ya existe manda el
+  // valor configurado en /admin/categorias. La calcula analizarAntesDeImportar, que sí
+  // lee Firestore. `categoriasConDescuento0` queda en estadísticas como dato del Excel.
   const advertencias: string[] = []
-  if (categoriasConDescuento0.length > 0) {
-    advertencias.push(
-      `Las siguientes categorías tienen descuento 0% (pendiente de configurar en el admin): ${categoriasConDescuento0.join(', ')}`,
-    )
-  }
 
   return {
     tiposEstructura: Array.from(estructurasMap.values()),
@@ -411,5 +454,6 @@ export async function parsearExcelModulos(
       categoriasConDescuento0,
     },
     advertencias,
+    colisiones,
   }
 }
